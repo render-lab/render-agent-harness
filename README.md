@@ -2,12 +2,13 @@
 
 A Render-native agent harness. Built on Render primitives (Workflows, Workers, Cron, Postgres, Key Value, private services), provider-agnostic at the model layer, MCP-first for tools.
 
-The harness is a thin core wrapped by three runtime adapters. The same agent definition runs unchanged across all three runtimes — pick the one that matches your shape:
+The harness is a thin core wrapped by four runtime adapters. The same agent definition runs unchanged across all of them — pick the one that matches your shape:
 
 | Runtime | Trigger | Use when |
 |---|---|---|
+| `runtime-web` | HTTP request | Sub-30s synchronous agent, demos, hackathons, single-tenant prototypes. One service, one process, agent runs in-request. |
 | `runtime-cron` | Schedule | Run completes inside 12 hours, no user interaction. Audits, periodic jobs, monitoring. |
-| `runtime-worker` *(Phase 3)* | Queue / event | Streaming output, low latency, always-on, webhook receivers. |
+| `runtime-worker` *(Phase 3)* | Queue / event | Streaming output, low latency, always-on, webhook receivers, multi-tenant. |
 | `runtime-workflows` *(Phase 4)* | HTTP / API | Long-running, durable, human-in-the-loop, survives deploys. |
 
 ## Status
@@ -15,6 +16,7 @@ The harness is a thin core wrapped by three runtime adapters. The same agent def
 - Phase 0 — verifications: **done** (see [`docs/architecture.md`](docs/architecture.md))
 - Phase 1 — core skeleton: **done**
 - Phase 2 — Cron runtime + citations-monitor example: **done**
+- Phase 2.5 — Web runtime + web-chat example: **done**
 - Phase 3 — Worker runtime + Slack support agent: planned
 - Phase 4 — Workflows runtime + deploy agent: planned
 - Phase 5 — Hardened mode + docs: planned
@@ -24,18 +26,21 @@ The harness is a thin core wrapped by three runtime adapters. The same agent def
 ```
 packages/
   core/                  # Shared loop, adapters, MCP, state, skills, prompt, tools
-  runtime-cron/          # Cron one-shot runtime (this phase)
+  runtime-cron/          # Cron one-shot runtime
+  runtime-web/           # Synchronous HTTP request handler runtime
   runtime-worker/        # Queue-driven runtime (Phase 3)
   runtime-workflows/     # Render Workflows runtime (Phase 4)
-  web/                   # Public web service (Phase 3+)
+  web/                   # Multi-tenant public web service (Phase 3+)
 
 examples/
-  citations-monitor/     # Cron: AEO citations tracker (this phase)
+  citations-monitor/     # Cron: AEO citations tracker
+  web-chat/              # Web: chat agent with optional Render MCP
   support-agent/         # Worker: streaming Slack agent (Phase 3)
   deploy-agent/          # Workflows: deploys repos to Render (Phase 4)
 
 blueprints/
-  render.demo.yaml       # Single cron + Postgres (this phase)
+  render.demo.yaml       # Single web service + Postgres (web-chat)
+  render.demo-cron.yaml  # Single cron + Postgres (citations-monitor)
   render.private.yaml    # Web + worker pserv + MCP pservs (Phase 3+)
   render.hardened.yaml   # Private + egress allowlist + audit (Phase 5)
 
@@ -43,30 +48,34 @@ docs/
   architecture.md        # The architecture and Phase 0 verifications
 ```
 
-## Quickstart: deploy the citations-monitor in 15 minutes
+## Quickstart: deploy a chat agent in 5 minutes
 
-The citations-monitor cron audits a tracked set of queries against an AI search engine each day and writes a Markdown summary into Postgres.
+The `web-chat` example is the smallest possible deployment: one Render web service, one process, agent runs in the HTTP request handler.
 
 1. Fork this repo.
 2. In the [Render Dashboard](https://dashboard.render.com), create a new Blueprint pointing at your fork. Pick `blueprints/render.demo.yaml`.
-3. Render provisions a managed Postgres database and a daily cron job.
-4. Set the two secret env vars on the cron service:
-   - `ANTHROPIC_API_KEY` — the model the *agent* uses (Claude Sonnet 4.7 by default).
-   - `SEARCH_ENGINE_API_KEY` — the model the *agent audits* (defaults to OpenAI `gpt-5`).
-5. Trigger the cron manually from the Dashboard. The agent runs end-to-end and writes the audit summary to `agent_messages` and the structured audit rows to `aeo_audits`.
+3. Render provisions a managed Postgres and the web service.
+4. Set the secret env var on the web service:
+   - `ANTHROPIC_API_KEY` — required, the model the agent uses.
+   - `RENDER_API_KEY` — optional, enables Render MCP tools (read-only by default).
+5. `curl` the assigned `https://*.onrender.com` URL:
 
-```sql
--- Inspect the most recent run's summary
-SELECT m.created_at, m.content
-  FROM agent_messages m
-  JOIN agent_runs r ON r.id = m.run_id
- WHERE r.agent_name = 'citations-monitor'
-   AND m.role = 'assistant'
- ORDER BY m.created_at DESC
- LIMIT 1;
+```sh
+curl -sS https://your-app.onrender.com/runs \
+  -H 'content-type: application/json' \
+  -d '{"input":"List my Render services"}' | jq
+
+# Streaming
+curl -N https://your-app.onrender.com/runs/stream \
+  -H 'content-type: application/json' \
+  -d '{"input":"What's my newest deploy?"}'
 ```
 
-See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md) for the full walkthrough.
+See [`examples/web-chat/README.md`](examples/web-chat/README.md) for the full walkthrough.
+
+### Alt quickstart: scheduled audits with the citations-monitor cron
+
+For an unattended cron variant of demo mode (audits queries against an AI search engine, summarizes results to Postgres), use `blueprints/render.demo-cron.yaml`. See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md).
 
 ## Local development
 
@@ -104,20 +113,26 @@ or Redis on the default ports, override the host port:
 HARNESS_PG_PORT=55432 HARNESS_KV_PORT=56379 pnpm db:up
 ```
 
-### Run the citations-monitor end to end
+### Run the web-chat agent end to end
 
 ```sh
-# 1. Bring up the stack
 pnpm db:up
+cp examples/web-chat/.env.example examples/web-chat/.env
+# fill in ANTHROPIC_API_KEY (and optionally RENDER_API_KEY)
+pnpm dev:web
 
-# 2. Set your API keys (env vars or examples/citations-monitor/.env)
-export ANTHROPIC_API_KEY=sk-ant-...
-export SEARCH_ENGINE_API_KEY=sk-...
-# Defaults assume the Compose stack:
-#   DATABASE_URL=postgres://harness:harness@127.0.0.1:5432/harness
-#   KV_URL=redis://127.0.0.1:6379
+# in another shell:
+curl -sS http://localhost:8080/runs \
+  -H 'content-type: application/json' \
+  -d '{"input":"What can you help me with?"}' | jq
+```
 
-# 3. Run the agent. Migrations + seed queries run on first boot.
+### Run the citations-monitor cron end to end
+
+```sh
+pnpm db:up
+cp examples/citations-monitor/.env.example examples/citations-monitor/.env
+# fill in ANTHROPIC_API_KEY and SEARCH_ENGINE_API_KEY
 pnpm dev:citations
 ```
 
