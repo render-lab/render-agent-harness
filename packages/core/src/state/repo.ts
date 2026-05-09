@@ -134,9 +134,12 @@ export async function setRunStatus(
   await pool.query(
     `UPDATE agent_runs
        SET status = $2,
-           updated_at = $3,
-           started_at = COALESCE(started_at, CASE WHEN $2 = 'running' THEN $3 ELSE NULL END),
-           finished_at = CASE WHEN $4 THEN $3 ELSE finished_at END,
+           updated_at = $3::timestamptz,
+           started_at = COALESCE(
+             started_at,
+             CASE WHEN $2 = 'running' THEN $3::timestamptz END
+           ),
+           finished_at = CASE WHEN $4 THEN $3::timestamptz ELSE finished_at END,
            final_error = COALESCE($5::jsonb, final_error)
        WHERE id = $1`,
     [runId, status, now, finalize, opts?.error ? JSON.stringify(opts.error) : null],
@@ -255,8 +258,16 @@ export async function setToolCallStatus(
   await pool.query(
     `UPDATE agent_tool_calls
        SET status = $2,
-           started_at = COALESCE($3, started_at, CASE WHEN $2 = 'running' THEN now() ELSE NULL END),
-           finished_at = COALESCE($4, finished_at, CASE WHEN $2 IN ('completed','failed','cancelled') THEN now() ELSE NULL END)
+           started_at = COALESCE(
+             $3::timestamptz,
+             started_at,
+             CASE WHEN $2 = 'running' THEN now() END
+           ),
+           finished_at = COALESCE(
+             $4::timestamptz,
+             finished_at,
+             CASE WHEN $2 IN ('completed','failed','cancelled') THEN now() END
+           )
        WHERE id = $1`,
     [toolCallId, status, opts?.startedAt ?? null, opts?.finishedAt ?? null],
   );
