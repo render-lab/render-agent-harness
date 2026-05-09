@@ -5,9 +5,10 @@ name: render-harness
 #   valkey   -> Render Key Value (Redis-compatible Valkey 8)
 #
 # Both services bind to 127.0.0.1 only so they don't conflict with anything
-# else listening on your LAN. If your host already runs Postgres or Redis on
-# the default ports, override the host port via env, e.g.:
-#   HARNESS_PG_PORT=55432 HARNESS_KV_PORT=56379 docker compose up -d
+# else listening on your LAN. Default host ports are intentionally
+# non-standard (55432 / 56379) so they don't collide with a host-installed
+# Postgres or Redis. Override if even those are taken:
+#   HARNESS_PG_PORT=15432 HARNESS_KV_PORT=16379 docker compose up -d
 
 services:
   postgres:
@@ -19,7 +20,7 @@ services:
       POSTGRES_PASSWORD: harness
       POSTGRES_DB: harness
     ports:
-      - "127.0.0.1:${HARNESS_PG_PORT:-5432}:5432"
+      - "127.0.0.1:${HARNESS_PG_PORT:-55432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -35,7 +36,7 @@ services:
     restart: unless-stopped
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
     ports:
-      - "127.0.0.1:${HARNESS_KV_PORT:-6379}:6379"
+      - "127.0.0.1:${HARNESS_KV_PORT:-56379}:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s

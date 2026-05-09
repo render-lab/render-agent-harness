@@ -106,12 +106,16 @@ pnpm db:reset     # nuke volumes and restart with a fresh DB
 pnpm db:down      # stop everything
 ```
 
-Both services bind to `127.0.0.1` only. If your host already runs Postgres
-or Redis on the default ports, override the host port:
+Both services bind to `127.0.0.1` only and use non-standard host ports
+(`55432` for Postgres, `56379` for Valkey) so they don't collide with a
+host-installed Postgres or Redis. If even those ports are taken, override:
 
 ```sh
-HARNESS_PG_PORT=55432 HARNESS_KV_PORT=56379 pnpm db:up
+HARNESS_PG_PORT=15432 HARNESS_KV_PORT=16379 pnpm db:up
 ```
+
+Inside containers the services still listen on the canonical 5432/6379, so
+nothing else needs to change.
 
 ### Run the web-chat agent end to end
 
