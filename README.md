@@ -8,8 +8,10 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 |---|---|---|
 | `runtime-web` | HTTP request | Sub-30s synchronous agent, demos, hackathons, single-tenant prototypes. One service, one process, agent runs in-request. |
 | `runtime-cron` | Schedule | Run completes inside 12 hours, no user interaction. Audits, periodic jobs, monitoring. |
-| `runtime-worker` *(Phase 3)* | Queue / event | Streaming output, low latency, always-on, webhook receivers, multi-tenant. |
+| `runtime-worker` | Queue / event | Streaming output, low latency, always-on, webhook receivers, multi-tenant. Production shape. |
 | `runtime-workflows` *(Phase 4)* | HTTP / API | Long-running, durable, human-in-the-loop, survives deploys. |
+
+For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, and a HITL `/runs/:id/input` endpoint.
 
 ## Status
 
@@ -17,7 +19,7 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 - Phase 1 — core skeleton: **done**
 - Phase 2 — Cron runtime + citations-monitor example: **done**
 - Phase 2.5 — Web runtime + web-chat example: **done**
-- Phase 3 — Worker runtime + Slack support agent: planned
+- Phase 3 — Worker runtime + multi-tenant web service + support-agent: **done**
 - Phase 4 — Workflows runtime + deploy agent: planned
 - Phase 5 — Hardened mode + docs: planned
 
@@ -28,20 +30,20 @@ packages/
   core/                  # Shared loop, adapters, MCP, state, skills, prompt, tools
   runtime-cron/          # Cron one-shot runtime
   runtime-web/           # Synchronous HTTP request handler runtime
-  runtime-worker/        # Queue-driven runtime (Phase 3)
+  runtime-worker/        # pg-boss queue consumer with soft checkpoint
   runtime-workflows/     # Render Workflows runtime (Phase 4)
-  web/                   # Multi-tenant public web service (Phase 3+)
+  web/                   # Multi-tenant public web service in front of runtime-worker
 
 examples/
   citations-monitor/     # Cron: AEO citations tracker
   web-chat/              # Web: chat agent with optional Render MCP
-  support-agent/         # Worker: streaming Slack agent (Phase 3)
+  support-agent/         # Worker: Slack-driven agent with Slack MCP
   deploy-agent/          # Workflows: deploys repos to Render (Phase 4)
 
 blueprints/
   render.demo.yaml       # Single web service + Postgres (web-chat)
   render.demo-cron.yaml  # Single cron + Postgres (citations-monitor)
-  render.private.yaml    # Web + worker pserv + MCP pservs (Phase 3+)
+  render.private.yaml    # Production: web + worker pserv + Postgres + KV (support-agent)
   render.hardened.yaml   # Private + egress allowlist + audit (Phase 5)
 
 docs/
@@ -76,6 +78,22 @@ See [`examples/web-chat/README.md`](examples/web-chat/README.md) for the full wa
 ### Alt quickstart: scheduled audits with the citations-monitor cron
 
 For an unattended cron variant of demo mode (audits queries against an AI search engine, summarizes results to Postgres), use `blueprints/render.demo-cron.yaml`. See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md).
+
+### Production: Slack support agent on the private network
+
+`blueprints/render.private.yaml` provisions the production-shape stack: a public web service that receives Slack Events, a private worker pserv that runs the agent with Slack MCP, plus managed Postgres and Render Key Value on the private network.
+
+```sh
+# Local dev requires two processes plus the Compose stack.
+pnpm db:up
+cp examples/support-agent/.env.example examples/support-agent/.env
+# fill in ANTHROPIC_API_KEY, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET
+pnpm --filter @render-harness/example-support-agent dev:worker  # terminal 1
+pnpm --filter @render-harness/example-support-agent dev:web     # terminal 2
+ngrok http 8080  # expose web for Slack Events delivery
+```
+
+See [`examples/support-agent/README.md`](examples/support-agent/README.md) for the full deploy walkthrough including Slack app setup.
 
 ## Local development
 
