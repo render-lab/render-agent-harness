@@ -9,7 +9,7 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 | `runtime-web` | HTTP request | Sub-30s synchronous agent, demos, hackathons, single-tenant prototypes. One service, one process, agent runs in-request. |
 | `runtime-cron` | Schedule | Run completes inside 12 hours, no user interaction. Audits, periodic jobs, monitoring. |
 | `runtime-worker` | Queue / event | Streaming output, low latency, always-on, webhook receivers, multi-tenant. Production shape. |
-| `runtime-workflows` *(Phase 4)* | HTTP / API | Long-running, durable, human-in-the-loop, survives deploys. |
+| `runtime-workflows` | Render Workflows task | Long-running, durable, human-in-the-loop, survives deploys. Each checkpoint is a subtask in the Workflows UI. |
 
 For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, and a HITL `/runs/:id/input` endpoint.
 
@@ -20,7 +20,7 @@ For multi-tenant production deployments, the `@render-harness/web` package front
 - Phase 2 — Cron runtime + citations-monitor example: **done**
 - Phase 2.5 — Web runtime + web-chat example: **done**
 - Phase 3 — Worker runtime + multi-tenant web service + support-agent: **done**
-- Phase 4 — Workflows runtime + deploy agent: planned
+- Phase 4 — Workflows runtime + deploy-agent: **done**
 - Phase 5 — Hardened mode + docs: planned
 
 ## Repo layout
@@ -31,14 +31,14 @@ packages/
   runtime-cron/          # Cron one-shot runtime
   runtime-web/           # Synchronous HTTP request handler runtime
   runtime-worker/        # pg-boss queue consumer with soft checkpoint
-  runtime-workflows/     # Render Workflows runtime (Phase 4)
+  runtime-workflows/     # Render Workflows: per-step task with HITL approval
   web/                   # Multi-tenant public web service in front of runtime-worker
 
 examples/
   citations-monitor/     # Cron: AEO citations tracker
   web-chat/              # Web: chat agent with optional Render MCP
   support-agent/         # Worker: Slack-driven agent with Slack MCP
-  deploy-agent/          # Workflows: deploys repos to Render (Phase 4)
+  deploy-agent/          # Workflows: deploys repos to Render via Render MCP
 
 blueprints/
   render.demo.yaml       # Single web service + Postgres (web-chat)
@@ -78,6 +78,30 @@ See [`examples/web-chat/README.md`](examples/web-chat/README.md) for the full wa
 ### Alt quickstart: scheduled audits with the citations-monitor cron
 
 For an unattended cron variant of demo mode (audits queries against an AI search engine, summarizes results to Postgres), use `blueprints/render.demo-cron.yaml`. See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md).
+
+### Headline: Workflows-driven deploy agent
+
+`examples/deploy-agent` takes a GitHub repo URL and deploys it to Render via Render MCP. The whole loop is visible in the Render Workflows UI: each agent checkpoint is a chained subtask, and every destructive Render API call (create/update/delete service, postgres, key value, env vars) pauses for human approval.
+
+```sh
+pnpm db:up
+cp examples/deploy-agent/.env.example examples/deploy-agent/.env
+# fill in ANTHROPIC_API_KEY and RENDER_API_KEY
+
+pnpm --filter @render-harness/example-deploy-agent build
+pnpm --filter @render-harness/example-deploy-agent dev:workflow
+
+# in another shell:
+pnpm --filter @render-harness/example-deploy-agent trigger \
+  --repo https://github.com/render-examples/express-hello-world \
+  --name hello-from-deploy-agent --await
+
+# when the run pauses for approval:
+pnpm --filter @render-harness/example-deploy-agent trigger \
+  --resume <runId> --approve <toolUseId> --await
+```
+
+Render Workflows aren't yet supported in `render.yaml`, so the workflow service must be created in the Dashboard. See [`examples/deploy-agent/README.md`](examples/deploy-agent/README.md) for the deploy checklist.
 
 ### Production: Slack support agent on the private network
 
