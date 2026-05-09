@@ -1,0 +1,31 @@
+{
+  "name": "@render-harness/example-citations-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cron agent that audits AI search engines for Render citations on tracked queries.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-cron": "workspace:*",
+    "dotenv": "^17.4.2",
+    "openai": "^6.37.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
