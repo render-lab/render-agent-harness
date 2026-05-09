@@ -1,0 +1,32 @@
+{
+  "name": "@render-harness/runtime-cron",
+  "version": "0.1.0",
+  "description": "Cron runtime for @render-harness/core. One-shot, run-to-completion semantics for scheduled agents.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
