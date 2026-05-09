@@ -68,9 +68,12 @@ SELECT m.created_at, m.content
 
 See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md) for the full walkthrough.
 
-## Development
+## Local development
 
-Requires Node 22+ and pnpm 10+.
+Requires Node 22+, pnpm 10+, and Docker (for the local Postgres + Valkey
+stack).
+
+### One-time setup
 
 ```sh
 corepack enable
@@ -79,17 +82,66 @@ pnpm build
 pnpm test
 ```
 
-To run the citations-monitor locally:
+### Bring up the local primitives
+
+The repo ships a `compose.yaml` that runs the same primitives Render gives
+you in production: Postgres 17 (matches the `render.demo.yaml` Blueprint)
+and Valkey 8 (Redis-compatible, matches Render Key Value).
 
 ```sh
-# 1. Point DATABASE_URL at a local Postgres
-export DATABASE_URL='postgres://localhost:5432/harness'
-# 2. Set keys
+pnpm db:up        # start postgres + valkey, wait for healthchecks
+pnpm db:logs      # tail compose logs
+pnpm db:psql      # open psql in the postgres container
+pnpm db:valkey    # open valkey-cli in the valkey container
+pnpm db:reset     # nuke volumes and restart with a fresh DB
+pnpm db:down      # stop everything
+```
+
+Both services bind to `127.0.0.1` only. If your host already runs Postgres
+or Redis on the default ports, override the host port:
+
+```sh
+HARNESS_PG_PORT=55432 HARNESS_KV_PORT=56379 pnpm db:up
+```
+
+### Run the citations-monitor end to end
+
+```sh
+# 1. Bring up the stack
+pnpm db:up
+
+# 2. Set your API keys (env vars or examples/citations-monitor/.env)
 export ANTHROPIC_API_KEY=sk-ant-...
 export SEARCH_ENGINE_API_KEY=sk-...
-# 3. Run
+# Defaults assume the Compose stack:
+#   DATABASE_URL=postgres://harness:harness@127.0.0.1:5432/harness
+#   KV_URL=redis://127.0.0.1:6379
+
+# 3. Run the agent. Migrations + seed queries run on first boot.
 pnpm dev:citations
 ```
+
+When the run finishes, inspect what happened:
+
+```sh
+pnpm db:psql
+
+# inside psql:
+SELECT id, status, total_cost_usd, finished_at FROM agent_runs ORDER BY created_at DESC LIMIT 5;
+SELECT role, jsonb_array_length(content) AS blocks FROM agent_messages ORDER BY seq;
+SELECT query_id, was_cited, response_excerpt FROM aeo_audits ORDER BY created_at DESC;
+```
+
+### Cancel a running agent (worker / future runtimes)
+
+Cancellation is KV-backed. To cancel a run from another shell:
+
+```sh
+pnpm db:valkey
+> SET cancel:<run-id> user_requested EX 3600
+```
+
+The cron runtime polls this flag every 500 ms between turns and tool calls.
 
 ## Locked decisions
 

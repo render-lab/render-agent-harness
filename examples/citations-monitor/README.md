@@ -57,15 +57,37 @@ ORDER BY 1 DESC;
 corepack enable
 pnpm install
 
-# point at a local Postgres
-export DATABASE_URL='postgres://localhost:5432/harness'
-export ANTHROPIC_API_KEY=sk-ant-...
-export SEARCH_ENGINE_API_KEY=sk-...
+# bring up local Postgres + Valkey (matches Render primitives)
+pnpm db:up
+
+# copy and fill in API keys
+cp examples/citations-monitor/.env.example examples/citations-monitor/.env
+# edit ANTHROPIC_API_KEY and SEARCH_ENGINE_API_KEY
 
 pnpm dev:citations
 ```
 
-Or copy `.env.example` → `.env` inside `examples/citations-monitor/` and the `dotenv` loader will pick it up.
+Inspect the result:
+
+```sh
+pnpm db:psql
+
+# inside psql:
+SELECT m.created_at, substring(m.content::text, 1, 200) AS preview
+  FROM agent_messages m
+  JOIN agent_runs r ON r.id = m.run_id
+ WHERE r.agent_name = 'citations-monitor'
+   AND m.role = 'assistant'
+ ORDER BY m.created_at DESC
+ LIMIT 1;
+
+SELECT q.query_text, a.was_cited, substring(a.response_excerpt, 1, 120) AS excerpt
+  FROM aeo_audits a
+  JOIN aeo_queries q ON q.id = a.query_id
+ ORDER BY a.created_at DESC;
+```
+
+To wipe the DB and start fresh: `pnpm db:reset`.
 
 ## Customising the queries
 
