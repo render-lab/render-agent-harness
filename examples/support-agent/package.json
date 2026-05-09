@@ -1,0 +1,37 @@
+{
+  "name": "@render-harness/example-support-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slack-driven support agent. Web service receives Slack Events, worker runs the agent, replies stream back to the thread via Slack MCP.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/web.js",
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev:web": "tsx watch src/web.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start:web": "node dist/web.js",
+    "start:worker": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.2",
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-worker": "workspace:*",
+    "@render-harness/web": "workspace:*",
+    "@slack/web-api": "^7.15.2",
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.18",
+    "pg-boss": "^12.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
