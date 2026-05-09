@@ -1,0 +1,38 @@
+{
+  "name": "@render-harness/web",
+  "version": "0.1.0",
+  "description": "Multi-tenant public HTTP service for the Render agent harness. Fronts the worker runtime via pg-boss.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.2",
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-worker": "workspace:*",
+    "hono": "^4.12.18",
+    "pg": "^8.20.0",
+    "pg-boss": "^12.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@types/pg": "^8.20.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
