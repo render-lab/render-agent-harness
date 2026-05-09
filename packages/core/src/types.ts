@@ -304,7 +304,7 @@ export interface AgentDefinition {
 
 export interface ModelSpec {
   provider: "anthropic" | "openai-compat";
-  /** e.g. "claude-sonnet-4-7" or "openai/gpt-4o" or "anthropic/claude-sonnet-4-7" via OpenRouter. */
+  /** e.g. "claude-sonnet-4-6" or "openai/gpt-4o" or "anthropic/claude-sonnet-4-6" via OpenRouter. */
   model: string;
   /** Optional baseURL override (used by the openai-compat adapter for gateways). */
   baseURL?: string;

@@ -8,7 +8,7 @@ import type { AgentDefinition } from "./types.js";
  *   export const supportAgent = defineAgent({
  *     name: "support",
  *     version: "0.1.0",
- *     model: { provider: "anthropic", model: "claude-sonnet-4-7" },
+ *     model: { provider: "anthropic", model: "claude-sonnet-4-6" },
  *     systemPrompt: "...",
  *     mcpServers: [...],
  *   });

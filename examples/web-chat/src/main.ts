@@ -37,7 +37,7 @@ const agent = defineAgent({
   version: "0.1.0",
   model: {
     provider: "anthropic",
-    model: process.env.LLM_MODEL ?? "claude-sonnet-4-7",
+    model: process.env.LLM_MODEL ?? "claude-sonnet-4-6",
   },
   systemPrompt: SYSTEM_PROMPT,
   mcpServers,

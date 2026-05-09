@@ -39,7 +39,7 @@ export function buildCitationsAgent(opts: {
     version: "0.1.0",
     model: opts.model ?? {
       provider: "anthropic",
-      model: process.env.LLM_MODEL ?? "claude-sonnet-4-7",
+      model: process.env.LLM_MODEL ?? "claude-sonnet-4-6",
     },
     systemPrompt: SYSTEM_PROMPT,
     skills: { kind: "directory", path: SKILLS_DIR },

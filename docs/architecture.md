@@ -186,7 +186,7 @@ See [`packages/core/src/run.ts`](../packages/core/src/run.ts) for the full type 
 5. **State in Postgres, signals in KV.** No Redis dependency for state.
 6. **Streaming via Postgres LISTEN/NOTIFY.** No Redis pub/sub.
 7. **Pserv as default for production.** Demo mode collapses to a single web service.
-8. **Default model: `claude-sonnet-4-7`** via Anthropic native. Override with `LLM_MODEL` env var.
+8. **Default model: `claude-sonnet-4-6`** via Anthropic native (latest Sonnet as of build; Anthropic's Models API is the source of truth). Override with `LLM_MODEL` env var.
 9. **Agent definition format: TS object** via `defineAgent()`. Source of truth, versioned in git.
 10. **MCP transport: stdio + Streamable HTTP** in v1. Render MCP runs over HTTP.
 11. **Build order:** Cron → Worker → Workflows. Cron forces the runtime-agnostic core from day one.

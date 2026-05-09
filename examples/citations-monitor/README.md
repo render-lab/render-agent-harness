@@ -43,7 +43,7 @@ ORDER BY 1 DESC;
 |---|---|---|
 | `DATABASE_URL` | (required) | Render-managed Postgres connection string. |
 | `ANTHROPIC_API_KEY` | (required) | The model the *agent* uses for reasoning. |
-| `LLM_MODEL` | `claude-sonnet-4-7` | The agent's model. Override to use a different Claude model. |
+| `LLM_MODEL` | `claude-sonnet-4-6` | The agent's model. Override to use a different Claude model. |
 | `SEARCH_ENGINE_API_KEY` | (required) | API key for the engine being audited. |
 | `SEARCH_ENGINE_BASE_URL` | OpenAI default | Set to point at OpenRouter, Perplexity, etc. |
 | `SEARCH_ENGINE_MODEL` | `gpt-5` | Model identifier on the audited engine. |

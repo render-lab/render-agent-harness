@@ -34,7 +34,7 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: LLM_MODEL
-        value: claude-sonnet-4-7
+        value: claude-sonnet-4-6
       # The agent's reasoning model. Required.
       - key: ANTHROPIC_API_KEY
         sync: false
