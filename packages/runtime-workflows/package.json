@@ -1,0 +1,33 @@
+{
+  "name": "@render-harness/runtime-workflows",
+  "version": "0.1.0",
+  "description": "Render Workflows runtime for @render-harness/core. Each agent step = one Workflows task; soft checkpoint chains subtasks; HITL via approvedToolCallIds.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "@renderinc/sdk": "^0.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
