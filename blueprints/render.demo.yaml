@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+#
+# Demo mode for the Render agent harness.
+# Deploys the citations-monitor cron + a managed Postgres database.
+# Use this to fork the repo and have a working agent on Render in 15 minutes.
+#
+# Production note: this Blueprint is intentionally minimal. For private
+# networking, MCP servers as private services, and Key Value-backed
+# cancellation, see blueprints/render.private.yaml.
+
+databases:
+  - name: harness-demo-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "17"
+
+services:
+  - type: cron
+    name: citations-monitor
+    runtime: node
+    region: oregon
+    plan: starter
+    schedule: "0 13 * * *"  # 13:00 UTC daily — quote the expression
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-citations-monitor build
+    startCommand: node examples/citations-monitor/dist/main.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harness-demo-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: LLM_MODEL
+        value: claude-sonnet-4-7
+      # The harness model client (Anthropic by default).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # The "engine being audited." Defaults to OpenAI gpt-5; swap to a
+      # Perplexity / OpenRouter base URL + key if you want to audit a
+      # different search-grounded model.
+      - key: SEARCH_ENGINE_API_KEY
+        sync: false
+      - key: SEARCH_ENGINE_MODEL
+        value: gpt-5
