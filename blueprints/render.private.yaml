@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+#
+# Production-shape Blueprint for the Render agent harness.
+# Deploys the support-agent example end-to-end:
+#
+#   - support-agent-web (public web service): receives Slack Events, enqueues
+#     run jobs onto pg-boss in Postgres, never talks to the model directly.
+#   - support-agent-worker (private service): pulls jobs, runs the agent
+#     through @render-harness/core with Slack MCP wired in, posts the final
+#     reply back to the originating Slack thread.
+#   - Managed Postgres for state + queue (single DB, no Redis).
+#   - Render Key Value (Valkey 8) for ephemeral cancel signals.
+#
+# Egress to model providers (Anthropic, etc.) is the only outbound public
+# traffic. The worker reaches Postgres, Key Value, and Slack over the
+# private network where supported (Postgres + KV) and over public internet
+# only for the Slack API.
+
+databases:
+  - name: harness-private-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "17"
+
+services:
+  # --- Public web entrypoint ----------------------------------------------
+  - type: web
+    name: support-agent-web
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-support-agent build
+    startCommand: node examples/support-agent/dist/web.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: WORKER_QUEUE
+        value: support-runs
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harness-private-db
+          property: connectionString
+      - key: KV_URL
+        fromService:
+          name: harness-kv
+          type: keyvalue
+          property: connectionString
+      # Slack signing secret so the web service can verify Events callbacks.
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+
+  # --- Private worker ------------------------------------------------------
+  - type: pserv
+    name: support-agent-worker
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-support-agent build
+    startCommand: node examples/support-agent/dist/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: WORKER_QUEUE
+        value: support-runs
+      - key: LLM_MODEL
+        value: claude-sonnet-4-6
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harness-private-db
+          property: connectionString
+      - key: KV_URL
+        fromService:
+          name: harness-kv
+          type: keyvalue
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Bot User OAuth Token (xoxb-...) for both Slack MCP read access and
+      # posting replies via the Web API.
+      - key: SLACK_BOT_TOKEN
+        sync: false
+
+  # --- Ephemeral signal store ---------------------------------------------
+  - type: keyvalue
+    name: harness-kv
+    plan: free
+    region: oregon
+    ipAllowList: []
