@@ -1,0 +1,29 @@
+{
+  "name": "@render-harness/example-web-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single-service web agent. POST a message, get an answer. Optional Render MCP for service introspection.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-web": "workspace:*",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
