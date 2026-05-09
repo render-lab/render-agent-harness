@@ -1,0 +1,33 @@
+{
+  "name": "@render-harness/example-deploy-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Render Workflows agent that deploys a repo to Render via Render MCP. Headline Phase 4 demo.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev:workflow": "render workflows dev -- node dist/main.js",
+    "dev:workflow:tsx": "render workflows dev -- tsx src/main.ts",
+    "trigger": "tsx src/trigger.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-workflows": "workspace:*",
+    "@renderinc/sdk": "^0.5.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
