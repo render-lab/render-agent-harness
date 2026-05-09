@@ -1,13 +1,9 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: {
-    index: "src/index.ts",
-    "adapters/index": "src/adapters/index.ts",
-    "state/schema": "src/state/schema.ts",
-  },
+  entry: { index: "src/index.ts" },
   format: ["esm"],
-  dts: true,
+  dts: { compilerOptions: { ignoreDeprecations: "6.0" } },
   clean: true,
   sourcemap: true,
   target: "node22",

@@ -10,14 +10,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./adapters": {
-      "types": "./dist/adapters/index.d.ts",
-      "import": "./dist/adapters/index.js"
-    },
-    "./schema": {
-      "types": "./dist/state/schema.d.ts",
-      "import": "./dist/state/schema.js"
     }
   },
   "files": [
