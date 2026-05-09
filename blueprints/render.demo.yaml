@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+#
+# Demo mode: a single Render web service running the web-chat agent on top
+# of the harness, plus a managed Postgres for state. POST /runs after
+# deployment and you have a working agent in 5 minutes.
+#
+# For the citations-monitor cron variant of demo mode, see render.demo-cron.yaml.
+# For the production-shape Blueprint (web + worker pserv + private MCP) see
+# render.private.yaml when Phase 3 lands.
+
+databases:
+  - name: harness-demo-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "17"
+
+services:
+  - type: web
+    name: web-chat
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-web-chat build
+    startCommand: node examples/web-chat/dist/main.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harness-demo-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: LLM_MODEL
+        value: claude-sonnet-4-7
+      # The agent's reasoning model. Required.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: enables Render MCP tools (list services, read deploys, etc.)
+      # Set this to a Render workspace API key to opt in. Leave unset for a
+      # generic chat agent without tools.
+      - key: RENDER_API_KEY
+        sync: false
