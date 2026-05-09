@@ -75,6 +75,15 @@ export interface RunAgentArgs {
   signal: AbortSignal;
   checkpoint?: CheckpointPolicy;
   hooks?: RuntimeHooks;
+  /**
+   * Tool-use ids that the caller has approved for execution despite being in
+   * the agent's `permissions.requireApproval` list. Used to resume a paused
+   * (`awaiting_approval`) run after a human reviews the proposed tool call.
+   *
+   * Pass the `tool_use_id` from the previous step's
+   * `{ status: "paused", payload: { tool_use_id, ... } }` result.
+   */
+  approvedToolCallIds?: ReadonlySet<string>;
 }
 
 export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<RunStepResult> {
@@ -142,33 +151,53 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
         });
       }
       const messages = await listMessages(pool, runId);
-      const completion = await client.complete({
-        model: agentDef.model,
-        system: systemPrompt,
-        tools: allowed,
-        messages,
-        ...(agentDef.sampling ? { sampling: agentDef.sampling } : {}),
-        signal,
-      });
 
-      cursor.usage = addUsage(cursor.usage, completion.usage);
-      cursor.turn += 1;
-      const turnCost = estimateCost(agentDef.model, completion.usage).totalUsd;
-      totalCost += turnCost;
-      cursor.wallMs = Date.now() - wallStart + run.cursor.wallMs;
-      await updateRunCursor(pool, runId, cursor, totalCost);
-      await hooks.onTokenUsage?.(completion.usage);
+      // Resume detection: if the last persisted message is an assistant turn
+      // whose tool_uses were never fulfilled with tool_results (the run paused
+      // for approval), replay those tool_uses instead of re-prompting the
+      // model. Sending an unfulfilled assistant turn back to the provider's
+      // messages.create would 400, and the duplicate completion would burn
+      // tokens to no purpose.
+      const pending = pendingToolUses(messages);
+      let assistantContent: ContentBlock[];
+      let assistant: Message;
+      if (pending) {
+        log.info(
+          { pendingCount: pending.toolUses.length },
+          "resuming run with unfulfilled tool_uses",
+        );
+        assistantContent = pending.assistantContent;
+        assistant = pending.assistantMessage;
+      } else {
+        const completion = await client.complete({
+          model: agentDef.model,
+          system: systemPrompt,
+          tools: allowed,
+          messages,
+          ...(agentDef.sampling ? { sampling: agentDef.sampling } : {}),
+          signal,
+        });
 
-      const assistant = await appendMessage(pool, {
-        runId,
-        role: "assistant",
-        content: completion.message.content,
-        usage: completion.usage,
-      });
+        cursor.usage = addUsage(cursor.usage, completion.usage);
+        cursor.turn += 1;
+        const turnCost = estimateCost(agentDef.model, completion.usage).totalUsd;
+        totalCost += turnCost;
+        cursor.wallMs = Date.now() - wallStart + run.cursor.wallMs;
+        await updateRunCursor(pool, runId, cursor, totalCost);
+        await hooks.onTokenUsage?.(completion.usage);
+
+        assistant = await appendMessage(pool, {
+          runId,
+          role: "assistant",
+          content: completion.message.content,
+          usage: completion.usage,
+        });
+        await hooks.onMessage?.(assistant);
+        assistantContent = completion.message.content;
+      }
       lastAssistantMessage = assistant;
-      await hooks.onMessage?.(assistant);
 
-      const toolUses = collectToolUses(completion.message.content);
+      const toolUses = collectToolUses(assistantContent);
       if (toolUses.length === 0) {
         // No tool calls — model returned a final answer.
         await setRunStatus(pool, runId, "completed");
@@ -191,9 +220,9 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
           });
           continue;
         }
-        if (requiresApproval(use.name, agentDef)) {
+        if (requiresApproval(use.name, agentDef) && !args.approvedToolCallIds?.has(use.id)) {
           await setRunStatus(pool, runId, "paused");
-          log.info({ tool: use.name }, "paused: awaiting_approval");
+          log.info({ tool: use.name, toolUseId: use.id }, "paused: awaiting_approval");
           return {
             status: "paused",
             reason: "awaiting_approval",
@@ -352,6 +381,49 @@ function findHandler(
 
 function collectToolUses(content: ContentBlock[]): ToolUseBlock[] {
   return content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+}
+
+interface PendingToolUses {
+  assistantMessage: Message;
+  assistantContent: ContentBlock[];
+  toolUses: ToolUseBlock[];
+}
+
+/**
+ * If the most recent persisted assistant message has tool_use blocks that
+ * weren't resolved by a subsequent tool message, return them so the loop can
+ * dispatch directly without re-prompting the model.
+ *
+ * Returns null in the normal case (no pending tool uses, or last message is a
+ * tool/user message that resolved the last assistant turn).
+ */
+function pendingToolUses(messages: Message[]): PendingToolUses | null {
+  // Walk backwards looking for the most recent assistant message.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (!msg) continue;
+    if (msg.role === "assistant") {
+      const toolUses = msg.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+      if (toolUses.length === 0) return null;
+      // Collect tool_result tool_use_ids that came after this assistant turn.
+      const fulfilledIds = new Set<string>();
+      for (let j = i + 1; j < messages.length; j++) {
+        const next = messages[j];
+        if (!next) continue;
+        for (const block of next.content) {
+          if (block.type === "tool_result") fulfilledIds.add(block.tool_use_id);
+        }
+      }
+      const unfulfilled = toolUses.filter((t) => !fulfilledIds.has(t.id));
+      if (unfulfilled.length === 0) return null;
+      return {
+        assistantMessage: msg,
+        assistantContent: msg.content,
+        toolUses: unfulfilled,
+      };
+    }
+  }
+  return null;
 }
 
 function requiresApproval(toolName: string, agent: AgentDefinition): boolean {
