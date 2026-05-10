@@ -1,38 +1,9 @@
+import type { AgentSummary } from "@render-harness/contracts";
 import { type AgentDefinition, previewBuiltins, type SkippedBuiltin } from "@render-harness/core";
 
-const SYSTEM_PROMPT_PREVIEW_CHARS = 400;
+export type { AgentSummary };
 
-export interface AgentSummary {
-  name: string;
-  version: string;
-  model: { provider: string; model: string };
-  systemPromptPreview: string;
-  systemPromptLength: number;
-  mcpServers: { name: string; transport: "stdio" | "http" }[];
-  permissions: {
-    allowedTools?: string[];
-    deniedTools?: string[];
-    requireApproval?: string[];
-  };
-  budget?: AgentDefinition["budget"];
-  sampling?: AgentDefinition["sampling"];
-  hasLocalTools: boolean;
-  hasSkills: boolean;
-  /**
-   * Builtin tools registered for this agent given the current process env,
-   * with the agent's own deniedTools / allowedTools applied. Names that
-   * would otherwise register but are blocked by permissions appear under
-   * `builtinsSkipped` with reason `"denied by agent permissions"`.
-   */
-  builtinsRegistered: string[];
-  builtinsSkipped: SkippedBuiltin[];
-  /**
-   * Capability pack names declared on the agent (via `defineAgent`'s
-   * `capabilityPacks` field). Pure metadata — the harness uses this only
-   * to surface "this agent uses Pack X" in the operator UI.
-   */
-  capabilityPacks: string[];
-}
+const SYSTEM_PROMPT_PREVIEW_CHARS = 400;
 
 export function summariseAgent(agent: AgentDefinition): AgentSummary {
   const fullPrompt = agent.systemPrompt ?? "";

@@ -1,19 +1,8 @@
+import type { DiagnosticCheck } from "@render-harness/contracts";
 import type { AgentDefinition, Pool, UserId } from "@render-harness/core";
 import type { Hono } from "hono";
 
-/**
- * Outcome of a single diagnostic check. The operator UI groups by
- * `level`, surfaces "error" entries as a top banner, and renders the
- * full list in a Diagnostics panel.
- */
-export interface DiagnosticCheck {
-  id: string;
-  level: "ok" | "warn" | "error";
-  title: string;
-  message: string;
-  /** Optional one-line action a human can take to fix the issue. */
-  hint?: string;
-}
+export type { DiagnosticCheck };
 
 export interface DiagnosticsRouteContext {
   pool: Pool;

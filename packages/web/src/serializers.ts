@@ -1,12 +1,7 @@
-import type { AgentRun, ContentBlock } from "@render-harness/core";
+import type { MessageRecord, RunSummary } from "@render-harness/contracts";
+import type { AgentRun, Message } from "@render-harness/core";
 
-export function serializeMessage(m: {
-  id: string;
-  role: string;
-  content: ContentBlock[];
-  createdAt: Date;
-  usage?: unknown;
-}) {
+export function serializeMessage(m: Message): MessageRecord {
   return {
     id: m.id,
     role: m.role,
@@ -16,7 +11,7 @@ export function serializeMessage(m: {
   };
 }
 
-export function serializeRun(run: AgentRun) {
+export function serializeRun(run: AgentRun): RunSummary {
   return {
     id: run.id,
     agentName: run.agentName,
