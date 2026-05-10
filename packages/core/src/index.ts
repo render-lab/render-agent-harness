@@ -67,6 +67,7 @@ export {
   listMessages,
   listRuns,
   listToolCalls,
+  loadMessage,
   loadRun,
   loadRunForUser,
   loadToolResult,

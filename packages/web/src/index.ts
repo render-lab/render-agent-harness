@@ -17,6 +17,7 @@ import {
   listMessages,
   listRuns,
   listToolCalls,
+  loadMessage,
   loadRunForUser,
   type NotifyPayload,
   type Pool,
@@ -342,8 +343,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
           }
           if (parsed.runId !== id) return;
           if (parsed.kind === "message") {
-            const messages = await listMessages(pool, id);
-            const m = messages.find((x) => x.id === parsed.messageId);
+            const m = await loadMessage(pool, parsed.messageId);
             if (m) await writeEvent("message", serializeMessage(m));
           } else if (parsed.kind === "run_status") {
             await writeEvent("status", { status: parsed.status });

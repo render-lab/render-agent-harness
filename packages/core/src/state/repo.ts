@@ -235,6 +235,18 @@ export async function listMessages(pool: Pool, runId: RunId): Promise<Message[]>
   return rows.map(rowToMessage);
 }
 
+/**
+ * Fetch a single message by id. Used by the SSE handler so we don't reload the
+ * full run history on every NOTIFY.
+ */
+export async function loadMessage(pool: Pool, messageId: string): Promise<Message | null> {
+  const { rows } = await pool.query<MessageRow>(
+    "SELECT * FROM agent_messages WHERE id = $1",
+    [messageId],
+  );
+  return rows.length > 0 ? rowToMessage(rows[0] as MessageRow) : null;
+}
+
 export interface ListRunsFilter {
   /** Restrict to runs owned by this user. */
   userId?: UserId;
