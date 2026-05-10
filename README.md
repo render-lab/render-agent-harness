@@ -1,6 +1,6 @@
 # Render Agent Harness
 
-A Render-native agent harness. Built on Render primitives (Workflows, Workers, Cron, Postgres, Key Value, private services), provider-agnostic at the model layer, MCP-first for tools.
+A Render-native agent harness. Built on Render primitives (Workflows, Workers, Cron, Postgres, Key Value, private services), provider-agnostic at the model layer, MCP-first for tools, with a [config registry](#config-registry) for one-click-deploy entries.
 
 The harness is a thin core wrapped by four runtime adapters. The same agent definition runs unchanged across all of them — pick the one that matches your shape:
 
@@ -34,6 +34,9 @@ packages/
   runtime-workflows/     # Render Workflows: per-step task with HITL approval
   web/                   # Multi-tenant public web service in front of runtime-worker
 
+  registry/              # Config registry: schema, defineFromConfig(), emitter, render-harness-build bin
+  capabilities/          # First-party capability packs (search/scrape/memory/browser)
+
 examples/
   citations-monitor/     # Cron: AEO citations tracker
   web-chat/              # Web: chat agent with optional Render MCP
@@ -45,6 +48,14 @@ blueprints/
   render.demo-cron.yaml  # Single cron + Postgres (citations-monitor)
   render.private.yaml    # Production: web + worker pserv + Postgres + KV (support-agent)
   render.hardened.yaml   # Private + egress allowlist + audit (Phase 5)
+
+templates/
+  render-harness-entry/  # Starter template for new registry entries
+
+registry-index/
+  index.json             # Decentralized registry index (entries by repo + SHA)
+  scripts/               # Validation scripts (schema + entry-fetch CI)
+  site/                  # Static discovery site
 
 docs/
   architecture.md        # The architecture and Phase 0 verifications
@@ -118,6 +129,21 @@ ngrok http 8080  # expose web for Slack Events delivery
 ```
 
 See [`examples/support-agent/README.md`](examples/support-agent/README.md) for the full deploy walkthrough including Slack app setup.
+
+## Config registry
+
+Each runtime can be packaged as a registry entry: a small repo with a declarative `render-harness.yaml`, a committed `render.yaml`, and (optionally) custom TypeScript agent code. End users deploy with one click via a Deploy-to-Render badge — no CLI, no API key. Authors regenerate `render.yaml` from `render-harness.yaml` with `npx render-harness-build`.
+
+**[Read the registry guide](docs/registry-guide.md)** for end-to-end walkthroughs (deploying, authoring, contributing packs).
+
+Where things live:
+
+- [`packages/registry/`](packages/registry) — schema, `defineFromConfig()` runtime library, Blueprint emitter, `render-harness-build` bin.
+- [`packages/capabilities/`](packages/capabilities) — first-party capability packs: search (Exa, Tavily), scraping (Firecrawl), long-term memory (Postgres), browser automation (Browserbase). Community packs live on npm with the `render-harness-cap` keyword.
+- [`templates/render-harness-entry/`](templates/render-harness-entry) — starter template for a new entry.
+- [`registry-index/`](registry-index) — the decentralized index file, validation CI, and discovery static site.
+
+See [`docs/architecture.md`](docs/architecture.md#config-registry) for the full contract, namespacing rules, and the Blueprint shape table.
 
 ## Local development
 
@@ -210,7 +236,7 @@ These are documented in [`docs/architecture.md`](docs/architecture.md). They're 
 
 1. **TypeScript** end-to-end.
 2. **No agent framework dependency.** Direct Anthropic SDK + OpenAI SDK behind a thin `LLMClient` interface.
-3. **Three runtimes on shared core**, built in order: Cron → Worker → Workflows.
+3. **Four runtimes on shared core** (Web, Cron, Worker, Workflows). Cron came first; Web shipped in Phase 2.5.
 4. **State in Postgres, signals in Key Value, streaming via LISTEN/NOTIFY.** No Redis dependency.
 5. **Private services as the production default.** Demo mode collapses to one service.
 6. **MCP for tools.** Both stdio and Streamable HTTP supported in v1.

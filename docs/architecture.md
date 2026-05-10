@@ -1,6 +1,6 @@
 # Architecture
 
-The harness is a thin core wrapped by three runtime adapters (Cron, Worker, Workflows) running on Render primitives. Postgres holds state, Key Value holds ephemeral signals, MCP servers expose tools, and the model provider sits behind a swappable client.
+The harness is a thin core wrapped by four runtime adapters (Web, Cron, Worker, Workflows) running on Render primitives. Postgres holds state, Key Value holds ephemeral signals, MCP servers expose tools, and the model provider sits behind a swappable client. A separate config registry (`@render-harness/registry`) lets users package an entry as a declarative `render-harness.yaml`, with capability packs as the extension surface.
 
 This document captures the architectural decisions and the Phase 0 verifications that confirmed (or adjusted) them. It's the source of truth for how the pieces fit together.
 
@@ -182,11 +182,48 @@ See [`packages/core/src/run.ts`](../packages/core/src/run.ts) for the full type 
 1. **Language: TypeScript.**
 2. **No agent framework dependency.** No Vercel AI SDK, no Mastra, no Claude Agent SDK in the core.
 3. **Model client: direct `@anthropic-ai/sdk` + `openai` SDKs** behind a thin `LLMClient` interface (Token.js rejected per Phase 0 verification 1).
-4. **Three runtimes on shared core:** Cron, Worker, Workflows.
+4. **Four runtimes on shared core:** Web, Cron, Worker, Workflows. (Web shipped in Phase 2.5.)
 5. **State in Postgres, signals in KV.** No Redis dependency for state.
 6. **Streaming via Postgres LISTEN/NOTIFY.** No Redis pub/sub.
 7. **Pserv as default for production.** Demo mode collapses to a single web service.
 8. **Default model: `claude-sonnet-4-6`** via Anthropic native (latest Sonnet as of build; Anthropic's Models API is the source of truth). Override with `LLM_MODEL` env var.
-9. **Agent definition format: TS object** via `defineAgent()`. Source of truth, versioned in git.
+9. **Agent definition format:** TS object via `defineAgent()` is the canonical form. Registry entries may also use a YAML `render-harness.yaml` that either references a built-in agent kind (e.g. `chat`) or points at a TS entrypoint exporting an `AgentDefinition`. YAML is the deploy-time interface; TS remains the runtime contract.
 10. **MCP transport: stdio + Streamable HTTP** in v1. Render MCP runs over HTTP.
 11. **Build order:** Cron → Worker → Workflows. Cron forces the runtime-agnostic core from day one.
+
+## Config registry
+
+The harness ships a thin config registry that packages an entry as a small bundle: a declarative `render-harness.yaml` (model, MCP servers, capabilities, runtime topology, env schema), a committed `render.yaml` Blueprint, and optional TypeScript agent code. Two surfaces in [`packages/registry`](../packages/registry):
+
+- A runtime library — `defineFromConfig()` reads `render-harness.yaml`, resolves capability packs from `node_modules`, and returns a runnable `AgentDefinition` ready for any runtime.
+- A build bin — `npx render-harness-build` validates the YAML, runs the Blueprint emitter, and writes `render.yaml` next to the source. Authors run it once before committing.
+
+Discovery and deployment intentionally have **no user-facing CLI**. A central [`registry-index/index.json`](../registry-index/index.json) lists entries by name + repo + commit-pinned SHA. End users browse a static discovery site and click a Deploy-to-Render badge in the entry's README. Render reads the committed `render.yaml`. This matches Render's existing Template Gallery flow.
+
+The Blueprint emitter mirrors the shapes of the hand-authored Blueprints in [`blueprints/`](../blueprints/):
+
+| `runtimes[]` combination | Output | Reference |
+|---|---|---|
+| `web` alone | Single web service + Postgres | [`render.demo.yaml`](../blueprints/render.demo.yaml) |
+| `cron` alone | Cron service + Postgres | [`render.demo-cron.yaml`](../blueprints/render.demo-cron.yaml) |
+| `web` + `worker` | Public web (multi-tenant shell) + worker pserv + Postgres + Key Value | [`render.private.yaml`](../blueprints/render.private.yaml) |
+| `workflows` | Dashboard checklist (Workflows aren't yet Blueprintable; see verification 2) | n/a |
+
+## Extensibility (capability packs)
+
+Three tiers of extension, each with a clean separation of concerns:
+
+1. **MCP servers** (zero code). Declare them under `mcpServers[]` in `render-harness.yaml`. Works for any third-party MCP — Render MCP, Slack MCP, GitHub MCP, etc.
+2. **Capability packs** (npm). Packages that default-export a `CapabilityPack` and contribute one or more of: `localTools`, `mcpServers`, `skills`, `envSchema`, `renderServices`. Tool / server names are namespaced as `<pack>.<thing>` so multiple packs coexist. First-party suite under [`packages/capabilities/`](../packages/capabilities/):
+   - `cap-search-exa` — Exa MCP wiring + skill + env schema.
+   - `cap-search-tavily` — Tavily MCP + skill + env.
+   - `cap-scrape-firecrawl` — Firecrawl MCP + a `scrape_and_store` LocalToolHandler that persists to Postgres.
+   - `cap-memory-pg` — long-term memory tools backed by `pg_trgm`. Pure TS; no extra service.
+   - `cap-browser-browserbase` — Browserbase MCP wiring (hosted; no sidecar needed).
+3. **Custom TS** (full control). Any entry can declare `agent.kind: custom` with an `entrypoint` that default-exports an `AgentDefinition`. The YAML still drives Blueprint emission.
+
+The community publishes packs to npm; entries reference them as regular `pnpm add` deps and list them under `capabilities[]`.
+
+## Future runtimes
+
+Voice / realtime is a planned fifth runtime with a different loop shape (bidirectional audio, OpenAI Realtime API or chained STT-LLM-TTS pipelines). It does not fit the existing tool-loop core. Tracked as a separate roadmap item; explicitly out of scope for the config registry.
