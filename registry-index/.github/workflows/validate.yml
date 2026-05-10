@@ -1,0 +1,35 @@
+name: validate-index
+
+on:
+  pull_request:
+    paths:
+      - "index.json"
+      - "scripts/validate.mjs"
+      - ".github/workflows/validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "index.json"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: corepack enable
+
+      - name: Install validation deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate index.json shape
+        run: node scripts/validate.mjs
+
+      - name: Validate every referenced entry at its pinned SHA
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/validate-entries.mjs

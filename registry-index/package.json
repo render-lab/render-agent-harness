@@ -1,0 +1,15 @@
+{
+  "name": "render-harness-index",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Decentralized registry index for the Render agent harness.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "validate:entries": "node scripts/validate-entries.mjs"
+  },
+  "dependencies": {
+    "@render-harness/registry": "^0.1"
+  }
+}

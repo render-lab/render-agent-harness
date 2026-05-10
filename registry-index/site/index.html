@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Render harness registry</title>
+    <meta
+      name="description"
+      content="Browse and deploy community-built Render agent harness entries."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fafafa;
+        --fg: #111;
+        --fg-muted: #555;
+        --card-bg: #fff;
+        --card-border: #e5e5e5;
+        --accent: #5e17eb;
+        --tag-bg: #f0f0ff;
+        --tag-fg: #5e17eb;
+        --code-bg: #f4f4f6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e0e10;
+          --fg: #f0f0f0;
+          --fg-muted: #9a9aa0;
+          --card-bg: #18181b;
+          --card-border: #2a2a30;
+          --accent: #a78bfa;
+          --tag-bg: #261f3a;
+          --tag-fg: #c4b5fd;
+          --code-bg: #1f1f23;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      header {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 4rem 1.5rem 2rem;
+      }
+      header h1 {
+        font-size: 2.5rem;
+        margin: 0 0 0.5rem;
+      }
+      header p {
+        margin: 0;
+        color: var(--fg-muted);
+        max-width: 60ch;
+      }
+      header a {
+        color: var(--accent);
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 1.5rem 4rem;
+      }
+      .controls {
+        display: flex;
+        gap: 1rem;
+        margin: 2rem 0 1.5rem;
+        flex-wrap: wrap;
+      }
+      .controls input {
+        flex: 1;
+        min-width: 200px;
+        padding: 0.6rem 0.8rem;
+        font: inherit;
+        background: var(--card-bg);
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+      .card h2 a {
+        color: var(--fg);
+        text-decoration: none;
+      }
+      .card h2 a:hover {
+        color: var(--accent);
+      }
+      .card p {
+        margin: 0;
+        color: var(--fg-muted);
+        flex: 1;
+      }
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .tag {
+        font-size: 0.75rem;
+        background: var(--tag-bg);
+        color: var(--tag-fg);
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+      }
+      .meta {
+        font-size: 0.8rem;
+        color: var(--fg-muted);
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      .deploy {
+        display: inline-block;
+      }
+      .deploy img {
+        height: 32px;
+      }
+      .empty {
+        text-align: center;
+        padding: 3rem;
+        color: var(--fg-muted);
+        border: 2px dashed var(--card-border);
+        border-radius: 12px;
+      }
+      .error {
+        background: #fee;
+        color: #800;
+        padding: 1rem;
+        border-radius: 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.85rem;
+      }
+      footer {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+        color: var(--fg-muted);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--card-border);
+      }
+      footer code {
+        background: var(--code-bg);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Render harness registry</h1>
+      <p>
+        One-click-deploy agents built on the
+        <a href="https://github.com/render-examples/render-harness">Render agent harness</a>. Each
+        entry is its own GitHub repo, pinned by commit SHA, with a Deploy-to-Render badge.
+      </p>
+    </header>
+
+    <main>
+      <div class="controls">
+        <input id="search" type="search" placeholder="Search entries…" autofocus />
+      </div>
+      <div id="grid" class="grid" aria-live="polite"></div>
+      <div id="status"></div>
+    </main>
+
+    <footer>
+      Want to add an entry? Open a PR adding 4 fields to
+      <code>index.json</code> in
+      <a href="https://github.com/render-examples/render-harness-index">render-harness-index</a>.
+    </footer>
+
+    <script>
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("status");
+      const search = document.getElementById("search");
+      let entries = [];
+
+      function deployUrlFor(entry) {
+        return `https://render.com/deploy?repo=${encodeURIComponent(entry.repo)}`;
+      }
+
+      function render(query = "") {
+        const q = query.trim().toLowerCase();
+        const filtered = entries.filter((e) => {
+          if (!q) return true;
+          return (
+            e.name.toLowerCase().includes(q) ||
+            e.description.toLowerCase().includes(q) ||
+            (e.categories ?? []).some((c) => c.toLowerCase().includes(q))
+          );
+        });
+
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="empty">No entries match "${escapeHtml(query)}".</div>`;
+          return;
+        }
+
+        grid.innerHTML = filtered
+          .map((e) => {
+            const tags = (e.categories ?? [])
+              .map((c) => `<span class="tag">${escapeHtml(c)}</span>`)
+              .join("");
+            return `
+              <article class="card">
+                <h2><a href="${escapeHtml(e.repo)}">${escapeHtml(e.name)}</a></h2>
+                <p>${escapeHtml(e.description)}</p>
+                <div class="tags">${tags}</div>
+                <div class="meta">${escapeHtml(e.repo.replace(/^https?:\/\//, ""))}@${e.ref.slice(0, 7)}</div>
+                <a class="deploy" href="${deployUrlFor(e)}">
+                  <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />
+                </a>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      }
+
+      search.addEventListener("input", () => render(search.value));
+
+      (async () => {
+        try {
+          const res = await fetch("index.json", { cache: "no-store" });
+          if (!res.ok) throw new Error(`fetch index.json: ${res.status} ${res.statusText}`);
+          const data = await res.json();
+          entries = data.entries ?? [];
+          if (entries.length === 0) {
+            grid.innerHTML = `<div class="empty">The registry is empty. Be the first to <a href="https://github.com/render-examples/render-harness-index">add an entry</a>.</div>`;
+          } else {
+            render();
+          }
+        } catch (err) {
+          status.innerHTML = `<div class="error">Failed to load index.json: ${escapeHtml(err.message)}</div>`;
+        }
+      })();
+    </script>
+  </body>
+</html>
