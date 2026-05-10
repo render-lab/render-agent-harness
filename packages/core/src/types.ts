@@ -5,51 +5,55 @@
  * with an {@link AgentDefinition} and a {@link CheckpointPolicy}. The core owns the
  * loop, the model adapter, MCP, state, skills, prompts, idempotency, and
  * cancellation. Runtimes never read message history or call the model directly.
+ *
+ * Browser-safe primitives (RunStatus, ContentBlock, TokenUsage, etc.) live
+ * in `@render-harness/contracts` and are re-exported here so existing
+ * consumers of `@render-harness/core` keep working unchanged.
  */
 
+import type {
+  Budget,
+  ContentBlock,
+  MessageId,
+  MessageRole,
+  Permissions,
+  RunCursor,
+  RunId,
+  RunStatus,
+  SamplingParams,
+  TokenUsage,
+  ToolCallId,
+  UserId,
+} from "@render-harness/contracts";
 import type { Logger } from "pino";
 
 // --------------------------------------------------------------------
-// Identifiers
+// Re-exports from @render-harness/contracts
 // --------------------------------------------------------------------
 
-export type RunId = string;
-export type ToolCallId = string;
-export type MessageId = string;
-export type UserId = string;
+export type {
+  Budget,
+  ContentBlock,
+  CostEstimate,
+  MessageId,
+  MessageRole,
+  Permissions,
+  RunCursor,
+  RunId,
+  RunStatus,
+  SamplingParams,
+  TextBlock,
+  ThinkingBlock,
+  TokenUsage,
+  ToolCallId,
+  ToolResultBlock,
+  ToolUseBlock,
+  UserId,
+} from "@render-harness/contracts";
 
 // --------------------------------------------------------------------
-// Messages
+// Messages (runtime form: Date instead of ISO string)
 // --------------------------------------------------------------------
-
-export type MessageRole = "system" | "user" | "assistant" | "tool";
-
-export interface TextBlock {
-  type: "text";
-  text: string;
-}
-
-export interface ToolUseBlock {
-  type: "tool_use";
-  id: ToolCallId;
-  name: string;
-  input: unknown;
-}
-
-export interface ToolResultBlock {
-  type: "tool_result";
-  tool_use_id: ToolCallId;
-  content: string;
-  is_error?: boolean;
-}
-
-export interface ThinkingBlock {
-  type: "thinking";
-  thinking: string;
-  signature?: string;
-}
-
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock;
 
 export interface Message {
   id: MessageId;
@@ -101,39 +105,8 @@ export interface ToolDefinition {
 }
 
 // --------------------------------------------------------------------
-// Token usage and cost
+// Run lifecycle (runtime form — wire form lives in @render-harness/contracts)
 // --------------------------------------------------------------------
-
-export interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens?: number;
-  cacheWriteTokens?: number;
-}
-
-export interface CostEstimate {
-  inputUsd: number;
-  outputUsd: number;
-  cacheUsd: number;
-  totalUsd: number;
-}
-
-// --------------------------------------------------------------------
-// Run lifecycle
-// --------------------------------------------------------------------
-
-export type RunStatus = "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
-
-export interface RunCursor {
-  /** Number of full turns (assistant messages) completed so far. */
-  turn: number;
-  /** Number of tool calls executed so far. */
-  toolCalls: number;
-  /** Cumulative wall time in ms. */
-  wallMs: number;
-  /** Cumulative token usage so far. */
-  usage: TokenUsage;
-}
 
 export interface AgentRun {
   id: RunId;
@@ -209,17 +182,6 @@ export interface RuntimeHooks {
 // Budgets and stop conditions
 // --------------------------------------------------------------------
 
-export interface Budget {
-  /** Hard cap on tool-loop iterations. */
-  maxIterations: number;
-  /** Hard cap on wall-clock seconds (the runtime can override down). */
-  maxWallSeconds: number;
-  /** Hard cap on combined input + output tokens for the whole run. */
-  maxTokens: number;
-  /** Hard cap on total cost in USD. Run terminates when crossed. */
-  maxCostUsd: number;
-}
-
 export const DEFAULT_BUDGET: Budget = {
   maxIterations: 50,
   maxWallSeconds: 11 * 60 * 60, // 11h, leaves room before the 12h cron cap
@@ -260,19 +222,6 @@ export interface SkillMetadata {
   whenToUse: string;
   /** Path on disk where the SKILL.md content lives. */
   contentPath: string;
-}
-
-// --------------------------------------------------------------------
-// Permissions
-// --------------------------------------------------------------------
-
-export interface Permissions {
-  /** Tools that require human approval before execution. */
-  requireApproval?: string[];
-  /** Tools the agent is allowed to call. Empty = all registered tools. */
-  allowedTools?: string[];
-  /** Tools the agent is explicitly forbidden from calling. */
-  deniedTools?: string[];
 }
 
 // --------------------------------------------------------------------
@@ -330,12 +279,6 @@ export interface ModelSpec {
   apiKeyEnv?: string;
   /** Anthropic-only: enable extended thinking. */
   thinking?: { enabled: true; budgetTokens: number };
-}
-
-export interface SamplingParams {
-  temperature?: number;
-  topP?: number;
-  maxOutputTokens?: number;
 }
 
 export interface LocalToolHandler {
