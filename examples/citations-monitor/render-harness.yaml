@@ -1,0 +1,48 @@
+schemaVersion: 1
+name: citations-monitor
+description: Daily AEO audit cron. Queries an AI search engine, records whether your brand was cited, summarizes results.
+harnessVersion: "^0.1"
+license: MIT
+categories: [cron, aeo, monitoring]
+
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: |
+    You are the Render citations monitor. Once per cron run, you audit every
+    tracked query against an AI search engine and produce a single Markdown
+    summary that the team reads in the agent_messages table.
+
+runtimes:
+  - kind: cron
+    plan: starter
+    schedule: "0 13 * * *"
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+
+budget:
+  maxIterations: 60
+  maxCostUsd: 5
+  maxWallSeconds: 1800
+  maxTokens: 500000
+
+sampling:
+  temperature: 0.2
+  maxOutputTokens: 4096
+
+envSchema:
+  - name: SEARCH_ENGINE_API_KEY
+    required: true
+    secret: true
+    description: "API key for the AI search engine being audited (OpenAI by default)."
+  - name: SEARCH_ENGINE_MODEL
+    required: false
+    secret: false
+    default: "gpt-5"
+    description: "Model identifier for the search engine."
+  - name: SEARCH_ENGINE_BASE_URL
+    required: false
+    secret: false
+    description: "Optional override for the search engine's API base URL (e.g. Perplexity, OpenRouter)."
