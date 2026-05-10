@@ -4,7 +4,40 @@
  * Uses cookies for auth (set by `/ui/login`); no bearer header is needed
  * from the browser. Errors are surfaced as `ApiError` so the UI can show
  * a coherent message.
+ *
+ * Wire types are imported from `@render-harness/contracts` so the SPA
+ * and server share one source of truth.
  */
+
+import type {
+  AgentSummary,
+  CancelRunResp,
+  ContentBlock,
+  CreateRunBody,
+  CreateRunResp,
+  DiagnosticCheck,
+  HealthInfo,
+  ListRunsResp,
+  MessageRecord,
+  RunDetailResp,
+  RunStatus,
+  RunSummary,
+  SendInputResp,
+  ToolCallRecord,
+  UsageRow,
+} from "@render-harness/contracts";
+
+export type {
+  AgentSummary,
+  ContentBlock,
+  DiagnosticCheck,
+  HealthInfo,
+  MessageRecord,
+  RunStatus,
+  RunSummary,
+  ToolCallRecord,
+  UsageRow,
+};
 
 export class ApiError extends Error {
   constructor(
@@ -14,95 +47,6 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
-}
-
-export interface RunSummary {
-  id: string;
-  agentName: string;
-  agentVersion: string;
-  status: RunStatus;
-  userId: string | null;
-  totalCostUsd: number;
-  cursor: {
-    turn: number;
-    toolCalls: number;
-    wallMs: number;
-    usage: { inputTokens: number; outputTokens: number };
-  };
-  metadata: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-}
-
-export type RunStatus = "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
-
-export type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
-  | { type: "thinking"; thinking: string; signature?: string };
-
-export interface MessageRecord {
-  id: string;
-  role: "system" | "user" | "assistant" | "tool";
-  content: ContentBlock[];
-  createdAt: string;
-  usage?: { inputTokens: number; outputTokens: number };
-}
-
-export interface ToolCallRecord {
-  id: string;
-  name: string;
-  input: unknown;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
-  idempotencyKey: string;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  result: {
-    content: string;
-    truncatedContent: string;
-    tokenCount: number;
-    isError: boolean;
-    durationMs: number;
-    createdAt: string;
-  } | null;
-}
-
-export interface AgentSummary {
-  name: string;
-  version: string;
-  model: { provider: string; model: string };
-  systemPromptPreview: string;
-  systemPromptLength: number;
-  mcpServers: { name: string; transport: "stdio" | "http" }[];
-  permissions: {
-    allowedTools?: string[];
-    deniedTools?: string[];
-    requireApproval?: string[];
-  };
-  budget?: Record<string, unknown>;
-  sampling?: Record<string, unknown>;
-  hasLocalTools: boolean;
-  hasSkills: boolean;
-  /** Capability pack names declared on the agent. */
-  capabilityPacks?: string[];
-}
-
-export interface UsageRow {
-  day: string;
-  agentName: string;
-  runs: number;
-  costUsd: number;
-  inputTokens: number;
-  outputTokens: number;
-}
-
-export interface ListRunsResp {
-  runs: RunSummary[];
-  nextCursor: string | null;
 }
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -156,17 +100,6 @@ export function listRuns(params: ListRunsParams = {}): Promise<ListRunsResp> {
   return request<ListRunsResp>(`/runs${qs ? `?${qs}` : ""}`);
 }
 
-export interface CreateRunBody {
-  input: string;
-  agentName?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface CreateRunResp {
-  runId: string;
-  status: RunStatus;
-}
-
 export function createRun(body: CreateRunBody): Promise<CreateRunResp> {
   return request<CreateRunResp>("/runs", {
     method: "POST",
@@ -185,24 +118,19 @@ export function getActiveRun(agentName?: string): Promise<{ run: RunSummary | nu
   return request<{ run: RunSummary | null }>(`/runs/active${qs}`);
 }
 
-export interface RunDetail {
-  run: RunSummary;
-  messages: MessageRecord[];
-}
-
-export function getRun(id: string): Promise<RunDetail> {
-  return request<RunDetail>(`/runs/${encodeURIComponent(id)}`);
+export function getRun(id: string): Promise<RunDetailResp> {
+  return request<RunDetailResp>(`/runs/${encodeURIComponent(id)}`);
 }
 
 export function getToolCalls(id: string): Promise<{ toolCalls: ToolCallRecord[] }> {
   return request<{ toolCalls: ToolCallRecord[] }>(`/runs/${encodeURIComponent(id)}/tool-calls`);
 }
 
-export function cancelRun(id: string): Promise<{ runId: string; cancelRequested: boolean }> {
+export function cancelRun(id: string): Promise<CancelRunResp> {
   return request(`/runs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
 }
 
-export function sendInput(id: string, input: string): Promise<{ runId: string; status: string }> {
+export function sendInput(id: string, input: string): Promise<SendInputResp> {
   return request(`/runs/${encodeURIComponent(id)}/input`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -210,24 +138,8 @@ export function sendInput(id: string, input: string): Promise<{ runId: string; s
   });
 }
 
-export interface DiagnosticCheck {
-  id: string;
-  level: "ok" | "warn" | "error";
-  title: string;
-  message: string;
-  hint?: string;
-}
-
 export function getDiagnostics(): Promise<{ checks: DiagnosticCheck[] }> {
   return request<{ checks: DiagnosticCheck[] }>("/diagnostics");
-}
-
-export interface HealthInfo {
-  ok: boolean;
-  queue: string;
-  agents: string[];
-  /** ISO timestamp captured when the web service process started. */
-  bootedAt: string;
 }
 
 export function getHealth(): Promise<HealthInfo> {

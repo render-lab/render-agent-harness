@@ -1,12 +1,12 @@
+import type { RunDetailResp } from "@render-harness/contracts";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
-  cancelRun,
   type ContentBlock,
+  cancelRun,
   getRun,
   getToolCalls,
   type MessageRecord,
-  type RunDetail as RunDetailDto,
   type RunStatus,
   sendInput,
   streamRun,
@@ -21,6 +21,8 @@ import {
   formatUsd,
 } from "../components/format.js";
 import { StatusBadge } from "../components/StatusBadge.js";
+
+type RunDetailDto = RunDetailResp;
 
 interface RunDetailProps {
   runId: string;
@@ -255,9 +257,7 @@ function ActionsCard({
         </form>
       )}
 
-      {actionError && (
-        <div className="border border-err p-2 text-xs text-err">{actionError}</div>
-      )}
+      {actionError && <div className="border border-err p-2 text-xs text-err">{actionError}</div>}
     </aside>
   );
 }
@@ -302,10 +302,7 @@ function MessageCard({ message }: { message: MessageRecord }) {
       </div>
       <div className="space-y-2">
         {message.content.map((block, blockIdx) => (
-          <ContentBlockView
-            key={contentBlockKey(message.id, block, blockIdx)}
-            block={block}
-          />
+          <ContentBlockView key={contentBlockKey(message.id, block, blockIdx)} block={block} />
         ))}
       </div>
       {message.usage && (
