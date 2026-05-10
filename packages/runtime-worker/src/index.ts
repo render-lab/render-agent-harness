@@ -5,13 +5,13 @@ import {
   buildLogger,
   type CheckpointPolicy,
   type ContentBlock,
+  closeSharedKv,
   closeSharedPool,
   createCancelSignal,
   createRun,
   DEFAULT_BUDGET,
-  getKv,
+  getKvSafe,
   getPool,
-  type KvLike,
   type Logger,
   loadRun,
   type Message,
@@ -128,7 +128,7 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     await applyMigrations(pool);
   }
 
-  const kv = tryGetKv(logger);
+  const kv = getKvSafe(logger);
 
   const boss = new PgBoss(connectionString);
   boss.on("error", (err: Error) => {
@@ -229,6 +229,7 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "boss.stop errored");
     }
+    await closeSharedKv().catch(() => {});
     await closeSharedPool().catch(() => {});
     logger.info("runtime-worker stopped");
   };
@@ -363,18 +364,6 @@ function extractId(payload: Message | ToolCall | ToolResult): string {
   if ("id" in payload) return payload.id;
   if ("toolCallId" in payload) return payload.toolCallId;
   return "?";
-}
-
-function tryGetKv(logger: Logger): KvLike | null {
-  try {
-    return getKv();
-  } catch (err) {
-    logger.debug(
-      { err: err instanceof Error ? err.message : String(err) },
-      "no KV configured; cancel polling disabled",
-    );
-    return null;
-  }
 }
 
 function installShutdownHandlers(stop: () => Promise<void>, logger: Logger): void {

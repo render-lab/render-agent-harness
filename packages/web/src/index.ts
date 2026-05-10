@@ -8,8 +8,9 @@ import {
   buildLogger,
   type BuiltinPreview,
   type ContentBlock,
+  closeSharedKv,
   closeSharedPool,
-  getKv,
+  getKvSafe,
   getPool,
   type ListRunsFilter,
   type Logger,
@@ -396,7 +397,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     // the cancel.
     if (run.status === "paused") {
       await setRunStatus(pool, id, "cancelled");
-      const kv = tryGetKv(logger);
+      const kv = getKvSafe(logger);
       if (kv) await requestCancel(kv, id, "web_request");
       logger.info({ runId: id, userId, prevStatus: run.status }, "cancel applied to paused run");
       return c.json({ runId: id, cancelRequested: true, status: "cancelled" });
@@ -405,7 +406,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     // Run is `pending` or `running` — the worker is (or will be) executing.
     // Write the KV flag; the cancel signal in `runtime-worker` polls it
     // between turns and tool calls and aborts the in-flight model call.
-    const kv = tryGetKv(logger);
+    const kv = getKvSafe(logger);
     if (!kv) {
       return c.json({ error: "cancel_unavailable", message: "no KV configured" }, 503);
     }
@@ -504,6 +505,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
       (err) => logger.error({ err: err.message }, "server.close errored"),
     );
     await boss.stop({ graceful: true, timeout: 30_000 }).catch(() => {});
+    await closeSharedKv().catch(() => {});
     await closeSharedPool().catch(() => {});
   };
   installShutdownHandlers(stop, logger);
@@ -962,15 +964,6 @@ function summariseAgent(agent: AgentDefinition): AgentSummary {
   if (agent.budget) summary.budget = agent.budget;
   if (agent.sampling) summary.sampling = agent.sampling;
   return summary;
-}
-
-function tryGetKv(logger: Logger): ReturnType<typeof getKv> | null {
-  try {
-    return getKv();
-  } catch (err) {
-    logger.debug({ err: err instanceof Error ? err.message : String(err) }, "no KV configured");
-    return null;
-  }
 }
 
 function installShutdownHandlers(stop: () => Promise<void>, logger: Logger): void {

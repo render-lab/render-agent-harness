@@ -3,6 +3,7 @@ import {
   applyMigrations,
   type Budget,
   buildLogger,
+  closeSharedKv,
   closeSharedPool,
   createCancelSignal,
   createRun,
@@ -141,6 +142,7 @@ export async function runCron(opts: RunCronOpts): Promise<RunCronResult> {
     cancelDispose?.();
     process.off("SIGTERM", sigtermHandler);
     process.off("SIGINT", sigtermHandler);
+    await closeSharedKv().catch(() => {});
     await closeSharedPool().catch(() => {});
   }
 }

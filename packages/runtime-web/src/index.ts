@@ -9,7 +9,7 @@ import {
   createCancelSignal,
   createRun,
   DEFAULT_BUDGET,
-  getKv,
+  getKvSafe,
   getPool,
   type Logger,
   type Message,
@@ -100,7 +100,7 @@ const DEFAULT_WEB_BUDGET: Partial<Budget> = {
 export async function serveAgent(opts: ServeAgentOpts): Promise<ServerType> {
   const logger = opts.logger ?? buildLogger({ service: "runtime-web" });
   const pool = getPool({ applicationName: `web:${opts.agent.name}` });
-  const kv = tryGetKv(logger);
+  const kv = getKvSafe(logger);
 
   if (!opts.skipMigrations) {
     await applyMigrations(pool);
@@ -288,18 +288,6 @@ function serializeToolResult(r: ToolResult): Record<string, unknown> {
     durationMs: r.durationMs,
     truncatedContent: r.truncatedContent,
   };
-}
-
-function tryGetKv(logger: Logger): ReturnType<typeof getKv> | null {
-  try {
-    return getKv();
-  } catch (err) {
-    logger.debug(
-      { err: err instanceof Error ? err.message : String(err) },
-      "no KV configured; web runtime will not poll cancel flags",
-    );
-    return null;
-  }
 }
 
 function installShutdownHandlers(server: ServerType, logger: Logger): void {

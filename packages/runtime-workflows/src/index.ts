@@ -9,7 +9,7 @@ import {
   createCancelSignal,
   createRun,
   DEFAULT_BUDGET,
-  getKv,
+  getKvSafe,
   getPool,
   type Logger,
   loadRun,
@@ -109,7 +109,7 @@ export async function runAgentStep(opts: RunAgentStepOpts): Promise<RunStepResul
   let cancel: ReturnType<typeof createCancelSignal> | null = null;
   let signal = upstream.signal;
   try {
-    const kv = tryGetKv(log);
+    const kv = getKvSafe(log);
     if (kv) {
       cancel = createCancelSignal({
         runId: opts.runId,
@@ -282,18 +282,6 @@ async function countRunMessages(pool: Pool, runId: string): Promise<number> {
     [runId],
   );
   return Number(rows[0]?.count ?? 0);
-}
-
-function tryGetKv(logger: Logger): ReturnType<typeof getKv> | null {
-  try {
-    return getKv();
-  } catch (err) {
-    logger.debug(
-      { err: err instanceof Error ? err.message : String(err) },
-      "no KV configured; cancel polling disabled",
-    );
-    return null;
-  }
 }
 
 // Re-export commonly-needed types so deploy-agent/main.ts imports stay tight.

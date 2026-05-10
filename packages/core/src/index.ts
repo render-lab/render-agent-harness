@@ -33,7 +33,7 @@ export type { PricingOverride } from "./cost.js";
 export { addUsage, estimateCost } from "./cost.js";
 export { defineAgent } from "./define.js";
 export { idempotencyKey } from "./idempotency.js";
-export { getKv, memoryKv } from "./kv.js";
+export { closeSharedKv, getKv, getKvSafe, memoryKv } from "./kv.js";
 export type { Logger } from "./logger.js";
 export { buildLogger } from "./logger.js";
 export type { McpToolHandle, RunAgentArgs, RunAgentDeps } from "./loop.js";
