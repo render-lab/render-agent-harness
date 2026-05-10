@@ -34,7 +34,8 @@ export function AgentsTab() {
       error={error}
       empty={{
         when: agents.length === 0,
-        message: "// no agents loaded — pass via serveWeb({ agent }) or serveWeb({ agents })",
+        message:
+          "// no agents loaded — pass via serveWeb({ agent }) or serveWeb({ agents })",
       }}
     >
       <div className="grid gap-4 md:grid-cols-2">
@@ -51,7 +52,9 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
     <div className="panel space-y-4 p-4 text-xs">
       <header>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wide">{agent.name}</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide">
+            {agent.name}
+          </h2>
           <span className="badge">v{agent.version}</span>
         </div>
         <div className="mt-1 text-muted">
@@ -62,7 +65,8 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
       <Section title="system prompt">
         <details className="border border-line p-2">
           <summary className="cursor-pointer text-[11px] text-muted">
-            {agent.systemPromptLength.toLocaleString()} chars · click to expand preview
+            {agent.systemPromptLength.toLocaleString()} chars · click to expand
+            preview
           </summary>
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-[11px]">
             {agent.systemPromptPreview}
@@ -90,9 +94,18 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
 
       <Section title="permissions">
         <div className="space-y-2">
-          <PermList label="allowed" items={agent.permissions.allowedTools ?? []} />
-          <PermList label="denied" items={agent.permissions.deniedTools ?? []} />
-          <PermList label="requires approval" items={agent.permissions.requireApproval ?? []} />
+          <PermList
+            label="allowed"
+            items={agent.permissions.allowedTools ?? []}
+          />
+          <PermList
+            label="denied"
+            items={agent.permissions.deniedTools ?? []}
+          />
+          <PermList
+            label="requires approval"
+            items={agent.permissions.requireApproval ?? []}
+          />
         </div>
       </Section>
 
@@ -106,7 +119,11 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
       {(agent.budget || agent.sampling) && (
         <Section title="budget / sampling">
           <pre className="overflow-auto border border-line p-2 text-[11px]">
-            {JSON.stringify({ budget: agent.budget, sampling: agent.sampling }, null, 2)}
+            {JSON.stringify(
+              { budget: agent.budget, sampling: agent.sampling },
+              null,
+              2,
+            )}
           </pre>
         </Section>
       )}
@@ -114,7 +131,13 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div className="label mb-1">{title}</div>
