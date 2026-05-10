@@ -118,7 +118,7 @@ function ChatBody({
 
       {session.error && (
         <div className="border border-err p-2 text-xs text-err">
-          <span className="label !text-err">error:</span> {session.error.message}
+          <span className="label text-err!">error:</span> {session.error.message}
         </div>
       )}
 
@@ -136,8 +136,6 @@ function ChatBody({
                 SystemMessage: SystemBubble,
               }}
             />
-
-            {session.isRunning && <ThinkingIndicator />}
           </ThreadPrimitive.Viewport>
 
           <Composer />
@@ -277,7 +275,7 @@ function UserBubble() {
 function AssistantBubble() {
   return (
     <div className="mb-5 text-sm last:mb-0">
-      <div className="label !text-accent mb-1.5">agent</div>
+      <div className="label text-accent! mb-1.5">agent</div>
       <div className="border-l-2 border-accent pl-3">
         <AssistantContent />
       </div>
@@ -301,33 +299,29 @@ function SystemBubble() {
   return (
     <div className="mb-5 text-xs last:mb-0">
       <div className="label mb-1.5">tool</div>
-      <div className="border-l-2 border-muted pl-3 text-muted">
-        <MessagePrimitive.Parts components={{ Text: PlainText }} />
+      <div className="border-l-2 border-muted pl-3">
+        <details>
+          <summary className="label cursor-pointer text-muted">raw result</summary>
+          <div className="mt-2 text-muted">
+            <MessagePrimitive.Parts components={{ Text: PlainText }} />
+          </div>
+        </details>
       </div>
     </div>
   );
 }
 
 function PlainText(props: TextMessagePartProps) {
+  if (props.text === "thinking") return <ThinkingText />;
   return <Markdown text={props.text} />;
 }
 
-/**
- * Renders below the message list while the agent is processing a turn.
- * Mirrors the AssistantBubble layout so it visually slots into the
- * stream, with a blinking accent caret in place of the body text.
- */
-function ThinkingIndicator() {
+function ThinkingText() {
   return (
-    <div className="mb-5 text-sm last:mb-0">
-      <div className="label !text-accent mb-1.5">agent</div>
-      <div className="border-l-2 border-accent pl-3 text-muted">
-        thinking
-        <span className="blink ml-1 text-accent" aria-hidden="true">
-          ▊
-        </span>
-      </div>
-    </div>
+    <span className="text-muted">
+      thinking<span className="cli-dots" aria-hidden="true" />
+      <span className="sr-only">...</span>
+    </span>
   );
 }
 
@@ -347,16 +341,20 @@ function ToolCallBlock(props: ToolCallMessagePartProps) {
       : safeJsonStringify(props.args ?? {});
   return (
     <div className="my-1 border border-line p-2 text-xs">
-      <div className="label !text-accent">tool · {props.toolName}</div>
-      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px]">
-        {argsText}
-      </pre>
-      {props.result !== undefined && (
-        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap border-t border-line pt-2 text-[11px]">
-          {typeof props.result === "string"
-            ? props.result
-            : safeJsonStringify(props.result)}
+      <div className="label text-accent!">tool · {props.toolName}</div>
+      <details className="mt-1">
+        <summary className="label cursor-pointer text-muted">raw input</summary>
+        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px]">
+          {argsText}
         </pre>
+      </details>
+      {props.result !== undefined && (
+        <details className="mt-2 border-t border-line pt-2">
+          <summary className="label cursor-pointer text-muted">raw result</summary>
+          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px]">
+            {typeof props.result === "string" ? props.result : safeJsonStringify(props.result)}
+          </pre>
+        </details>
       )}
     </div>
   );
@@ -376,10 +374,9 @@ function safeJsonStringify(v: unknown): string {
 
 function Composer() {
   return (
-    <ComposerPrimitive.Root className="flex items-center gap-3 border-t border-line p-3">
+    <ComposerPrimitive.Root className="flex items-center gap-3 border-t border-line py-3 pr-3 pl-0">
       <span aria-hidden="true" className="flex items-center text-accent leading-none">
         <span>$</span>
-        <span className="blink ml-1">▊</span>
       </span>
       <ComposerPrimitive.Input
         autoFocus

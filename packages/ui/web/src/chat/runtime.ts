@@ -1,5 +1,5 @@
 import { useExternalStoreRuntime } from "@assistant-ui/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   cancelRun,
@@ -232,8 +232,13 @@ export function useChatSession(opts: UseChatSessionOpts): UseChatSessionResult {
     }
   }, [runId]);
 
+  const displayMessages = useMemo(
+    () => withThinkingPlaceholder(messages, isRunning),
+    [messages, isRunning],
+  );
+
   const runtime = useExternalStoreRuntime<MessageRecord>({
-    messages,
+    messages: displayMessages,
     isRunning,
     convertMessage,
     onNew,
@@ -267,4 +272,19 @@ export function isChatSession(run: Pick<RunSummary, "metadata" | "status">): boo
     return run.metadata?.["pauseReason"] === "chat_turn_end";
   }
   return run.metadata?.["pauseReason"] === "chat_turn_end";
+}
+
+function withThinkingPlaceholder(messages: MessageRecord[], isRunning: boolean): MessageRecord[] {
+  if (!isRunning || messages.length === 0) return messages;
+  const last = messages[messages.length - 1];
+  if (!last || last.role === "assistant") return messages;
+  return [
+    ...messages,
+    {
+      id: `local-thinking-${last.id}`,
+      role: "assistant",
+      content: [{ type: "text", text: "thinking" }],
+      createdAt: new Date().toISOString(),
+    },
+  ];
 }

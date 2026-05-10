@@ -326,7 +326,7 @@ function contentBlockKey(messageId: string, block: ContentBlock, fallbackIdx: nu
 
 function ContentBlockView({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
-    return <pre className="whitespace-pre-wrap break-words">{block.text}</pre>;
+    return <pre className="whitespace-pre-wrap wrap-break-word">{block.text}</pre>;
   }
   if (block.type === "thinking") {
     return (
@@ -352,14 +352,17 @@ function ContentBlockView({ block }: { block: ContentBlock }) {
   if (block.type === "tool_result") {
     return (
       <div className={`border p-2 ${block.is_error ? "border-err" : "border-line"}`}>
-        <div className="mb-1">
+        <div>
           <span className={block.is_error ? "badge badge-err" : "badge"}>
             TOOL_RESULT{block.is_error ? " · ERROR" : ""}
           </span>
         </div>
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px]">
-          {block.content}
-        </pre>
+        <details className="mt-2">
+          <summary className="label cursor-pointer">raw result</summary>
+          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px]">
+            {block.content}
+          </pre>
+        </details>
       </div>
     );
   }
@@ -397,9 +400,12 @@ function ToolCallCard({ call }: { call: ToolCallRecord }) {
           {call.result ? (
             <div>
               <div className="label">result · {formatTokens(call.result.tokenCount)} tokens</div>
-              <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-all text-[11px]">
-                {call.result.content}
-              </pre>
+              <details className="mt-1">
+                <summary className="label cursor-pointer">raw result</summary>
+                <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-all text-[11px]">
+                  {call.result.content}
+                </pre>
+              </details>
             </div>
           ) : (
             <div className="text-muted">// result not yet recorded</div>

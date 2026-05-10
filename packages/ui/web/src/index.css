@@ -135,6 +135,18 @@
     display: none;
   }
 
+  details > summary::before {
+    content: ">";
+    display: inline-block;
+    margin-right: 0.45rem;
+    color: var(--color-accent);
+    transition: transform 80ms linear;
+  }
+
+  details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
   @keyframes rh-caret-blink {
     0%, 50% { caret-color: var(--color-accent); }
     51%, 100% { caret-color: transparent; }
@@ -221,6 +233,21 @@
 
   .blink {
     animation: rh-block-blink 1.06s steps(2, jump-none) infinite;
+  }
+
+  .cli-dots::after {
+    content: "";
+    display: inline-block;
+    min-width: 3ch;
+    color: var(--color-accent);
+    animation: rh-cli-dots 1.2s steps(4, end) infinite;
+  }
+
+  @keyframes rh-cli-dots {
+    0% { content: ""; }
+    25% { content: "."; }
+    50% { content: ".."; }
+    75%, 100% { content: "..."; }
   }
 
   /* --------------------------------------------------------------------
