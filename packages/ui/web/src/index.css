@@ -1,0 +1,262 @@
+@import "tailwindcss";
+
+/* --------------------------------------------------------------------
+ * Brutalist black-and-white CLI theme.
+ *
+ * Single source of truth: the @theme block below registers semantic
+ * color tokens that Tailwind v4 turns into utilities (`bg-canvas`,
+ * `text-ink`, `border-line`, `text-accent`, etc.). Components reference
+ * those utilities — no `style={{ color: "var(...)" }}` props anywhere.
+ *
+ * Dark mode swaps the same variables via `prefers-color-scheme`. The
+ * utilities don't change; the values they resolve to do.
+ * -------------------------------------------------------------------- */
+
+@theme {
+  /* JetBrains Mono Variable, self-hosted via @fontsource-variable. The
+   * stack falls back to system monospaces if the woff2 fails to load. */
+  --font-sans: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+
+  /* Light defaults; overridden in dark mode below. */
+  --color-canvas: #ffffff;
+  --color-ink: #000000;
+  --color-muted: #555555;
+  --color-line: #000000;
+  /* Tailwind purple-500 / purple-400 — terminal-ish accent that pops on
+   * both light and dark canvases. */
+  --color-accent: #a855f7;
+  --color-err: #b40000;
+  --color-code-bg: #e4e4e7; /* zinc-200, for inline `code` chunks */
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  /* Override the @theme tokens for OS dark mode. The Tailwind utilities
+   * pick this up automatically because they reference `var(--color-*)`. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-canvas: #000000;
+      --color-ink: #ffffff;
+      --color-muted: #999999;
+      --color-line: #ffffff;
+      --color-accent: #c084fc; /* purple-400, brighter for dark canvas */
+      --color-err: #ff5555;
+      --color-code-bg: #27272a; /* zinc-800 */
+    }
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "calt", "ss01"; /* JetBrains Mono coding ligatures + open-zero */
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Square corners, everywhere. */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-canvas);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  input,
+  textarea,
+  select {
+    border: 1px solid var(--color-line);
+    background: var(--color-canvas);
+    padding: 0.35rem 0.55rem;
+    caret-color: var(--color-accent);
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 0;
+    border-color: var(--color-accent);
+  }
+
+  /* Terminal-style blinking caret on focused inputs. */
+  input:focus-visible,
+  textarea:focus-visible {
+    animation: rh-caret-blink 1.06s steps(2, jump-none) infinite;
+  }
+
+  button:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  details > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @keyframes rh-caret-blink {
+    0%, 50% { caret-color: var(--color-accent); }
+    51%, 100% { caret-color: transparent; }
+  }
+
+  @keyframes rh-block-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+}
+
+/* --------------------------------------------------------------------
+ * Component-class shortcuts. Used wherever the same group of utilities
+ * shows up enough times that inlining them would be noise. Built on top
+ * of Tailwind utilities via @apply; they compose with other utilities.
+ * -------------------------------------------------------------------- */
+
+@layer components {
+  .panel {
+    @apply bg-canvas border border-line;
+  }
+
+  .label {
+    @apply uppercase tracking-wider text-muted;
+    font-size: 0.72rem;
+  }
+
+  /* `// LABEL ─────────────────────────────────────` divider. */
+  .hr-section {
+    @apply flex items-center gap-2 uppercase text-muted;
+    letter-spacing: 0.1em;
+    font-size: 0.72rem;
+  }
+  .hr-section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center bg-canvas text-ink border border-line uppercase;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    transition: background 80ms linear, color 80ms linear, border-color 80ms linear;
+  }
+  .btn:hover:not(:disabled) {
+    @apply text-accent border-accent;
+  }
+  .btn-active {
+    @apply bg-accent text-canvas border-accent;
+  }
+  .btn-active:hover:not(:disabled) {
+    @apply bg-canvas text-accent border-accent;
+  }
+  .btn-primary {
+    @apply bg-accent text-canvas border-accent;
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-canvas text-accent;
+  }
+  .btn-danger {
+    @apply text-err border-err;
+  }
+  .btn-danger:hover:not(:disabled) {
+    @apply bg-err text-canvas;
+  }
+
+  .badge {
+    @apply inline-flex items-center border border-line uppercase;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+  }
+  .badge-fill {
+    @apply bg-accent text-canvas border-accent;
+  }
+  .badge-warn {
+    @apply text-accent border-accent;
+  }
+  .badge-err {
+    @apply text-err border-err;
+  }
+
+  .blink {
+    animation: rh-block-blink 1.06s steps(2, jump-none) infinite;
+  }
+
+  /* --------------------------------------------------------------------
+   * Shiki dual-theme bridge.
+   *
+   * Markdown.tsx emits highlighted HTML with `defaultColor: false`, so
+   * each token carries inline CSS variables `--shiki-light` /
+   * `--shiki-dark` (foreground) and `--shiki-light-bg` /
+   * `--shiki-dark-bg` (background). The rules below pick the right
+   * pair based on `prefers-color-scheme`. Without this, tokens would
+   * render uncoloured.
+   *
+   * We also reset shiki's <pre> styling to fit our hairline panel:
+   * no margin, monospace inherits from the body, transparent bg so
+   * our wrapper's canvas shows through.
+   * -------------------------------------------------------------------- */
+  .shiki-host pre.shiki {
+    margin: 0;
+    padding: 0.75rem;
+    background: transparent !important;
+    font: inherit;
+    line-height: 1.5;
+  }
+  /* Foreground only. Wildcard selector so any element shiki emits
+   * (line wrappers, token spans, focus highlights, whatever) renders
+   * with a transparent background — only the foreground colour bridges
+   * via `--shiki-light` / `--shiki-dark`. */
+  .shiki-host pre.shiki *,
+  .shiki-host pre.shiki {
+    background: transparent !important;
+    color: var(--shiki-light);
+  }
+  @media (prefers-color-scheme: dark) {
+    .shiki-host pre.shiki *,
+    .shiki-host pre.shiki {
+      color: var(--shiki-dark);
+    }
+  }
+}

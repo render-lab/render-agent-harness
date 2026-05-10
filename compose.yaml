@@ -1,14 +1,41 @@
 name: render-harness
 
-# Local-only stack for harness development. Mirrors the production primitives:
-#   postgres -> Render Managed Postgres (matches the render.demo.yaml version)
-#   valkey   -> Render Key Value (Redis-compatible Valkey 8)
+# Local stack for harness development. Two layers:
 #
-# Both services bind to 127.0.0.1 only so they don't conflict with anything
-# else listening on your LAN. Default host ports are intentionally
-# non-standard (55432 / 56379) so they don't collide with a host-installed
-# Postgres or Redis. Override if even those are taken:
+#   1. Datastore (default profile, always on):
+#      postgres -> Render Managed Postgres (matches render.demo.yaml's version)
+#      valkey   -> Render Key Value (Redis-compatible Valkey 8)
+#
+#   2. App services (opt-in via --profile). Each example wires to the
+#      datastore over the compose network and reads its API keys from its
+#      existing examples/<name>/.env file:
+#        --profile web-chat          -> examples/web-chat (single web service)
+#        --profile support-agent     -> examples/support-agent (web + worker)
+#        --profile citations-monitor -> examples/citations-monitor (one-shot cron)
+#        --profile operator-demo     -> examples/operator-demo (web + worker
+#                                       with the operator UI mounted at /ui)
+#        --profile all               -> everything above
+#
+# Datastore services bind to 127.0.0.1 only and use non-standard host ports
+# (55432 / 56379) to avoid colliding with a host-installed Postgres or Redis.
+# Override if even those are taken:
 #   HARNESS_PG_PORT=15432 HARNESS_KV_PORT=16379 docker compose up -d
+#
+# Prerequisites for the app profiles: build the workspace once on the host
+# so the bind-mounted dist/ folders exist:
+#   corepack enable && pnpm install && pnpm build
+#
+# Then pick a profile, e.g.:
+#   docker compose --profile support-agent up -d
+#   docker compose --profile all up -d --wait
+
+x-app-defaults: &app-defaults
+  image: node:22-alpine
+  working_dir: /app
+  restart: unless-stopped
+  volumes:
+    - .:/app
+  init: true
 
 services:
   postgres:
@@ -43,6 +70,179 @@ services:
       timeout: 3s
       retries: 10
       start_period: 2s
+
+  # --- web-chat --------------------------------------------------------------
+  # Single Render web service. Mirrors blueprints/render.demo.yaml.
+  # POST /runs to http://127.0.0.1:${HARNESS_WEB_CHAT_PORT:-8080}/runs.
+  web-chat:
+    <<: *app-defaults
+    profiles: ["web-chat", "all"]
+    container_name: render-harness-web-chat
+    command: ["node", "examples/web-chat/dist/main.js"]
+    env_file:
+      - path: ./examples/web-chat/.env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      PORT: "8080"
+      DATABASE_URL: postgres://harness:harness@postgres:5432/harness
+      KV_URL: redis://valkey:6379
+    ports:
+      - "127.0.0.1:${HARNESS_WEB_CHAT_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  # --- support-agent ---------------------------------------------------------
+  # Production-shape: public web receives Slack Events and enqueues runs;
+  # private worker pulls the queue, runs the agent with Slack MCP, posts
+  # the reply back to the originating thread. Mirrors render.private.yaml.
+  support-agent-web:
+    <<: *app-defaults
+    profiles: ["support-agent", "all"]
+    container_name: render-harness-support-web
+    command: ["node", "examples/support-agent/dist/web.js"]
+    env_file:
+      - path: ./examples/support-agent/.env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      PORT: "8081"
+      WORKER_QUEUE: support-runs
+      DATABASE_URL: postgres://harness:harness@postgres:5432/harness
+      KV_URL: redis://valkey:6379
+    ports:
+      - "127.0.0.1:${HARNESS_SUPPORT_PORT:-8081}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  support-agent-worker:
+    <<: *app-defaults
+    profiles: ["support-agent", "all"]
+    container_name: render-harness-support-worker
+    command: ["node", "examples/support-agent/dist/worker.js"]
+    env_file:
+      - path: ./examples/support-agent/.env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      WORKER_QUEUE: support-runs
+      DATABASE_URL: postgres://harness:harness@postgres:5432/harness
+      KV_URL: redis://valkey:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  # --- operator-demo ---------------------------------------------------------
+  # Self-contained operator UI demo. The image bakes pnpm install + a
+  # full workspace build (see examples/operator-demo/Dockerfile), so a
+  # cold `docker compose --profile operator-demo up` works without any
+  # host pnpm install.
+  #
+  # Fast iteration: the dist/ directories of every workspace package
+  # this demo touches are bind-mounted from the host. Edit code, run
+  #   pnpm build
+  # then restart the two services:
+  #   docker compose --profile operator-demo restart operator-demo-web operator-demo-worker
+  # (or `pnpm apps:operator-demo:reload` from the repo root).
+  # That picks up the new dist/ in ~5s with no image rebuild.
+  #
+  # If you change DEPENDENCIES (package.json, lockfile), do a full image
+  # rebuild instead:
+  #   docker compose --profile operator-demo build operator-demo-web
+  operator-demo-web:
+    profiles: ["operator-demo", "all"]
+    container_name: render-harness-operator-web
+    image: render-harness-operator-demo
+    build:
+      context: .
+      dockerfile: examples/operator-demo/Dockerfile
+    restart: unless-stopped
+    init: true
+    command: ["node", "examples/operator-demo/dist/web.js"]
+    environment: &operator-demo-env
+      NODE_ENV: development
+      LOG_LEVEL: info
+      PORT: "8082"
+      WORKER_QUEUE: operator-demo-runs
+      DATABASE_URL: postgres://harness:harness@postgres:5432/harness
+      KV_URL: redis://valkey:6379
+      # Demo-grade defaults so the UI works out of the box. Override in
+      # the Dashboard / your own compose.override.yaml for anything real.
+      WEB_API_KEY: demo
+      UI_COOKIE_SECRET: deadbeefcafe1234567890abcdef0123
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
+    ports:
+      - "127.0.0.1:${HARNESS_OPERATOR_PORT:-8082}:8082"
+    volumes: &operator-demo-volumes
+      # Bind-mount built dist/ directories. The image still ships a
+      # baked copy under each path (so a fresh user without a host build
+      # can boot from the image alone), but the host bind shadows it
+      # whenever the host has a built version. After the first
+      # `pnpm build`, every subsequent change becomes a 5s restart.
+      - ./packages/core/dist:/app/packages/core/dist
+      - ./packages/runtime-worker/dist:/app/packages/runtime-worker/dist
+      - ./packages/web/dist:/app/packages/web/dist
+      - ./packages/ui/dist:/app/packages/ui/dist
+      - ./examples/operator-demo/dist:/app/examples/operator-demo/dist
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  operator-demo-worker:
+    profiles: ["operator-demo", "all"]
+    container_name: render-harness-operator-worker
+    # Reuses the image built by operator-demo-web; declaring `build:` on
+    # both services makes Compose try to bake them in parallel and one
+    # fails with "already exists". The depends_on below guarantees web
+    # has produced the image before this service starts.
+    image: render-harness-operator-demo
+    restart: unless-stopped
+    init: true
+    command: ["node", "examples/operator-demo/dist/worker.js"]
+    environment: *operator-demo-env
+    volumes: *operator-demo-volumes
+    depends_on:
+      operator-demo-web:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  # --- citations-monitor -----------------------------------------------------
+  # One-shot cron run. `up` starts it; it exits when the audit completes.
+  # Re-run with `docker compose --profile citations-monitor run --rm citations-monitor`.
+  citations-monitor:
+    <<: *app-defaults
+    profiles: ["citations-monitor", "all"]
+    container_name: render-harness-citations
+    restart: "no"
+    command: ["node", "examples/citations-monitor/dist/main.js"]
+    env_file:
+      - path: ./examples/citations-monitor/.env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://harness:harness@postgres:5432/harness
+      KV_URL: redis://valkey:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

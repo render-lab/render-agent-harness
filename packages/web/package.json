@@ -28,7 +28,16 @@
     "pg": "^8.20.0",
     "pg-boss": "^12.18.2"
   },
+  "peerDependencies": {
+    "@render-harness/ui": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@render-harness/ui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@render-harness/ui": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
     "tsup": "^8.5.1",

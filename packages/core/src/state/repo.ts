@@ -147,6 +147,25 @@ export async function setRunStatus(
   await notify(pool, { runId, kind: "run_status", status });
 }
 
+/**
+ * Shallow-merge keys into `runs.metadata`. Used by the agent loop to stash
+ * per-run flags (e.g. `pauseReason: "chat_turn_end"`) without overwriting
+ * metadata the runtime set when the run was created.
+ */
+export async function mergeRunMetadata(
+  pool: Pool,
+  runId: RunId,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await pool.query(
+    `UPDATE agent_runs
+       SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+           updated_at = now()
+       WHERE id = $1`,
+    [runId, JSON.stringify(patch)],
+  );
+}
+
 export async function updateRunCursor(
   pool: Pool,
   runId: RunId,
@@ -214,6 +233,127 @@ export async function listMessages(pool: Pool, runId: RunId): Promise<Message[]>
     [runId],
   );
   return rows.map(rowToMessage);
+}
+
+export interface ListRunsFilter {
+  /** Restrict to runs owned by this user. */
+  userId?: UserId;
+  /** Restrict to one or more agent names. */
+  agentName?: string | string[];
+  /** Restrict to one or more statuses. */
+  status?: RunStatus | RunStatus[];
+  /** Page size; defaults to 50, capped at 200. */
+  limit?: number;
+  /**
+   * Keyset cursor: opaque string returned by the previous page. Internally
+   * encodes `(createdAt, id)` of the last row so we can paginate without
+   * counting offsets.
+   */
+  cursor?: string;
+}
+
+export interface ListRunsPage {
+  runs: AgentRun[];
+  /** Pass back as `cursor` to fetch the next page. `null` when no more. */
+  nextCursor: string | null;
+}
+
+const RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
+  "pending",
+  "running",
+  "paused",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+/**
+ * List runs newest-first with optional status / agent / user filters and
+ * keyset pagination over `(created_at DESC, id DESC)`.
+ *
+ * Used by the operator UI's runs list. Don't call this in the hot path of
+ * the agent loop — it's a read-side API and not optimised for that.
+ */
+export async function listRuns(pool: Pool, filter: ListRunsFilter = {}): Promise<ListRunsPage> {
+  const limit = clampLimit(filter.limit);
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter.userId !== undefined) {
+    params.push(filter.userId);
+    where.push(`user_id = $${params.length}`);
+  }
+  const agentNames = toArray(filter.agentName).filter((s) => s.length > 0);
+  if (agentNames.length > 0) {
+    params.push(agentNames);
+    where.push(`agent_name = ANY($${params.length}::text[])`);
+  }
+  const statuses = toArray(filter.status).filter((s): s is RunStatus => RUN_STATUSES.has(s));
+  if (statuses.length > 0) {
+    params.push(statuses);
+    where.push(`status = ANY($${params.length}::text[])`);
+  }
+
+  const cursor = decodeCursor(filter.cursor);
+  if (cursor) {
+    params.push(cursor.createdAt.toISOString(), cursor.id);
+    where.push(`(created_at, id) < ($${params.length - 1}::timestamptz, $${params.length}::text)`);
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  // Fetch limit+1 to see whether there's another page.
+  params.push(limit + 1);
+  const sql = `
+    SELECT * FROM agent_runs
+    ${whereSql}
+    ORDER BY created_at DESC, id DESC
+    LIMIT $${params.length}
+  `;
+
+  const { rows } = await pool.query<RunRow>(sql, params);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null;
+  return { runs: page.map(rowToRun), nextCursor };
+}
+
+function clampLimit(raw: number | undefined): number {
+  const n = Number.isFinite(raw) && typeof raw === "number" ? Math.floor(raw) : 50;
+  if (n < 1) return 1;
+  if (n > 200) return 200;
+  return n;
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+interface RunCursorKey {
+  createdAt: Date;
+  id: string;
+}
+
+function encodeCursor(key: RunCursorKey): string {
+  return Buffer.from(JSON.stringify({ t: key.createdAt.toISOString(), i: key.id })).toString(
+    "base64url",
+  );
+}
+
+function decodeCursor(raw: string | undefined): RunCursorKey | null {
+  if (!raw) return null;
+  try {
+    const json = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = JSON.parse(json) as { t?: unknown; i?: unknown };
+    if (typeof parsed.t !== "string" || typeof parsed.i !== "string") return null;
+    const d = new Date(parsed.t);
+    if (Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id: parsed.i };
+  } catch {
+    return null;
+  }
 }
 
 // --------------------------------------------------------------------
@@ -327,6 +467,151 @@ export async function loadToolResult(
   );
   const row = rows[0];
   return row ? rowToToolResult(row) : null;
+}
+
+export interface ToolCallWithResult {
+  call: ToolCall & {
+    status: "pending" | "running" | "completed" | "failed" | "cancelled";
+    startedAt: Date | null;
+    finishedAt: Date | null;
+  };
+  result: ToolResult | null;
+}
+
+/**
+ * List every tool call for a run, joined to its result if one exists. Used
+ * by the operator UI to render a tool timeline distinct from the message
+ * stream. Ordered by `created_at ASC` so it interleaves cleanly with
+ * messages.
+ */
+export async function listToolCalls(pool: Pool, runId: RunId): Promise<ToolCallWithResult[]> {
+  const { rows } = await pool.query<
+    ToolCallRow & {
+      r_content: string | null;
+      r_truncated_content: string | null;
+      r_token_count: number | null;
+      r_is_error: boolean | null;
+      r_duration_ms: number | null;
+      r_created_at: Date | null;
+    }
+  >(
+    `SELECT c.id, c.run_id, c.name, c.input, c.idempotency_key, c.status,
+            c.started_at, c.finished_at, c.created_at,
+            r.content              AS r_content,
+            r.truncated_content    AS r_truncated_content,
+            r.token_count          AS r_token_count,
+            r.is_error             AS r_is_error,
+            r.duration_ms          AS r_duration_ms,
+            r.created_at           AS r_created_at
+       FROM agent_tool_calls c
+       LEFT JOIN agent_tool_results r ON r.tool_call_id = c.id
+      WHERE c.run_id = $1
+      ORDER BY c.created_at ASC`,
+    [runId],
+  );
+
+  return rows.map((row) => {
+    const call = {
+      ...rowToToolCall(row),
+      status: row.status,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+    };
+    const result: ToolResult | null =
+      row.r_content !== null &&
+      row.r_truncated_content !== null &&
+      row.r_token_count !== null &&
+      row.r_is_error !== null &&
+      row.r_duration_ms !== null &&
+      row.r_created_at !== null
+        ? {
+            toolCallId: row.id,
+            runId: row.run_id,
+            content: row.r_content,
+            truncatedContent: row.r_truncated_content,
+            tokenCount: row.r_token_count,
+            isError: row.r_is_error,
+            durationMs: row.r_duration_ms,
+            createdAt: row.r_created_at,
+          }
+        : null;
+    return { call, result };
+  });
+}
+
+// --------------------------------------------------------------------
+// Aggregations (read-side, used by the operator UI usage tab)
+// --------------------------------------------------------------------
+
+export interface UsageRollupRow {
+  /** Day bucket as ISO date (UTC, "YYYY-MM-DD"). */
+  day: string;
+  agentName: string;
+  runs: number;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface AggregateUsageOpts {
+  /** Inclusive lower bound on `created_at`. Defaults to 30 days ago. */
+  from?: Date;
+  /** Exclusive upper bound on `created_at`. Defaults to "now". */
+  to?: Date;
+  /** Optional user filter. */
+  userId?: UserId;
+}
+
+/**
+ * Daily per-agent rollup of run count, cost, and token usage. Token usage
+ * comes from `agent_runs.cursor->'usage'` which the loop keeps up to date
+ * as the run progresses, so we don't need a join against the messages
+ * table for the typical view.
+ */
+export async function aggregateUsage(
+  pool: Pool,
+  opts: AggregateUsageOpts = {},
+): Promise<UsageRollupRow[]> {
+  const to = opts.to ?? new Date();
+  const from = opts.from ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const params: unknown[] = [from, to];
+  let userClause = "";
+  if (opts.userId !== undefined) {
+    params.push(opts.userId);
+    userClause = `AND user_id = $${params.length}`;
+  }
+
+  const { rows } = await pool.query<{
+    day: string;
+    agent_name: string;
+    runs: string;
+    cost_usd: string;
+    input_tokens: string;
+    output_tokens: string;
+  }>(
+    `SELECT to_char(date_trunc('day', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+            agent_name,
+            COUNT(*)::text AS runs,
+            COALESCE(SUM(total_cost_usd), 0)::text AS cost_usd,
+            COALESCE(SUM((cursor->'usage'->>'inputTokens')::bigint), 0)::text AS input_tokens,
+            COALESCE(SUM((cursor->'usage'->>'outputTokens')::bigint), 0)::text AS output_tokens
+       FROM agent_runs
+      WHERE created_at >= $1::timestamptz
+        AND created_at <  $2::timestamptz
+        ${userClause}
+      GROUP BY day, agent_name
+      ORDER BY day DESC, agent_name ASC`,
+    params,
+  );
+  return rows.map((row) => ({
+    day: row.day,
+    agentName: row.agent_name,
+    runs: Number(row.runs),
+    costUsd: Number(row.cost_usd),
+    inputTokens: Number(row.input_tokens),
+    outputTokens: Number(row.output_tokens),
+  }));
 }
 
 // --------------------------------------------------------------------

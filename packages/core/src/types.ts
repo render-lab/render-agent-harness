@@ -187,7 +187,7 @@ export type RunStepResult =
   | { status: "completed"; finalMessage: Message }
   | {
       status: "paused";
-      reason: "awaiting_input" | "awaiting_approval";
+      reason: "awaiting_input" | "awaiting_approval" | "chat_turn_end";
       payload: unknown;
     }
   | { status: "checkpoint"; cursor: RunCursor }
@@ -300,6 +300,24 @@ export interface AgentDefinition {
   budget?: Partial<Budget>;
   /** Optional sampling params (temperature, top_p, etc.). */
   sampling?: SamplingParams;
+  /**
+   * Conversation shape. `single-turn` (default) ends each run in `completed`
+   * once the model returns a final answer. `chat` keeps the run open across
+   * turns: when the model returns an answer with no tool calls the loop sets
+   * status to `paused` (with `metadata.pauseReason = "chat_turn_end"`) so the
+   * caller can append the next user message via `POST /runs/:id/input` and
+   * re-enqueue the same run. The full message history accumulates on the run
+   * and is fed back to the model on every turn.
+   */
+  shape?: "single-turn" | "chat";
+  /**
+   * Names of capability packs the agent has been composed with — declarative
+   * metadata only; the harness doesn't read this for behavior. The operator
+   * UI's Guide tab surfaces it so an operator can see, at a glance, which
+   * capability packs (e.g. `@render-harness/cap-search-exa`,
+   * `@render-harness/cap-memory-pg`) the deployed agent uses.
+   */
+  capabilityPacks?: string[];
 }
 
 export interface ModelSpec {

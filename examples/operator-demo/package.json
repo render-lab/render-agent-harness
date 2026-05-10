@@ -1,0 +1,33 @@
+{
+  "name": "@render-harness/example-operator-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smallest end-to-end demo of the operator UI: serveWeb({ ui: true }) in front of a runtime-worker pair, both targeting the local Compose stack.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/web.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev:web": "tsx watch src/web.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start:web": "node dist/web.js",
+    "start:worker": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "@render-harness/runtime-worker": "workspace:*",
+    "@render-harness/ui": "workspace:*",
+    "@render-harness/web": "workspace:*",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

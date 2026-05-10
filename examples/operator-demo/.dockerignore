@@ -1,0 +1,36 @@
+# Build context for examples/operator-demo/Dockerfile is the repo root.
+# Exclude everything we don't need so layer caching is fast and the
+# image doesn't ship host node_modules / dist / VCS state.
+
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+
+.git
+.github
+.cursor
+.claude
+.vscode
+.env
+.env.*
+!.env.example
+
+# Other examples we don't need for this image. Keep packages/ since the
+# Dockerfile uses workspace dependencies from there.
+examples/web-chat
+examples/support-agent
+examples/citations-monitor
+examples/deploy-agent
+
+# Discovery site, blueprints, docs — none of which are needed at build
+# or runtime for the operator-demo image.
+registry-index
+blueprints
+docs
+templates
+
+# Local artifacts.
+.pnpm-store
+*.log
+.DS_Store

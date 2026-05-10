@@ -197,7 +197,19 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
       }
       await handleResult(boss, queue, data, result, log);
     } catch (err) {
-      log.error({ err: err instanceof Error ? err.message : String(err) }, "job failed");
+      const serialized = serializeJobError(err);
+      log.error({ err: serialized.message }, "job failed");
+      // Reflect the failure in `agent_runs` so the operator UI (and
+      // anything else reading run state) sees a terminal status. Without
+      // this, a job that throws on its first attempt leaves the row stuck
+      // at `running` forever even after pg-boss gives up.
+      await setRunStatus(pool, data.runId, "failed", { error: serialized }).catch(
+        (updateErr) =>
+          log.error(
+            { err: updateErr instanceof Error ? updateErr.message : String(updateErr) },
+            "failed to mark run as failed",
+          ),
+      );
       throw err;
     } finally {
       cancel?.dispose();
@@ -373,6 +385,29 @@ function installShutdownHandlers(stop: () => Promise<void>, logger: Logger): voi
   };
   process.once("SIGTERM", handler);
   process.once("SIGINT", handler);
+}
+
+/**
+ * Best-effort serialization of an arbitrary thrown value into the
+ * `SerializedError` shape `agent_runs.final_error` expects. Falls back
+ * gracefully when the throw isn't an Error instance.
+ */
+function serializeJobError(err: unknown): {
+  name: string;
+  message: string;
+  stack?: string;
+  code?: string;
+} {
+  if (err instanceof Error) {
+    const code = (err as Error & { code?: string }).code;
+    return {
+      name: err.name,
+      message: err.message,
+      ...(err.stack ? { stack: err.stack } : {}),
+      ...(typeof code === "string" ? { code } : {}),
+    };
+  }
+  return { name: "JobError", message: String(err) };
 }
 
 /**

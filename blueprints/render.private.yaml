@@ -52,6 +52,17 @@ services:
       # Slack signing secret so the web service can verify Events callbacks.
       - key: SLACK_SIGNING_SECRET
         sync: false
+      # Operator UI session cookie secret. Only used when this service is
+      # built on top of `@render-harness/web` with `serveWeb({ ui: true })`.
+      # Render generates the value once on first deploy and stays consistent
+      # across deploys, so operator browser sessions survive code pushes.
+      - key: UI_COOKIE_SECRET
+        generateValue: true
+      # API key the operator UI's login form authenticates against. Same key
+      # the JSON API accepts as `Authorization: Bearer <key>`. Set to a
+      # strong shared secret in the Dashboard before enabling the UI.
+      - key: WEB_API_KEY
+        sync: false
 
   # --- Private worker ------------------------------------------------------
   - type: pserv

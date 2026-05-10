@@ -11,8 +11,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RunCursor } from "../types.js";
 import { closeSharedPool, createPool } from "./db.js";
 import {
+  aggregateUsage,
   appendMessage,
   createRun,
+  listRuns,
+  listToolCalls,
   loadRun,
   loadToolResult,
   recordToolCall,
@@ -129,6 +132,96 @@ describe("repo integration: tool call lifecycle", () => {
     });
     const result = await loadToolResult(db, tcId);
     expect(result?.content).toBe("ok");
+  });
+});
+
+describe("repo integration: read-side aggregations (operator UI)", () => {
+  dbTest("listRuns paginates newest-first with keyset cursor", async (db) => {
+    const tag = `it-list-${Date.now()}`;
+    for (let i = 0; i < 4; i++) {
+      await createRun(db, {
+        id: `${tag}-${i}`,
+        agentName: tag,
+        agentVersion: "0.0.0",
+      });
+    }
+    const first = await listRuns(db, { agentName: tag, limit: 2 });
+    expect(first.runs).toHaveLength(2);
+    expect(first.runs[0]?.id).toBe(`${tag}-3`);
+    expect(first.runs[1]?.id).toBe(`${tag}-2`);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await listRuns(db, {
+      agentName: tag,
+      limit: 2,
+      ...(first.nextCursor ? { cursor: first.nextCursor } : {}),
+    });
+    expect(second.runs.map((r) => r.id)).toEqual([`${tag}-1`, `${tag}-0`]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  dbTest("listToolCalls returns calls joined to results in order", async (db) => {
+    const runId = `it-tc-list-${Date.now()}`;
+    await createRun(db, { id: runId, agentName: "it", agentVersion: "0.0.0" });
+    const idA = `${runId}-a`;
+    const idB = `${runId}-b`;
+    await recordToolCall(db, {
+      id: idA,
+      runId,
+      name: "first",
+      input: { x: 1 },
+      idempotencyKey: `${runId}-a`,
+    });
+    await recordToolCall(db, {
+      id: idB,
+      runId,
+      name: "second",
+      input: { x: 2 },
+      idempotencyKey: `${runId}-b`,
+    });
+    await recordToolResult(db, {
+      toolCallId: idA,
+      runId,
+      content: "result-a",
+      truncatedContent: "result-a",
+      tokenCount: 2,
+      isError: false,
+      durationMs: 7,
+    });
+
+    const calls = await listToolCalls(db, runId);
+    expect(calls.map((c) => c.call.name)).toEqual(["first", "second"]);
+    expect(calls[0]?.result?.content).toBe("result-a");
+    expect(calls[1]?.result).toBeNull();
+  });
+
+  dbTest("aggregateUsage rolls up runs by day and agent", async (db) => {
+    const tag = `it-usage-${Date.now()}`;
+    const a = `${tag}-A`;
+    const b = `${tag}-B`;
+    await createRun(db, { id: a, agentName: tag, agentVersion: "0.0.0" });
+    await createRun(db, { id: b, agentName: tag, agentVersion: "0.0.0" });
+    await updateRunCursor(
+      db,
+      a,
+      { turn: 1, toolCalls: 0, wallMs: 0, usage: { inputTokens: 10, outputTokens: 5 } },
+      0.01,
+    );
+    await updateRunCursor(
+      db,
+      b,
+      { turn: 1, toolCalls: 0, wallMs: 0, usage: { inputTokens: 4, outputTokens: 2 } },
+      0.02,
+    );
+
+    const rollups = await aggregateUsage(db, {
+      from: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const me = rollups.find((r) => r.agentName === tag);
+    expect(me?.runs).toBe(2);
+    expect(me?.inputTokens).toBe(14);
+    expect(me?.outputTokens).toBe(7);
+    expect(me?.costUsd).toBeCloseTo(0.03, 5);
   });
 });
 

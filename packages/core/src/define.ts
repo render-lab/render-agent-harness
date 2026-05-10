@@ -34,4 +34,7 @@ function validate(def: AgentDefinition): void {
       throw new Error(`defineAgent: tool "${t}" is in both requireApproval and deniedTools`);
     }
   }
+  if (def.shape !== undefined && def.shape !== "chat" && def.shape !== "single-turn") {
+    throw new Error(`defineAgent: shape must be "chat" or "single-turn" (got "${def.shape}")`);
+  }
 }
