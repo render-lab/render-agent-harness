@@ -2,25 +2,27 @@ import type { Pool } from "pg";
 import type { Logger } from "pino";
 import type { LLMClient } from "./adapters/index.js";
 import { resolveClient } from "./adapters/index.js";
-import { AwaitingInputError, buildBuiltinTools } from "./builtins/index.js";
+import { buildBuiltinTools } from "./builtins/index.js";
 import { addUsage, estimateCost } from "./cost.js";
 import { serializeError } from "./errors.js";
-import { idempotencyKey } from "./idempotency.js";
+import {
+  collectToolUses,
+  executeToolCall,
+  finishWithoutToolCalls,
+  replayPendingToolUses,
+  type ToolExecutionContext,
+} from "./loop-steps.js";
+import type { McpToolHandle } from "./mcp.js";
 import { connectMcpServers } from "./mcp.js";
 import { assembleSystemPrompt } from "./prompt.js";
 import {
   appendMessage,
-  findExistingToolCall,
   listMessages,
   loadRun,
   mergeRunMetadata,
-  recordToolCall,
-  recordToolResult,
   setRunStatus,
-  setToolCallStatus,
   updateRunCursor,
 } from "./state/repo.js";
-import { truncateResult } from "./truncate.js";
 import {
   type AgentDefinition,
   type Budget,
@@ -28,7 +30,6 @@ import {
   type ContentBlock,
   DEFAULT_BUDGET,
   DEFAULT_SOFT_CHECKPOINT,
-  type LocalToolHandler,
   type Message,
   type RunCursor,
   type RunId,
@@ -36,10 +37,7 @@ import {
   type RuntimeHooks,
   type SkillMetadata,
   type TokenUsage,
-  type ToolCall,
   type ToolDefinition,
-  type ToolResult,
-  type ToolUseBlock,
 } from "./types.js";
 
 export interface RunAgentDeps {
@@ -61,14 +59,6 @@ export interface RunAgentDeps {
    * worker pserv).
    */
   externalMcpTools?: McpToolHandle[];
-}
-
-export interface McpToolHandle {
-  exposedName: string;
-  serverName: string;
-  server: string;
-  definition: ToolDefinition;
-  call: (input: unknown, signal: AbortSignal) => Promise<{ content: string; isError: boolean }>;
 }
 
 export interface RunAgentArgs {
@@ -164,6 +154,18 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
   let toolCallsThisStep = 0;
   let lastAssistantMessage: Message | null = null;
 
+  const toolCtx: ToolExecutionContext = {
+    pool,
+    logger: log,
+    hooks,
+    runId,
+    signal,
+    agentDef,
+    localTools,
+    mcpTools,
+    ...(args.approvedToolCallIds ? { approvedToolCallIds: args.approvedToolCallIds } : {}),
+  };
+
   try {
     for (let iter = 0; iter < budget.maxIterations; iter++) {
       throwIfAborted(signal);
@@ -178,12 +180,9 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
       const messages = await listMessages(pool, runId);
 
       // Resume detection: if the last persisted message is an assistant turn
-      // whose tool_uses were never fulfilled with tool_results (the run paused
-      // for approval), replay those tool_uses instead of re-prompting the
-      // model. Sending an unfulfilled assistant turn back to the provider's
-      // messages.create would 400, and the duplicate completion would burn
-      // tokens to no purpose.
-      const pending = pendingToolUses(messages);
+      // whose tool_uses were never fulfilled, replay those tool_uses instead
+      // of re-prompting the model.
+      const pending = replayPendingToolUses(messages);
       let assistantContent: ContentBlock[];
       let assistant: Message;
       if (pending) {
@@ -224,21 +223,7 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 
       const toolUses = collectToolUses(assistantContent);
       if (toolUses.length === 0) {
-        // No tool calls — model returned a final answer. For chat-shaped
-        // agents, end the turn in `paused` so the caller can append the
-        // next user message and resume the same run.
-        if (agentDef.shape === "chat") {
-          await mergeRunMetadata(pool, runId, { pauseReason: "chat_turn_end" });
-          await setRunStatus(pool, runId, "paused");
-          log.info({ messageId: assistant.id }, "chat turn complete; paused for next input");
-          return {
-            status: "paused",
-            reason: "chat_turn_end",
-            payload: { messageId: assistant.id },
-          };
-        }
-        await setRunStatus(pool, runId, "completed");
-        return { status: "completed", finalMessage: assistant };
+        return await finishWithoutToolCalls({ pool, runId, agentDef, assistant, logger: log });
       }
 
       // Execute each tool call. A single assistant turn can request multiple
@@ -247,130 +232,13 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
       const toolResultBlocks: ContentBlock[] = [];
       for (const use of toolUses) {
         throwIfAborted(signal);
-        const handler = findHandler(use.name, localTools, mcpTools, runId);
-        if (!handler) {
-          toolResultBlocks.push({
-            type: "tool_result",
-            tool_use_id: use.id,
-            content: `tool "${use.name}" is not registered for this agent`,
-            is_error: true,
-          });
-          continue;
+        const outcome = await executeToolCall(toolCtx, use);
+        if (outcome.kind === "paused") {
+          return outcome.result;
         }
-        if (requiresApproval(use.name, agentDef) && !args.approvedToolCallIds?.has(use.id)) {
-          await setRunStatus(pool, runId, "paused");
-          log.info({ tool: use.name, toolUseId: use.id }, "paused: awaiting_approval");
-          return {
-            status: "paused",
-            reason: "awaiting_approval",
-            payload: { tool_use_id: use.id, name: use.name, input: use.input },
-          };
-        }
-
-        const idem = idempotencyKey(runId, use.id);
-        const existing = await findExistingToolCall(pool, runId, idem);
-        let result: ToolResult;
-        if (existing?.result) {
-          log.debug({ tool: use.name, idem }, "tool call deduped");
-          result = existing.result;
-        } else {
-          await recordToolCall(pool, {
-            id: use.id,
-            runId,
-            name: use.name,
-            input: use.input,
-            idempotencyKey: idem,
-          });
-          await setToolCallStatus(pool, use.id, "running", { startedAt: new Date() });
-          const callRecord: ToolCall = {
-            id: use.id,
-            runId,
-            name: use.name,
-            input: use.input,
-            idempotencyKey: idem,
-            createdAt: new Date(),
-          };
-          await hooks.onToolCall?.(callRecord);
-          const start = Date.now();
-          let raw: { content: string; isError?: boolean };
-          try {
-            raw = await handler.invoke(use, signal, log);
-          } catch (err) {
-            if (err instanceof AwaitingInputError) {
-              // Tool requested user input (e.g. `ask_user`). Fulfill the
-              // dangling tool_use with a placeholder result so the resume
-              // path doesn't try to re-invoke ask_user, then pause the run.
-              // The user's actual answer arrives as the next user message
-              // via POST /runs/:id/input and gets fed to the model on the
-              // next turn.
-              const placeholder = formatAwaitingInputPlaceholder(err.payload);
-              const trunc = truncateResult(placeholder, use.id);
-              const placeholderResult: ToolResult = {
-                toolCallId: use.id,
-                runId,
-                content: placeholder,
-                truncatedContent: trunc.truncated,
-                tokenCount: trunc.fullTokens,
-                isError: false,
-                durationMs: Date.now() - start,
-                createdAt: new Date(),
-              };
-              await recordToolResult(pool, placeholderResult);
-              await hooks.onToolResult?.(placeholderResult);
-              const toolMsg = await appendMessage(pool, {
-                runId,
-                role: "tool",
-                content: [
-                  {
-                    type: "tool_result",
-                    tool_use_id: use.id,
-                    content: placeholderResult.truncatedContent,
-                  },
-                ],
-              });
-              await hooks.onMessage?.(toolMsg);
-              await mergeRunMetadata(pool, runId, {
-                pauseReason: "awaiting_input",
-                askUser: { ...err.payload, tool_use_id: use.id },
-              });
-              await setRunStatus(pool, runId, "paused");
-              log.info(
-                { tool: use.name, toolUseId: use.id },
-                "paused: awaiting_input from ask_user",
-              );
-              return {
-                status: "paused",
-                reason: "awaiting_input",
-                payload: { ...err.payload, tool_use_id: use.id },
-              };
-            }
-            raw = {
-              content: `tool error: ${err instanceof Error ? err.message : String(err)}`,
-              isError: true,
-            };
-          }
-          const trunc = truncateResult(raw.content, use.id);
-          result = {
-            toolCallId: use.id,
-            runId,
-            content: raw.content,
-            truncatedContent: trunc.truncated,
-            tokenCount: trunc.fullTokens,
-            isError: raw.isError ?? false,
-            durationMs: Date.now() - start,
-            createdAt: new Date(),
-          };
-          await recordToolResult(pool, result);
-          await hooks.onToolResult?.(result);
-        }
+        toolResultBlocks.push(outcome.block);
         cursor.toolCalls += 1;
         toolCallsThisStep += 1;
-        toolResultBlocks.push({
-          type: "tool_result",
-          tool_use_id: use.id,
-          content: result.truncatedContent,
-          ...(result.isError ? { is_error: true } : {}),
-        });
       }
 
       const toolMsg = await appendMessage(pool, {
@@ -417,103 +285,8 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 }
 
 // --------------------------------------------------------------------
-// Helpers
+// Driver-only helpers (everything composable lives in loop-steps.ts)
 // --------------------------------------------------------------------
-
-interface NormalizedHandler {
-  source: "local" | "mcp";
-  invoke: (
-    use: ToolUseBlock,
-    signal: AbortSignal,
-    logger: Logger,
-  ) => Promise<{ content: string; isError?: boolean }>;
-}
-
-function findHandler(
-  name: string,
-  local: LocalToolHandler[],
-  mcp: McpToolHandle[],
-  runId: RunId,
-): NormalizedHandler | null {
-  const localHit = local.find((t) => t.definition.name === name);
-  if (localHit) {
-    return {
-      source: "local",
-      invoke: async (use, signal, logger) => {
-        const res = await localHit.handler({
-          input: use.input,
-          runId,
-          toolCallId: use.id,
-          signal,
-          logger,
-        });
-        return res;
-      },
-    };
-  }
-  const mcpHit = mcp.find((t) => t.exposedName === name);
-  if (mcpHit) {
-    return {
-      source: "mcp",
-      invoke: async (use, signal) => {
-        const res = await mcpHit.call(use.input, signal);
-        return { content: res.content, isError: res.isError };
-      },
-    };
-  }
-  return null;
-}
-
-function collectToolUses(content: ContentBlock[]): ToolUseBlock[] {
-  return content.filter((b): b is ToolUseBlock => b.type === "tool_use");
-}
-
-interface PendingToolUses {
-  assistantMessage: Message;
-  assistantContent: ContentBlock[];
-  toolUses: ToolUseBlock[];
-}
-
-/**
- * If the most recent persisted assistant message has tool_use blocks that
- * weren't resolved by a subsequent tool message, return them so the loop can
- * dispatch directly without re-prompting the model.
- *
- * Returns null in the normal case (no pending tool uses, or last message is a
- * tool/user message that resolved the last assistant turn).
- */
-function pendingToolUses(messages: Message[]): PendingToolUses | null {
-  // Walk backwards looking for the most recent assistant message.
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (!msg) continue;
-    if (msg.role === "assistant") {
-      const toolUses = msg.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
-      if (toolUses.length === 0) return null;
-      // Collect tool_result tool_use_ids that came after this assistant turn.
-      const fulfilledIds = new Set<string>();
-      for (let j = i + 1; j < messages.length; j++) {
-        const next = messages[j];
-        if (!next) continue;
-        for (const block of next.content) {
-          if (block.type === "tool_result") fulfilledIds.add(block.tool_use_id);
-        }
-      }
-      const unfulfilled = toolUses.filter((t) => !fulfilledIds.has(t.id));
-      if (unfulfilled.length === 0) return null;
-      return {
-        assistantMessage: msg,
-        assistantContent: msg.content,
-        toolUses: unfulfilled,
-      };
-    }
-  }
-  return null;
-}
-
-function requiresApproval(toolName: string, agent: AgentDefinition): boolean {
-  return agent.permissions?.requireApproval?.includes(toolName) ?? false;
-}
 
 function filterByPermissions(tools: ToolDefinition[], agent: AgentDefinition): ToolDefinition[] {
   const denied = new Set(agent.permissions?.deniedTools ?? []);
@@ -523,24 +296,6 @@ function filterByPermissions(tools: ToolDefinition[], agent: AgentDefinition): T
     if (allowed && allowed.length > 0 && !allowed.includes(t.name)) return false;
     return true;
   });
-}
-
-function formatAwaitingInputPlaceholder(payload: {
-  question: string;
-  options?: string[];
-}): string {
-  const options =
-    payload.options && payload.options.length > 0
-      ? `\nOptions: ${payload.options.map((o, i) => `${i + 1}. ${o}`).join(" | ")}`
-      : "";
-  return [
-    "Awaiting user input.",
-    `Question: ${payload.question}`,
-    options.trim(),
-    "The user's reply will arrive as the next user message.",
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 function shouldCheckpoint(
