@@ -104,6 +104,45 @@ export async function createRun(
   return rowToRun(row);
 }
 
+/**
+ * Idempotent run insert. If a row with `id` already exists, return it
+ * unchanged; otherwise insert and emit `run_created`. Single-statement
+ * `ON CONFLICT (id) DO NOTHING` so two producers racing on the same runId
+ * can't both insert.
+ */
+export async function ensureRun(
+  pool: Pool,
+  args: {
+    id: RunId;
+    agentName: string;
+    agentVersion: string;
+    userId?: UserId | null;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<AgentRun> {
+  const { rows } = await pool.query<RunRow>(
+    `INSERT INTO agent_runs (id, agent_name, agent_version, status, user_id, metadata)
+       VALUES ($1, $2, $3, 'pending', $4, $5)
+       ON CONFLICT (id) DO NOTHING
+       RETURNING *`,
+    [
+      args.id,
+      args.agentName,
+      args.agentVersion,
+      args.userId ?? null,
+      JSON.stringify(args.metadata ?? {}),
+    ],
+  );
+  if (rows.length > 0) {
+    const row = rows[0] as RunRow;
+    await notify(pool, { runId: row.id, kind: "run_created" });
+    return rowToRun(row);
+  }
+  const existing = await loadRun(pool, args.id);
+  if (!existing) throw new Error(`ensureRun: row vanished after ON CONFLICT for ${args.id}`);
+  return existing;
+}
+
 export async function loadRun(pool: Pool, runId: RunId): Promise<AgentRun | null> {
   const { rows } = await pool.query<RunRow>("SELECT * FROM agent_runs WHERE id = $1", [runId]);
   const row = rows[0];
@@ -245,6 +284,34 @@ export async function loadMessage(pool: Pool, messageId: string): Promise<Messag
     [messageId],
   );
   return rows.length > 0 ? rowToMessage(rows[0] as MessageRow) : null;
+}
+
+export async function countRunMessages(pool: Pool, runId: RunId): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM agent_messages WHERE run_id = $1",
+    [runId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Append `content` as the run's first user message — but only if the run has
+ * no messages yet. No-op when content is empty or the run already has messages.
+ * Used by producers (workflows trigger, web /input) to initialize a run that
+ * the consumer will pick up later.
+ */
+export async function ensureInitialMessage(
+  pool: Pool,
+  args: { runId: RunId; content: ContentBlock[] },
+): Promise<void> {
+  if (!args.content || args.content.length === 0) return;
+  const count = await countRunMessages(pool, args.runId);
+  if (count > 0) return;
+  await appendMessage(pool, {
+    runId: args.runId,
+    role: "user",
+    content: args.content,
+  });
 }
 
 export interface ListRunsFilter {

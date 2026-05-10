@@ -1,19 +1,17 @@
 import {
   type AgentDefinition,
-  appendMessage,
   applyMigrations,
   type Budget,
   buildLogger,
   type CheckpointPolicy,
   type ContentBlock,
   createCancelSignal,
-  createRun,
   DEFAULT_BUDGET,
+  ensureInitialMessage,
+  ensureRun,
   getKvSafe,
   getPool,
   type Logger,
-  loadRun,
-  type Pool,
   type RunStepResult,
   runAgent,
   type UserId,
@@ -102,8 +100,16 @@ export async function runAgentStep(opts: RunAgentStepOpts): Promise<RunStepResul
     await applyMigrations(pool);
   }
 
-  await ensureRunExists({ pool, opts });
-  await ensureInitialContent({ pool, opts, logger: log });
+  await ensureRun(pool, {
+    id: opts.runId,
+    agentName: opts.agent.name,
+    agentVersion: opts.agent.version,
+    ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+    metadata: { runtime: "workflows", ...(opts.metadata ?? {}) },
+  });
+  if (opts.initialContent && opts.initialContent.length > 0) {
+    await ensureInitialMessage(pool, { runId: opts.runId, content: opts.initialContent });
+  }
 
   const upstream = new AbortController();
   let cancel: ReturnType<typeof createCancelSignal> | null = null;
@@ -202,25 +208,15 @@ export async function triggerAgentWorkflow(opts: TriggerOpts): Promise<TriggerRe
   const runId = opts.runId ?? globalThis.crypto.randomUUID();
   const pool = getPool({ applicationName: "trigger-workflow" });
   await applyMigrations(pool);
-  const existing = await loadRun(pool, runId);
-  if (!existing) {
-    await createRun(pool, {
-      id: runId,
-      agentName: opts.agentName,
-      agentVersion: opts.agentVersion,
-      ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
-      metadata: { runtime: "workflows", ...(opts.metadata ?? {}) },
-    });
-  }
+  await ensureRun(pool, {
+    id: runId,
+    agentName: opts.agentName,
+    agentVersion: opts.agentVersion,
+    ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+    metadata: { runtime: "workflows", ...(opts.metadata ?? {}) },
+  });
   if (opts.initialContent && opts.initialContent.length > 0) {
-    const messageCount = await countRunMessages(pool, runId);
-    if (messageCount === 0) {
-      await appendMessage(pool, {
-        runId,
-        role: "user",
-        content: opts.initialContent,
-      });
-    }
+    await ensureInitialMessage(pool, { runId, content: opts.initialContent });
   }
 
   const { Render } = await import("@renderinc/sdk");
@@ -244,44 +240,6 @@ export async function triggerAgentWorkflow(opts: TriggerOpts): Promise<TriggerRe
   }
   const started = await render.workflows.startTask(opts.taskRef, [taskInput]);
   return { runId, taskRunId: started.taskRunId };
-}
-
-// --------------------------------------------------------------------
-// Helpers
-// --------------------------------------------------------------------
-
-async function ensureRunExists(args: { pool: Pool; opts: RunAgentStepOpts }) {
-  const existing = await loadRun(args.pool, args.opts.runId);
-  if (existing) return;
-  await createRun(args.pool, {
-    id: args.opts.runId,
-    agentName: args.opts.agent.name,
-    agentVersion: args.opts.agent.version,
-    ...(args.opts.userId !== undefined ? { userId: args.opts.userId } : {}),
-    metadata: { runtime: "workflows", ...(args.opts.metadata ?? {}) },
-  });
-}
-
-async function ensureInitialContent(args: { pool: Pool; opts: RunAgentStepOpts; logger: Logger }) {
-  if (!args.opts.initialContent || args.opts.initialContent.length === 0) return;
-  const count = await countRunMessages(args.pool, args.opts.runId);
-  if (count > 0) {
-    args.logger.debug({ count }, "run already has messages; skipping initialContent");
-    return;
-  }
-  await appendMessage(args.pool, {
-    runId: args.opts.runId,
-    role: "user",
-    content: args.opts.initialContent,
-  });
-}
-
-async function countRunMessages(pool: Pool, runId: string): Promise<number> {
-  const { rows } = await pool.query<{ count: string }>(
-    "SELECT COUNT(*)::text AS count FROM agent_messages WHERE run_id = $1",
-    [runId],
-  );
-  return Number(rows[0]?.count ?? 0);
 }
 
 // Re-export commonly-needed types so deploy-agent/main.ts imports stay tight.

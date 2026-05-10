@@ -62,7 +62,10 @@ export type {
 export {
   aggregateUsage,
   appendMessage,
+  countRunMessages,
   createRun,
+  ensureInitialMessage,
+  ensureRun,
   findExistingToolCall,
   listMessages,
   listRuns,

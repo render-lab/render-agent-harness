@@ -13,7 +13,10 @@ import { closeSharedPool, createPool } from "./db.js";
 import {
   aggregateUsage,
   appendMessage,
+  countRunMessages,
   createRun,
+  ensureInitialMessage,
+  ensureRun,
   listRuns,
   listToolCalls,
   loadRun,
@@ -91,6 +94,52 @@ describe("repo integration: setRunStatus", () => {
       [id],
     );
     expect(rows[0]?.final_error?.name).toBe("Boom");
+  });
+});
+
+describe("repo integration: ensureRun + ensureInitialMessage", () => {
+  dbTest("ensureRun is idempotent and concurrency-safe", async (db) => {
+    const id = `it-ensure-${Date.now()}`;
+    const args = {
+      id,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      metadata: { kind: "ensure" },
+    } as const;
+
+    const first = await ensureRun(db, args);
+    expect(first.id).toBe(id);
+    expect(first.status).toBe("pending");
+    expect(first.metadata).toMatchObject({ kind: "ensure" });
+
+    // Concurrent racing inserts on the same id should all return the same row,
+    // and only one INSERT should ultimately happen.
+    const racers = await Promise.all([
+      ensureRun(db, args),
+      ensureRun(db, args),
+      ensureRun(db, args),
+    ]);
+    for (const r of racers) {
+      expect(r.id).toBe(id);
+      expect(r.createdAt.getTime()).toBe(first.createdAt.getTime());
+    }
+    const { rows } = await db.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM agent_runs WHERE id = $1",
+      [id],
+    );
+    expect(rows[0]?.count).toBe("1");
+  });
+
+  dbTest("ensureInitialMessage appends once and is a no-op afterwards", async (db) => {
+    const id = `it-init-msg-${Date.now()}`;
+    await ensureRun(db, { id, agentName: "it", agentVersion: "0.0.0" });
+    expect(await countRunMessages(db, id)).toBe(0);
+
+    await ensureInitialMessage(db, { runId: id, content: [{ type: "text", text: "hi" }] });
+    expect(await countRunMessages(db, id)).toBe(1);
+
+    await ensureInitialMessage(db, { runId: id, content: [{ type: "text", text: "again" }] });
+    expect(await countRunMessages(db, id)).toBe(1);
   });
 });
 

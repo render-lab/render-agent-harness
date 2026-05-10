@@ -8,12 +8,12 @@ import {
   closeSharedKv,
   closeSharedPool,
   createCancelSignal,
-  createRun,
   DEFAULT_BUDGET,
+  ensureInitialMessage,
+  ensureRun,
   getKvSafe,
   getPool,
   type Logger,
-  loadRun,
   type Message,
   type RunStepResult,
   runAgent,
@@ -155,7 +155,13 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     let cancel: ReturnType<typeof createCancelSignal> | null = null;
     try {
       const agentDef = await resolveAgent(opts.agent, data);
-      const run = await ensureRun(data, agentDef);
+      const run = await ensureRun(getPool(), {
+        id: data.runId,
+        agentName: agentDef.name,
+        agentVersion: agentDef.version,
+        ...(data.userId !== undefined ? { userId: data.userId } : {}),
+        metadata: { runtime: "worker", ...(data.metadata ?? {}) },
+      });
       log.info({ runStatus: run.status }, "processing run job");
 
       let signal = upstream.signal;
@@ -269,7 +275,7 @@ export async function enqueueRun(opts: {
   runId?: string;
 }): Promise<string> {
   const runId = opts.runId ?? globalThis.crypto.randomUUID();
-  await createRun(opts.pool, {
+  await ensureRun(opts.pool, {
     id: runId,
     agentName: opts.agentName,
     agentVersion: opts.agentVersion,
@@ -277,12 +283,7 @@ export async function enqueueRun(opts: {
     metadata: { runtime: "worker", ...(opts.metadata ?? {}) },
   });
   if (opts.initialContent && opts.initialContent.length > 0) {
-    const { appendMessage } = await import("@render-harness/core");
-    await appendMessage(opts.pool, {
-      runId,
-      role: "user",
-      content: opts.initialContent,
-    });
+    await ensureInitialMessage(opts.pool, { runId, content: opts.initialContent });
   }
   const job: RunJob = {
     runId,
@@ -302,21 +303,6 @@ export async function enqueueRun(opts: {
 async function resolveAgent(source: WorkerOpts["agent"], job: RunJob): Promise<AgentDefinition> {
   if (typeof source === "function") return source(job);
   return source;
-}
-
-async function ensureRun(data: RunJob, agentDef: AgentDefinition) {
-  const pool = getPool();
-  const existing = await loadRun(pool, data.runId);
-  if (existing) return existing;
-  // Producer didn't pre-create the row; do it now so the rest of the loop
-  // has something to update.
-  return createRun(pool, {
-    id: data.runId,
-    agentName: agentDef.name,
-    agentVersion: agentDef.version,
-    ...(data.userId !== undefined ? { userId: data.userId } : {}),
-    metadata: { runtime: "worker", ...(data.metadata ?? {}) },
-  });
 }
 
 async function handleResult(
