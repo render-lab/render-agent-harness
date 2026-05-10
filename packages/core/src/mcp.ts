@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Logger } from "pino";
+import { serializeError } from "./errors.js";
 import type { McpServerConfig, ToolDefinition } from "./types.js";
 
 export interface McpToolHandle {
@@ -87,7 +88,7 @@ export async function connectMcpServers(args: {
       }
       child.info({ toolCount: list.tools.length }, "mcp server connected");
     } catch (err) {
-      child.error({ err: serializeErr(err) }, "mcp server connection failed; skipping");
+      child.error({ err: serializeError(err) }, "mcp server connection failed; skipping");
     }
   }
 
@@ -155,7 +156,3 @@ function sanitize(s: string): string {
   return s.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
-function serializeErr(err: unknown): { message: string; name?: string } {
-  if (err instanceof Error) return { message: err.message, name: err.name };
-  return { message: String(err) };
-}

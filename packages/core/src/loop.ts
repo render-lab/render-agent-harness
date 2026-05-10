@@ -4,6 +4,7 @@ import type { LLMClient } from "./adapters/index.js";
 import { resolveClient } from "./adapters/index.js";
 import { AwaitingInputError, buildBuiltinTools } from "./builtins/index.js";
 import { addUsage, estimateCost } from "./cost.js";
+import { serializeError } from "./errors.js";
 import { idempotencyKey } from "./idempotency.js";
 import { connectMcpServers } from "./mcp.js";
 import { assembleSystemPrompt } from "./prompt.js";
@@ -587,22 +588,6 @@ async function failed(
 ): Promise<RunStepResult> {
   await setRunStatus(pool, runId, "failed", { error: err });
   return { status: "failed", error: err };
-}
-
-function serializeError(err: unknown): {
-  name: string;
-  message: string;
-  stack?: string;
-  code?: string;
-} {
-  if (err instanceof Error) {
-    return {
-      name: err.name,
-      message: err.message,
-      ...(err.stack ? { stack: err.stack } : {}),
-    };
-  }
-  return { name: "UnknownError", message: String(err) };
 }
 
 async function loadFinalMessage(pool: Pool, runId: RunId): Promise<Message> {

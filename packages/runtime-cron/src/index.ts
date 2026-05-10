@@ -13,6 +13,7 @@ import {
   type Logger,
   type RunStepResult,
   runAgent,
+  serializeError,
 } from "@render-harness/core";
 
 /**
@@ -106,7 +107,7 @@ export async function runCron(opts: RunCronOpts): Promise<RunCronResult> {
         cancelDispose = cancel.dispose;
       } catch (err) {
         logger.debug(
-          { err: serializeErr(err) },
+          { err: serializeError(err) },
           "no KV configured; falling back to upstream signal only",
         );
       }
@@ -158,7 +159,7 @@ export async function runCronAndExit(opts: RunCronOpts): Promise<never> {
     process.exit(exitCode);
   } catch (err) {
     const logger = opts.logger ?? buildLogger({ service: "runtime-cron" });
-    logger.fatal({ err: serializeErr(err) }, "cron run crashed");
+    logger.fatal({ err: serializeError(err) }, "cron run crashed");
     process.exit(2);
   }
 }
@@ -179,7 +180,3 @@ function exitCodeFor(result: RunStepResult): number {
   }
 }
 
-function serializeErr(err: unknown): { name: string; message: string } {
-  if (err instanceof Error) return { name: err.name, message: err.message };
-  return { name: "UnknownError", message: String(err) };
-}

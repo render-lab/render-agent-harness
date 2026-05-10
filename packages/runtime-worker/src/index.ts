@@ -13,10 +13,12 @@ import {
   ensureRun,
   getKvSafe,
   getPool,
+  installShutdownHandlers,
   type Logger,
   type Message,
   type RunStepResult,
   runAgent,
+  serializeError,
   setRunStatus,
   type ToolCall,
   type ToolResult,
@@ -203,7 +205,7 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
       }
       await handleResult(boss, queue, data, result, log);
     } catch (err) {
-      const serialized = serializeJobError(err);
+      const serialized = serializeError(err, "JobError");
       log.error({ err: serialized.message }, "job failed");
       // Reflect the failure in `agent_runs` so the operator UI (and
       // anything else reading run state) sees a terminal status. Without
@@ -240,7 +242,7 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     logger.info("runtime-worker stopped");
   };
 
-  installShutdownHandlers(stop, logger);
+  installShutdownHandlers(stop, logger, { service: "runtime-worker" });
   return { stop, boss, queue };
 }
 
@@ -350,39 +352,6 @@ function extractId(payload: Message | ToolCall | ToolResult): string {
   if ("id" in payload) return payload.id;
   if ("toolCallId" in payload) return payload.toolCallId;
   return "?";
-}
-
-function installShutdownHandlers(stop: () => Promise<void>, logger: Logger): void {
-  const handler = async (signal: NodeJS.Signals) => {
-    logger.warn({ signal }, "shutdown signal received");
-    await stop();
-    process.exit(0);
-  };
-  process.once("SIGTERM", handler);
-  process.once("SIGINT", handler);
-}
-
-/**
- * Best-effort serialization of an arbitrary thrown value into the
- * `SerializedError` shape `agent_runs.final_error` expects. Falls back
- * gracefully when the throw isn't an Error instance.
- */
-function serializeJobError(err: unknown): {
-  name: string;
-  message: string;
-  stack?: string;
-  code?: string;
-} {
-  if (err instanceof Error) {
-    const code = (err as Error & { code?: string }).code;
-    return {
-      name: err.name,
-      message: err.message,
-      ...(err.stack ? { stack: err.stack } : {}),
-      ...(typeof code === "string" ? { code } : {}),
-    };
-  }
-  return { name: "JobError", message: String(err) };
 }
 
 /**

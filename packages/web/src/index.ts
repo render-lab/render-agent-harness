@@ -12,6 +12,7 @@ import {
   closeSharedPool,
   getKvSafe,
   getPool,
+  installShutdownHandlers,
   type ListRunsFilter,
   type Logger,
   listMessages,
@@ -508,7 +509,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     await closeSharedKv().catch(() => {});
     await closeSharedPool().catch(() => {});
   };
-  installShutdownHandlers(stop, logger);
+  installShutdownHandlers(stop, logger, { service: "web" });
 
   return { server, boss, pool, stop };
 }
@@ -964,16 +965,6 @@ function summariseAgent(agent: AgentDefinition): AgentSummary {
   if (agent.budget) summary.budget = agent.budget;
   if (agent.sampling) summary.sampling = agent.sampling;
   return summary;
-}
-
-function installShutdownHandlers(stop: () => Promise<void>, logger: Logger): void {
-  const handler = async (signal: NodeJS.Signals) => {
-    logger.warn({ signal }, "shutting down web service");
-    await stop();
-    process.exit(0);
-  };
-  process.once("SIGTERM", handler);
-  process.once("SIGINT", handler);
 }
 
 interface MountUiArgs {

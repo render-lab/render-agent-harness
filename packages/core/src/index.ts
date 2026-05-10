@@ -32,12 +32,15 @@ export {
 export type { PricingOverride } from "./cost.js";
 export { addUsage, estimateCost } from "./cost.js";
 export { defineAgent } from "./define.js";
+export { serializeError } from "./errors.js";
 export { idempotencyKey } from "./idempotency.js";
 export { closeSharedKv, getKv, getKvSafe, memoryKv } from "./kv.js";
 export type { Logger } from "./logger.js";
 export { buildLogger } from "./logger.js";
 export type { McpToolHandle, RunAgentArgs, RunAgentDeps } from "./loop.js";
 export { runAgent } from "./loop.js";
+export type { ShutdownOpts } from "./shutdown.js";
+export { installShutdownHandlers } from "./shutdown.js";
 export { connectMcpServers, exposedToolName, parseExposedToolName } from "./mcp.js";
 export { assembleSystemPrompt } from "./prompt.js";
 export {

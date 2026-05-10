@@ -11,6 +11,7 @@ import {
   DEFAULT_BUDGET,
   getKvSafe,
   getPool,
+  installShutdownHandlers,
   type Logger,
   type Message,
   runAgent,
@@ -244,7 +245,14 @@ export async function serveAgent(opts: ServeAgentOpts): Promise<ServerType> {
     );
   });
 
-  installShutdownHandlers(server, logger);
+  installShutdownHandlers(
+    () =>
+      new Promise<void>((res, rej) => {
+        server.close((err) => (err ? rej(err) : res()));
+      }),
+    logger,
+    { service: "runtime-web" },
+  );
   return server;
 }
 
@@ -290,19 +298,3 @@ function serializeToolResult(r: ToolResult): Record<string, unknown> {
   };
 }
 
-function installShutdownHandlers(server: ServerType, logger: Logger): void {
-  const shutdown = (signal: NodeJS.Signals) => {
-    logger.warn({ signal }, "shutting down runtime-web");
-    server.close((err) => {
-      if (err) {
-        logger.error({ err: err.message }, "server.close errored");
-        process.exit(1);
-      }
-      process.exit(0);
-    });
-    // Hard cap so a stuck request can't hold us past Render's grace period.
-    setTimeout(() => process.exit(0), 10_000).unref();
-  };
-  process.once("SIGTERM", shutdown);
-  process.once("SIGINT", shutdown);
-}
