@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import type { Logger } from "pino";
 import type { LLMClient } from "./adapters/index.js";
 import { resolveClient } from "./adapters/index.js";
-import { buildBuiltinTools } from "./builtins.js";
+import { AwaitingInputError, buildBuiltinTools } from "./builtins/index.js";
 import { addUsage, estimateCost } from "./cost.js";
 import { idempotencyKey } from "./idempotency.js";
 import { connectMcpServers } from "./mcp.js";
@@ -12,6 +12,7 @@ import {
   findExistingToolCall,
   listMessages,
   loadRun,
+  mergeRunMetadata,
   recordToolCall,
   recordToolResult,
   setRunStatus,
@@ -112,7 +113,30 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
   await setRunStatus(pool, runId, "running");
 
   const skills = deps.skills ?? (await loadAgentSkills(agentDef));
-  const builtinTools = buildBuiltinTools({ pool, skills, runId, logger: log });
+  const { tools: builtinTools, skipped: skippedBuiltins } = buildBuiltinTools({
+    pool,
+    skills,
+    runId,
+    userId: run.userId,
+    agentName: agentDef.name,
+    logger: log,
+    env: process.env,
+  });
+  if (skippedBuiltins.length > 0) {
+    log.debug(
+      { skipped: skippedBuiltins.map((s) => `${s.name}: ${s.reason}`) },
+      "some builtin tools skipped",
+    );
+    // Stash on the run so the operator UI can show "image_generate (skipped:
+    // OPENAI_API_KEY not set)" without having to grep logs. Best-effort —
+    // failure to write here doesn't block the run.
+    await mergeRunMetadata(pool, runId, { skippedBuiltins }).catch((err) => {
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "failed to record skipped builtins",
+      );
+    });
+  }
   const localTools = [...(agentDef.localTools ?? []), ...builtinTools];
   let mcp: { tools: McpToolHandle[]; closeAll: () => Promise<void> } | null = null;
   if (deps.externalMcpTools) {
@@ -199,7 +223,19 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 
       const toolUses = collectToolUses(assistantContent);
       if (toolUses.length === 0) {
-        // No tool calls — model returned a final answer.
+        // No tool calls — model returned a final answer. For chat-shaped
+        // agents, end the turn in `paused` so the caller can append the
+        // next user message and resume the same run.
+        if (agentDef.shape === "chat") {
+          await mergeRunMetadata(pool, runId, { pauseReason: "chat_turn_end" });
+          await setRunStatus(pool, runId, "paused");
+          log.info({ messageId: assistant.id }, "chat turn complete; paused for next input");
+          return {
+            status: "paused",
+            reason: "chat_turn_end",
+            payload: { messageId: assistant.id },
+          };
+        }
         await setRunStatus(pool, runId, "completed");
         return { status: "completed", finalMessage: assistant };
       }
@@ -259,6 +295,54 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
           try {
             raw = await handler.invoke(use, signal, log);
           } catch (err) {
+            if (err instanceof AwaitingInputError) {
+              // Tool requested user input (e.g. `ask_user`). Fulfill the
+              // dangling tool_use with a placeholder result so the resume
+              // path doesn't try to re-invoke ask_user, then pause the run.
+              // The user's actual answer arrives as the next user message
+              // via POST /runs/:id/input and gets fed to the model on the
+              // next turn.
+              const placeholder = formatAwaitingInputPlaceholder(err.payload);
+              const trunc = truncateResult(placeholder, use.id);
+              const placeholderResult: ToolResult = {
+                toolCallId: use.id,
+                runId,
+                content: placeholder,
+                truncatedContent: trunc.truncated,
+                tokenCount: trunc.fullTokens,
+                isError: false,
+                durationMs: Date.now() - start,
+                createdAt: new Date(),
+              };
+              await recordToolResult(pool, placeholderResult);
+              await hooks.onToolResult?.(placeholderResult);
+              const toolMsg = await appendMessage(pool, {
+                runId,
+                role: "tool",
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: use.id,
+                    content: placeholderResult.truncatedContent,
+                  },
+                ],
+              });
+              await hooks.onMessage?.(toolMsg);
+              await mergeRunMetadata(pool, runId, {
+                pauseReason: "awaiting_input",
+                askUser: { ...err.payload, tool_use_id: use.id },
+              });
+              await setRunStatus(pool, runId, "paused");
+              log.info(
+                { tool: use.name, toolUseId: use.id },
+                "paused: awaiting_input from ask_user",
+              );
+              return {
+                status: "paused",
+                reason: "awaiting_input",
+                payload: { ...err.payload, tool_use_id: use.id },
+              };
+            }
             raw = {
               content: `tool error: ${err instanceof Error ? err.message : String(err)}`,
               isError: true,
@@ -438,6 +522,24 @@ function filterByPermissions(tools: ToolDefinition[], agent: AgentDefinition): T
     if (allowed && allowed.length > 0 && !allowed.includes(t.name)) return false;
     return true;
   });
+}
+
+function formatAwaitingInputPlaceholder(payload: {
+  question: string;
+  options?: string[];
+}): string {
+  const options =
+    payload.options && payload.options.length > 0
+      ? `\nOptions: ${payload.options.map((o, i) => `${i + 1}. ${o}`).join(" | ")}`
+      : "";
+  return [
+    "Awaiting user input.",
+    `Question: ${payload.question}`,
+    options.trim(),
+    "The user's reply will arrive as the next user message.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function shouldCheckpoint(

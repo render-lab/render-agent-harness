@@ -8,7 +8,19 @@ export {
   OpenAICompatAdapter,
   resolveClient,
 } from "./adapters/index.js";
-export { buildBuiltinTools } from "./builtins.js";
+export type {
+  BuildBuiltinsResult,
+  BuiltinContext,
+  BuiltinFactory,
+  BuiltinPreview,
+  BuiltinRegistration,
+  SkippedBuiltin,
+} from "./builtins/index.js";
+export {
+  AwaitingInputError,
+  buildBuiltinTools,
+  previewBuiltins,
+} from "./builtins/index.js";
 export type { KvLike } from "./cancel.js";
 export {
   cancelKey,
@@ -39,12 +51,22 @@ export {
   createPool,
   getPool,
 } from "./state/db.js";
-export type { NotifyPayload } from "./state/repo.js";
+export type {
+  AggregateUsageOpts,
+  ListRunsFilter,
+  ListRunsPage,
+  NotifyPayload,
+  ToolCallWithResult,
+  UsageRollupRow,
+} from "./state/repo.js";
 export {
+  aggregateUsage,
   appendMessage,
   createRun,
   findExistingToolCall,
   listMessages,
+  listRuns,
+  listToolCalls,
   loadRun,
   loadRunForUser,
   loadToolResult,
