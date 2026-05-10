@@ -1,0 +1,51 @@
+{
+  "name": "@render-harness/registry",
+  "version": "0.1.0",
+  "description": "Config registry for the Render agent harness. Schema for render-harness.yaml, capability-pack contract, runtime loader, and Blueprint emitter.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./capability": {
+      "types": "./dist/capability.d.ts",
+      "import": "./dist/capability.js"
+    },
+    "./emitter": {
+      "types": "./dist/emitter.d.ts",
+      "import": "./dist/emitter.js"
+    }
+  },
+  "bin": {
+    "render-harness-build": "./dist/bin/build.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@render-harness/core": "workspace:*",
+    "yaml": "^2.7.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
