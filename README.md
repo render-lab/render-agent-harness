@@ -23,6 +23,26 @@ For multi-tenant production deployments, the `@render-harness/web` package front
 - Phase 4 — Workflows runtime + deploy-agent: **done**
 - Phase 5 — Hardened mode + docs: planned
 
+## Built-in tools
+
+Every agent ships with a default toolset out of the box — no MCP wiring required, no `localTools` to write. The toolset is assembled by `buildBuiltinTools()` in [`packages/core/src/builtins/`](packages/core/src/builtins/) and concatenated with the agent's own tools before they reach the model. Each tool decides at boot whether its preconditions are met; tools whose env or harness preconditions aren't satisfied skip cleanly with a logged reason (operator UI surfaces this via `GET /agents`).
+
+| Tool | Tier | Notes |
+|---|---|---|
+| `load_skill`, `fetch_full_result` | A | Infrastructural — load skill bodies on demand, fetch the full payload of a previously-truncated tool result. |
+| `fetch_url` | A | HTTP GET with SSRF guard (blocks loopback / private / link-local / cloud-metadata IPs), 1 MB cap, 15s timeout, 3-redirect cap. |
+| `current_time` | A | UTC + optional IANA timezone conversion. |
+| `ask_user` | A | Pause the run and request input. Resumes via `POST /runs/:id/input`. |
+| `todo` | A | Per-run scratchpad task list, persisted in `agent_runs.metadata`. |
+| `list_my_runs` | C | Read-only view of the caller's recent runs (Postgres). Hard-scoped by `userId`. |
+| `web_search` | B | Provider chain: `EXA_API_KEY` → `TAVILY_API_KEY` → `BRAVE_API_KEY`. |
+| `web_extract` | B | Provider chain: `FIRECRAWL_API_KEY` → `EXA_API_KEY`. |
+| `image_generate` | B | Provider chain: `OPENAI_API_KEY` → `FAL_KEY`. |
+
+Override Tier B provider selection with `HARNESS_WEB_SEARCH_PROVIDER`, `HARNESS_WEB_EXTRACT_PROVIDER`, `HARNESS_IMAGE_PROVIDER`. Per-agent opt-out uses the existing `permissions.deniedTools` / `permissions.allowedTools`.
+
+For path-scoped filesystem access, install [`@render-harness/cap-filesystem`](packages/capabilities/cap-filesystem/) per agent — filesystem and terminal tools are deliberately not core defaults because the production worker pserv is multi-tenant.
+
 ## Repo layout
 
 ```

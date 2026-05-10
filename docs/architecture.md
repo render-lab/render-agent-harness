@@ -209,6 +209,22 @@ The Blueprint emitter mirrors the shapes of the hand-authored Blueprints in [`bl
 | `web` + `worker` | Public web (multi-tenant shell) + worker pserv + Postgres + Key Value | [`render.private.yaml`](../blueprints/render.private.yaml) |
 | `workflows` | Dashboard checklist (Workflows aren't yet Blueprintable; see verification 2) | n/a |
 
+## Built-in tools
+
+Every agent gets a default toolset from [`packages/core/src/builtins/`](../packages/core/src/builtins/), assembled by `buildBuiltinTools()` and concatenated with the agent's own `localTools` before the tool list reaches the model. Each builtin is a factory that decides at registration time whether its preconditions are met; tools whose env or harness preconditions aren't satisfied skip cleanly with a logged reason (operator UI surfaces this via `GET /agents`).
+
+Three tiers:
+
+| Tier | Always registers? | Tools |
+|---|---|---|
+| **A — always-on** | yes | `load_skill`, `fetch_full_result`, `fetch_url` (with SSRF guard), `current_time`, `ask_user`, `todo` |
+| **B — env-gated** | only when env present | `web_search` (`EXA_API_KEY` → `TAVILY_API_KEY` → `BRAVE_API_KEY`), `web_extract` (`FIRECRAWL_API_KEY` → `EXA_API_KEY`), `image_generate` (`OPENAI_API_KEY` → `FAL_KEY`) |
+| **C — harness-primitive-driven** | when the primitive is wired | `list_my_runs` (Postgres pool, scoped to caller `userId`) |
+
+Override the Tier B provider chain with `HARNESS_WEB_SEARCH_PROVIDER=exa|tavily|brave`, `HARNESS_WEB_EXTRACT_PROVIDER=firecrawl|exa`, `HARNESS_IMAGE_PROVIDER=openai|fal`. Per-agent opt-out uses the existing `permissions.deniedTools` / `permissions.allowedTools`.
+
+**Filesystem and terminal tools are deliberately NOT in core builtins.** The production worker pserv is multi-tenant — one Node process holds every tenant's env vars and runs against a shared filesystem. A core-default `read_file` would let a prompt-injected agent exfiltrate secrets from `/proc/self/environ` or read other tenants' uploaded data. Use the [`@render-harness/cap-filesystem`](../packages/capabilities/cap-filesystem/) pack for explicit, root-scoped, opt-in filesystem access.
+
 ## Extensibility (capability packs)
 
 Three tiers of extension, each with a clean separation of concerns:
@@ -220,6 +236,7 @@ Three tiers of extension, each with a clean separation of concerns:
    - `cap-scrape-firecrawl` — Firecrawl MCP + a `scrape_and_store` LocalToolHandler that persists to Postgres.
    - `cap-memory-pg` — long-term memory tools backed by `pg_trgm`. Pure TS; no extra service.
    - `cap-browser-browserbase` — Browserbase MCP wiring (hosted; no sidecar needed).
+   - `cap-filesystem` — path-scoped `read_file` / `list_dir` / `write_file` / `delete_file`. Opt-in only.
 3. **Custom TS** (full control). Any entry can declare `agent.kind: custom` with an `entrypoint` that default-exports an `AgentDefinition`. The YAML still drives Blueprint emission.
 
 The community publishes packs to npm; entries reference them as regular `pnpm add` deps and list them under `capabilities[]`.
@@ -227,3 +244,5 @@ The community publishes packs to npm; entries reference them as regular `pnpm ad
 ## Future runtimes
 
 Voice / realtime is a planned fifth runtime with a different loop shape (bidirectional audio, OpenAI Realtime API or chained STT-LLM-TTS pipelines). It does not fit the existing tool-loop core. Tracked as a separate roadmap item; explicitly out of scope for the config registry.
+
+A **per-run sandbox runtime** is on the table as a future direction — each run gets its own throwaway container (e2b / Daytona / Render-native primitive) instead of sharing the worker pserv's process. Once it lands, a `cap-sandbox-tools` pack can ship `terminal`, unscoped `read_file` / `write_file`, and arbitrary package installs as default tools, since per-run isolation makes them safe by construction. Until then those capabilities stay either out of the harness entirely (`terminal`) or in opt-in path-scoped packs (`cap-filesystem`).
