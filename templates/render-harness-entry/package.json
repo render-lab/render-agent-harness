@@ -1,0 +1,35 @@
+{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Render agent harness entry. Replace this with a real description.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml",
+    "skills"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "dev": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-web": "^0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

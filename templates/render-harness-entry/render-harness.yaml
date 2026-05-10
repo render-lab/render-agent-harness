@@ -1,0 +1,44 @@
+schemaVersion: 1
+name: my-agent
+description: Replace this with a one-line description of your agent.
+harnessVersion: "^0.1"
+license: MIT
+
+# kind: builtin uses the chat builtin (system prompt + model + MCP, no
+# local tools). Switch to kind: custom + entrypoint: ./agent/index.ts
+# if you need TypeScript tool handlers.
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: |
+    You are a helpful assistant deployed on Render via the agent harness.
+    Each request is a single-turn conversation. Be concise.
+
+# Pick the runtime that matches your shape.
+#   kind: web       — synchronous HTTP request handler (sub-30s).
+#   kind: cron      — scheduled, single-shot. Add `schedule: "..."`.
+#   kind: worker    — always-on queue consumer; combine with kind: web for multi-tenant.
+#   kind: workflows — long-running, durable, HITL. Not Blueprintable yet.
+runtimes:
+  - kind: web
+    plan: starter
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+
+# Add MCP servers and capability packs to give your agent tools.
+# mcpServers:
+#   - name: render
+#     transport: http
+#     url: https://mcp.render.com/mcp
+#     headers:
+#       Authorization: "Bearer ${RENDER_API_KEY}"
+# capabilities:
+#   - pack: "@render-harness/cap-search-exa"
+
+# Env vars beyond the model API key the user must (or may) supply.
+# envSchema:
+#   - name: SOME_API_KEY
+#     required: true
+#     secret: true
