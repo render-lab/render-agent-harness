@@ -33,6 +33,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+
 \`\`\`sh
 npm install
 cp .env.example .env       # then fill in ANTHROPIC_API_KEY
@@ -338,6 +340,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+
 \`\`\`sh
 npm install
 cp .env.example .env       # then fill in ANTHROPIC_API_KEY
@@ -619,6 +623,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 ## Local development
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
 
 \`\`\`sh
 npm install
@@ -945,6 +951,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 ## Local development
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
 
 \`\`\`sh
 npm install
@@ -1273,6 +1281,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 ## Local development
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
 
 \`\`\`sh
 npm install
@@ -1638,6 +1648,8 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 ## Local development
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
 
 \`\`\`sh
 npm install

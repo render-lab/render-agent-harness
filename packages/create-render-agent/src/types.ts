@@ -42,6 +42,18 @@ export interface Answers {
    * `npm:` prefix).
    */
   packageManager: PackageManager;
+  /**
+   * Absolute path to a local harness checkout, or null. When set:
+   *   - Gallery is read from the live `<root>/gallery/` and
+   *     `<root>/packages/capabilities/`.
+   *   - Scaffolded `package.json` `@render-harness/*` deps become
+   *     `link:<root>/packages/<pkg>` so the project can be built and
+   *     run today without publishing the harness to npm.
+   * When null, the CLI uses its bundled gallery snapshot and the
+   * scaffolded `package.json` pins published version ranges (which
+   * will fail `install` until the harness is on npm).
+   */
+  harnessRoot: string | null;
   gitInit: boolean;
   installDeps: boolean;
 }

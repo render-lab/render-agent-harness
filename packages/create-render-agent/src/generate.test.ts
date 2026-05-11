@@ -16,6 +16,7 @@ const BASE: Omit<Answers, "directory" | "runtimes"> = {
   templateManifest: null,
   ui: false,
   packageManager: "npm",
+  harnessRoot: null,
   gitInit: false,
   installDeps: false,
 };
@@ -211,6 +212,53 @@ describe("buildFileMap", () => {
       }).get(".env.example") ?? "";
     expect(env).toContain("DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness");
     expect(env).toContain("KV_URL=redis://127.0.0.1:56379");
+  });
+
+  it("emits link: deps when harnessRoot is set (local-link mode)", () => {
+    const map = buildFileMap({
+      ...BASE,
+      directory: "/tmp/link",
+      harnessRoot: "/Users/me/render-harness",
+      runtimes: [{ kind: "web" }],
+      capabilities: [{ pack: "@render-harness/cap-search-exa" }],
+      ui: true,
+    });
+    const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies["@render-harness/core"]).toBe(
+      "link:/Users/me/render-harness/packages/core",
+    );
+    expect(pkg.dependencies["@render-harness/registry"]).toBe(
+      "link:/Users/me/render-harness/packages/registry",
+    );
+    expect(pkg.dependencies["@render-harness/web"]).toBe(
+      "link:/Users/me/render-harness/packages/web",
+    );
+    expect(pkg.dependencies["@render-harness/ui"]).toBe(
+      "link:/Users/me/render-harness/packages/ui",
+    );
+    // Capabilities live under packages/capabilities/<name>.
+    expect(pkg.dependencies["@render-harness/cap-search-exa"]).toBe(
+      "link:/Users/me/render-harness/packages/capabilities/cap-search-exa",
+    );
+    // README explains local-link mode.
+    expect(map.get("README.md")).toContain("Local-link mode");
+    expect(map.get("README.md")).toContain("/Users/me/render-harness");
+  });
+
+  it("defaults to version-range deps when harnessRoot is null", () => {
+    const map = buildFileMap({
+      ...BASE,
+      directory: "/tmp/published",
+      runtimes: [{ kind: "web" }],
+    });
+    const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies["@render-harness/core"]).toBe("^0.1");
+    expect(pkg.dependencies["@render-harness/registry"]).toBe("^0.1");
+    expect(map.get("README.md")).toContain("aren't published yet");
   });
 
   it("preserves template-declared fields the wizard doesn't collect", () => {

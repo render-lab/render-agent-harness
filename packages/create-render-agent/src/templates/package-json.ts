@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
 
 /**
@@ -8,13 +9,19 @@ import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
  *   - multi runtime  → scripts.dev:<kind> / scripts.start:<kind> per runtime,
  *                      `main` points at the first entry's dist file
  *
- * `harnessVersion` defaults to ^0.1 to match the published @render-harness/*
- * line. The build script chains `render-harness-build` (renders render.yaml
- * from render-harness.yaml) then `tsup`.
+ * Harness deps:
+ *   - When `answers.harnessRoot` is null (default), `@render-harness/*` deps
+ *     are pinned to `^0.1` — the published version range. (Will fail to
+ *     install until the harness ships to npm.)
+ *   - When `answers.harnessRoot` is set, the deps become `link:` references
+ *     pointing into that checkout, so `pnpm install` works against the
+ *     local source today.
  */
 export function packageJson(answers: Answers): string {
   const multi = isMultiRuntime(answers);
   const runtimeKinds = answers.runtimes.map((r) => r.kind);
+  const harnessDep = (pkgName: string): string =>
+    harnessDepVersion(pkgName, answers.harnessRoot);
 
   const scripts: Record<string, string> = {
     build: "render-harness-build && tsup",
@@ -48,18 +55,19 @@ export function packageJson(answers: Answers): string {
   const mainEntry = multi ? `./dist/${runtimeKinds[0]}.js` : "./dist/main.js";
 
   const dependencies: Record<string, string> = {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
+    "@render-harness/core": harnessDep("@render-harness/core"),
+    "@render-harness/registry": harnessDep("@render-harness/registry"),
   };
   for (const kind of runtimeKinds) {
     // With UI enabled the web entry uses @render-harness/web (not runtime-web),
     // which transitively wraps runtime-web. Skip the direct runtime-web dep.
     if (kind === "web" && answers.ui) continue;
-    dependencies[runtimePackageFor(kind)] = "^0.1";
+    const pkg = runtimePackageFor(kind);
+    dependencies[pkg] = harnessDep(pkg);
   }
   if (answers.ui) {
-    dependencies["@render-harness/web"] = "^0.1";
-    dependencies["@render-harness/ui"] = "^0.1";
+    dependencies["@render-harness/web"] = harnessDep("@render-harness/web");
+    dependencies["@render-harness/ui"] = harnessDep("@render-harness/ui");
   }
   // dotenv is used by cron, worker, and the UI-flavored web entry for
   // .env loading during local dev.
@@ -67,7 +75,7 @@ export function packageJson(answers: Answers): string {
     dependencies.dotenv = "^17.4.2";
   }
   for (const cap of answers.capabilities) {
-    dependencies[cap.pack] = "^0.1";
+    dependencies[cap.pack] = harnessDep(cap.pack);
   }
 
   const pkg: Record<string, unknown> = {
@@ -91,4 +99,24 @@ export function packageJson(answers: Answers): string {
   };
 
   return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+/**
+ * Resolve an `@render-harness/*` dependency to either a published
+ * version range (default) or a `link:` reference into a local harness
+ * checkout.
+ *
+ * Capability packs live under `packages/capabilities/<name>`; everything
+ * else under `packages/<name>`.
+ */
+function harnessDepVersion(pkgName: string, harnessRoot: string | null): string {
+  if (!harnessRoot) return "^0.1";
+  const tail = pkgName.replace(/^@render-harness\//, "");
+  const subdir = tail.startsWith("cap-") ? `capabilities/${tail}` : tail;
+  // Always emit a POSIX-style path. `link:` accepts absolute paths.
+  return `link:${posix.join(toPosix(harnessRoot), "packages", subdir)}`;
+}
+
+function toPosix(p: string): string {
+  return p.split("\\").join("/");
 }

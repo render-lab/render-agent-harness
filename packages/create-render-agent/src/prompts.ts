@@ -36,6 +36,7 @@ export async function runWizard(options: {
   presetDirectory?: string;
   packageManager: PackageManager;
   gallery: ResolvedGallery;
+  harnessRoot: string | null;
 }): Promise<Answers> {
   intro("create-render-agent");
 
@@ -137,6 +138,7 @@ export async function runWizard(options: {
     templateManifest: template ? (template.manifest as Record<string, unknown>) : null,
     ui,
     packageManager: options.packageManager,
+    harnessRoot: options.harnessRoot,
     gitInit,
     installDeps,
   };

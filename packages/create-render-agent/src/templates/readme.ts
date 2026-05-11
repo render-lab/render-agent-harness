@@ -40,7 +40,7 @@ ${runtimeBlurb}
 ## Local development
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`${pm}\`).
-
+${harnessDepNote(answers)}
 \`\`\`sh
 ${pm} install
 cp .env.example .env       # then fill in ANTHROPIC_API_KEY
@@ -103,6 +103,17 @@ capabilities:
 \`\`\`
 
 Then re-run \`${run} build:bp\` so the pack's env requirements land in \`render.yaml\`.
+`;
+}
+
+function harnessDepNote(answers: Answers): string {
+  if (answers.harnessRoot) {
+    return `
+> **Local-link mode.** This project's \`@render-harness/*\` deps are \`link:\` paths into \`${answers.harnessRoot}\`. Rebuild the harness packages (\`pnpm -r build\` from there) and rerun this project to pick up changes. To break the link, replace the \`link:\` paths in \`package.json\` with version ranges and re-install.
+`;
+  }
+  return `
+> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
 `;
 }
 

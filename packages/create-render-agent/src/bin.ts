@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
 import { log, outro } from "@clack/prompts";
 import { resolveGallery } from "./gallery.js";
@@ -8,7 +9,7 @@ import { type GenerateResult, generate } from "./generate.js";
 import { runWizard } from "./prompts.js";
 import { type Answers, type PackageManager, scriptRunner } from "./types.js";
 
-const USAGE = `Usage: create-render-agent [directory] [--gallery <path>]
+const USAGE = `Usage: create-render-agent [directory] [--harness-root <path>]
 
 Scaffolds a new Render agent harness project. If [directory] is given, it
 is used as the target; otherwise the wizard prompts for it.
@@ -16,9 +17,13 @@ is used as the target; otherwise the wizard prompts for it.
 Options:
   -h, --help              Show this help and exit.
   -v, --version           Show the package version and exit.
-  --gallery <path>        Use a live harness checkout as the gallery
-                          source (path to the repo root). When omitted,
-                          the CLI uses its bundled snapshot.
+  --harness-root <path>   Path to a local harness checkout. Enables
+                          local-link mode: the scaffolded project's
+                          @render-harness/* deps become \`link:\` paths
+                          into the checkout, and the wizard's gallery
+                          loads from the live repo instead of the
+                          bundled snapshot. Use this until the harness
+                          is published to npm.
 `;
 
 async function main(): Promise<void> {
@@ -34,12 +39,13 @@ async function main(): Promise<void> {
   }
 
   const positional = args.find((a) => !a.startsWith("-"));
-  const galleryFlagIdx = args.indexOf("--gallery");
-  const galleryFlagValue = galleryFlagIdx >= 0 ? args[galleryFlagIdx + 1] : undefined;
+  const harnessRootIdx = args.indexOf("--harness-root");
+  const harnessRootRaw = harnessRootIdx >= 0 ? args[harnessRootIdx + 1] : undefined;
+  const harnessRoot = harnessRootRaw ? resolve(harnessRootRaw) : null;
   const packageManager = detectPackageManager();
 
   const gallery = await resolveGallery(
-    galleryFlagValue ? { liveSourceRoot: galleryFlagValue } : {},
+    harnessRoot ? { liveSourceRoot: harnessRoot } : {},
   ).catch((err) => {
     stderr.write(`failed to load gallery: ${describeError(err)}\n`);
     exit(2);
@@ -52,6 +58,7 @@ async function main(): Promise<void> {
       ...(positional !== undefined ? { presetDirectory: positional } : {}),
       packageManager,
       gallery,
+      harnessRoot,
     });
   } catch (err) {
     stderr.write(`wizard failed: ${describeError(err)}\n`);
