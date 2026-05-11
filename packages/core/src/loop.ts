@@ -18,6 +18,7 @@ import { assembleSystemPrompt } from "./prompt.js";
 import {
   appendMessage,
   listMessages,
+  loadConversationMessages,
   loadRun,
   mergeRunMetadata,
   setRunStatus,
@@ -159,6 +160,7 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
     logger: log,
     hooks,
     runId,
+    conversationId: run.conversationId,
     signal,
     agentDef,
     localTools,
@@ -177,7 +179,13 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
           code: "budget_exceeded",
         });
       }
-      const messages = await listMessages(pool, runId);
+      // For conversation-bound runs, the model sees the entire conversation
+      // (every message across every run in this conversation), not just this
+      // run's messages. This is how multi-turn chat works without overloading
+      // the run lifecycle.
+      const messages = run.conversationId
+        ? await loadConversationMessages(pool, run.conversationId)
+        : await listMessages(pool, runId);
 
       // Resume detection: if the last persisted message is an assistant turn
       // whose tool_uses were never fulfilled, replay those tool_uses instead
@@ -212,6 +220,7 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 
         assistant = await appendMessage(pool, {
           runId,
+          conversationId: run.conversationId,
           role: "assistant",
           content: completion.message.content,
           usage: completion.usage,
@@ -243,6 +252,7 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 
       const toolMsg = await appendMessage(pool, {
         runId,
+        conversationId: run.conversationId,
         role: "tool",
         content: toolResultBlocks,
       });

@@ -222,6 +222,12 @@ export async function setRunStatus(
     status,
     ...(conversationId ? { conversationId } : {}),
   });
+  // Keep the conversation rollup (cost, last_active_at) fresh after every
+  // status flip on a run that belongs to one. Cheap — the SUM is over the
+  // handful of runs in this conversation.
+  if (conversationId) {
+    await rollupConversation(pool, conversationId);
+  }
 }
 
 /**

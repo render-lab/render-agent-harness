@@ -26,6 +26,7 @@ import { truncateResult } from "./truncate.js";
 import type {
   AgentDefinition,
   ContentBlock,
+  ConversationId,
   LocalToolHandler,
   Message,
   RunId,
@@ -183,6 +184,7 @@ export async function pauseForApproval(args: {
 export async function pauseForAwaitingInput(args: {
   pool: Pool;
   runId: RunId;
+  conversationId: ConversationId | null;
   use: ToolUseBlock;
   payload: { question: string; options?: string[] };
   hooks: RuntimeHooks;
@@ -190,7 +192,7 @@ export async function pauseForAwaitingInput(args: {
   /** Wall-clock the handler ran before throwing AwaitingInputError. */
   startMs: number;
 }): Promise<RunStepResult> {
-  const { pool, runId, use, payload, hooks, logger, startMs } = args;
+  const { pool, runId, conversationId, use, payload, hooks, logger, startMs } = args;
 
   // Fulfill the dangling tool_use with a placeholder result so the resume
   // path doesn't try to re-invoke ask_user. The user's actual answer
@@ -213,6 +215,7 @@ export async function pauseForAwaitingInput(args: {
 
   const toolMsg = await appendMessage(pool, {
     runId,
+    conversationId,
     role: "tool",
     content: [
       {
@@ -263,6 +266,13 @@ export interface ToolExecutionContext {
   logger: Logger;
   hooks: RuntimeHooks;
   runId: RunId;
+  /**
+   * The conversation this run belongs to, or null for single-turn / cron
+   * one-shot runs. Threaded through so `pauseForAwaitingInput`'s persisted
+   * placeholder tool_result message carries the same `conversation_id` as
+   * every other message on this run.
+   */
+  conversationId: ConversationId | null;
   signal: AbortSignal;
   agentDef: AgentDefinition;
   localTools: LocalToolHandler[];
@@ -299,6 +309,7 @@ export async function executeToolCall(
     logger,
     hooks,
     runId,
+    conversationId,
     signal,
     agentDef,
     localTools,
@@ -359,6 +370,7 @@ export async function executeToolCall(
           result: await pauseForAwaitingInput({
             pool,
             runId,
+            conversationId,
             use,
             payload: err.payload,
             hooks,

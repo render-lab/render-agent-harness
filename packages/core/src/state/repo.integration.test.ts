@@ -14,15 +14,21 @@ import {
   aggregateUsage,
   appendMessage,
   countRunMessages,
+  createConversation,
   createRun,
   ensureInitialMessage,
   ensureRun,
+  findActiveRunForConversation,
+  listConversations,
   listRuns,
   listToolCalls,
+  loadConversation,
+  loadConversationMessages,
   loadRun,
   loadToolResult,
   recordToolCall,
   recordToolResult,
+  rollupConversation,
   setRunStatus,
   setToolCallStatus,
   updateRunCursor,
@@ -271,6 +277,168 @@ describe("repo integration: read-side aggregations (operator UI)", () => {
     expect(me?.inputTokens).toBe(14);
     expect(me?.outputTokens).toBe(7);
     expect(me?.costUsd).toBeCloseTo(0.03, 5);
+  });
+});
+
+describe("repo integration: conversations", () => {
+  dbTest("create + load + list round-trips", async (db) => {
+    const id = `it-conv-${Date.now()}`;
+    const created = await createConversation(db, {
+      id,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      userId: "u-test",
+      title: "first conversation",
+    });
+    expect(created.id).toBe(id);
+    expect(created.totalCostUsd).toBe(0);
+    expect(created.title).toBe("first conversation");
+
+    const loaded = await loadConversation(db, id);
+    expect(loaded?.agentName).toBe("it");
+
+    const page = await listConversations(db, { userId: "u-test", limit: 5 });
+    expect(page.conversations.some((c) => c.id === id)).toBe(true);
+  });
+
+  dbTest("loadConversationMessages stitches messages across runs in order", async (db) => {
+    const convId = `it-conv-msgs-${Date.now()}`;
+    await createConversation(db, {
+      id: convId,
+      agentName: "it",
+      agentVersion: "0.0.0",
+    });
+
+    const runA = `${convId}-r1`;
+    await createRun(db, {
+      id: runA,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      conversationId: convId,
+    });
+    await appendMessage(db, {
+      runId: runA,
+      conversationId: convId,
+      role: "user",
+      content: [{ type: "text", text: "first user message" }],
+    });
+    await appendMessage(db, {
+      runId: runA,
+      conversationId: convId,
+      role: "assistant",
+      content: [{ type: "text", text: "first assistant reply" }],
+    });
+    await setRunStatus(db, runA, "completed");
+
+    const runB = `${convId}-r2`;
+    await createRun(db, {
+      id: runB,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      conversationId: convId,
+    });
+    await appendMessage(db, {
+      runId: runB,
+      conversationId: convId,
+      role: "user",
+      content: [{ type: "text", text: "second user message" }],
+    });
+    await appendMessage(db, {
+      runId: runB,
+      conversationId: convId,
+      role: "assistant",
+      content: [{ type: "text", text: "second assistant reply" }],
+    });
+    await setRunStatus(db, runB, "completed");
+
+    const merged = await loadConversationMessages(db, convId);
+    const texts = merged.map((m) => (m.content[0] as { type: "text"; text: string }).text);
+    expect(texts).toEqual([
+      "first user message",
+      "first assistant reply",
+      "second user message",
+      "second assistant reply",
+    ]);
+  });
+
+  dbTest("setRunStatus on a conversation-bound run keeps rollup fresh", async (db) => {
+    const convId = `it-conv-rollup-${Date.now()}`;
+    await createConversation(db, {
+      id: convId,
+      agentName: "it",
+      agentVersion: "0.0.0",
+    });
+    const runId = `${convId}-r`;
+    await createRun(db, {
+      id: runId,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      conversationId: convId,
+    });
+
+    const before = await loadConversation(db, convId);
+    expect(before?.totalCostUsd).toBe(0);
+
+    await updateRunCursor(
+      db,
+      runId,
+      { turn: 1, toolCalls: 0, wallMs: 1, usage: { inputTokens: 0, outputTokens: 0 } },
+      0.0123,
+    );
+    // updateRunCursor doesn't flip status — explicitly rollup to verify the
+    // SUM is what we expect even without a status transition.
+    await rollupConversation(db, convId);
+    let snapshot = await loadConversation(db, convId);
+    expect(snapshot?.totalCostUsd).toBeCloseTo(0.0123, 5);
+
+    // Completing the run runs the rollup automatically inside setRunStatus.
+    await updateRunCursor(
+      db,
+      runId,
+      { turn: 2, toolCalls: 0, wallMs: 2, usage: { inputTokens: 0, outputTokens: 0 } },
+      0.05,
+    );
+    await setRunStatus(db, runId, "completed");
+    snapshot = await loadConversation(db, convId);
+    expect(snapshot?.totalCostUsd).toBeCloseTo(0.05, 5);
+  });
+
+  dbTest("sequential-only invariant: a second active run on the same conversation fails", async (db) => {
+    const convId = `it-conv-seq-${Date.now()}`;
+    await createConversation(db, {
+      id: convId,
+      agentName: "it",
+      agentVersion: "0.0.0",
+    });
+    const first = `${convId}-r1`;
+    await createRun(db, {
+      id: first,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      conversationId: convId,
+    });
+
+    const active = await findActiveRunForConversation(db, convId);
+    expect(active?.id).toBe(first);
+
+    await expect(
+      createRun(db, {
+        id: `${convId}-r2`,
+        agentName: "it",
+        agentVersion: "0.0.0",
+        conversationId: convId,
+      }),
+    ).rejects.toThrow(/agent_runs_conversation_active_uq/);
+
+    // Once the first run reaches a terminal state, a new run becomes legal.
+    await setRunStatus(db, first, "completed");
+    const next = await createRun(db, {
+      id: `${convId}-r2`,
+      agentName: "it",
+      agentVersion: "0.0.0",
+      conversationId: convId,
+    });
+    expect(next.conversationId).toBe(convId);
   });
 });
 
