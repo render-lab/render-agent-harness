@@ -192,6 +192,9 @@ services:
       # whenever the host has a built version. After the first
       # `pnpm build`, every subsequent change becomes a 5s restart.
       - ./packages/core/dist:/app/packages/core/dist
+      # SQL migrations live next to dist/ at runtime; bind-mount so adding
+      # a new migration is a 5s reload instead of a full image rebuild.
+      - ./packages/core/sql:/app/packages/core/sql
       - ./packages/runtime-worker/dist:/app/packages/runtime-worker/dist
       - ./packages/web/dist:/app/packages/web/dist
       - ./packages/ui/dist:/app/packages/ui/dist
