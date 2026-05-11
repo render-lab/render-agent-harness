@@ -18,8 +18,8 @@ interface RunsTabProps {
   runId: string | null;
   onSelectRun: (id: string) => void;
   onBackToList: () => void;
-  /** Jump to the chat tab and hydrate this run there. */
-  onOpenInChat: (id: string) => void;
+  /** Jump to the chat tab and hydrate the conversation this run belongs to. */
+  onOpenInChat: (conversationId: string) => void;
 }
 
 export function RunsTab({ runId, onSelectRun, onBackToList, onOpenInChat }: RunsTabProps) {
@@ -27,10 +27,6 @@ export function RunsTab({ runId, onSelectRun, onBackToList, onOpenInChat }: Runs
     return <RunDetail runId={runId} onBack={onBackToList} onOpenInChat={onOpenInChat} />;
   }
   return <RunList onSelect={onSelectRun} />;
-}
-
-function isChatRun(metadata: Record<string, unknown>): boolean {
-  return metadata?.["pauseReason"] === "chat_turn_end";
 }
 
 function RunList({ onSelect }: { onSelect: (id: string) => void }) {
@@ -151,8 +147,8 @@ function RunList({ onSelect }: { onSelect: (id: string) => void }) {
                     <Td>
                       <div className="flex items-center gap-1">
                         <StatusBadge status={r.status} />
-                        {isChatRun(r.metadata) && (
-                          <span className="badge" title="Chat-shape session">
+                        {r.conversationId && (
+                          <span className="badge" title="Part of a conversation">
                             chat
                           </span>
                         )}

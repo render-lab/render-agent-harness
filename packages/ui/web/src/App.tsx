@@ -11,11 +11,13 @@ type TabId = "chat" | "runs" | "agents" | "usage" | "guide";
 interface Route {
   tab: TabId;
   /**
-   * Optional run id. On the runs tab it opens the run detail view; on the
-   * chat tab it hydrates a specific (chat-shape) run instead of the
-   * caller's most recent active session.
+   * Optional run id. On the runs tab it opens the run detail view. On the
+   * chat tab the second URL segment is a `conversationId` instead — kept
+   * here for backwards-compat with hash parsing; see `conversationId`.
    */
   runId: string | null;
+  /** On the chat tab, the conversation to hydrate. */
+  conversationId: string | null;
   /** Optional guide section id when `tab === "guide"`. */
   guideSection: GuideSectionId | null;
 }
@@ -34,11 +36,11 @@ function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [head, id] = raw.split("/");
   const tab: TabId = head && TAB_IDS.has(head as TabId) ? (head as TabId) : "chat";
-  const runId =
-    (tab === "runs" || tab === "chat") && id ? decodeURIComponent(id) : null;
+  const runId = tab === "runs" && id ? decodeURIComponent(id) : null;
+  const conversationId = tab === "chat" && id ? decodeURIComponent(id) : null;
   const guideSection =
     tab === "guide" && id && isGuideSectionId(id) ? id : null;
-  return { tab, runId, guideSection };
+  return { tab, runId, conversationId, guideSection };
 }
 
 export function App() {
@@ -64,16 +66,22 @@ export function App() {
     [],
   );
 
-  // Chat tab updates the URL whenever its underlying runId changes (a new
-  // session is started, or the user resets). Use replaceState so we don't
-  // pollute browser history with one entry per turn.
-  const onChatRunChange = useCallback((runId: string | null) => {
-    if (route.tab !== "chat") return;
-    const target = runId ? `#/chat/${encodeURIComponent(runId)}` : `#/chat`;
-    if (window.location.hash === target) return;
-    window.history.replaceState(null, "", target);
-    setRoute({ tab: "chat", runId, guideSection: null });
-  }, [route.tab]);
+  // Chat tab updates the URL whenever its underlying conversationId changes
+  // (a fresh conversation gets created, or the user resets). Use
+  // replaceState so we don't pollute browser history with one entry per
+  // turn.
+  const onChatConversationChange = useCallback(
+    (conversationId: string | null) => {
+      if (route.tab !== "chat") return;
+      const target = conversationId
+        ? `#/chat/${encodeURIComponent(conversationId)}`
+        : `#/chat`;
+      if (window.location.hash === target) return;
+      window.history.replaceState(null, "", target);
+      setRoute({ tab: "chat", runId: null, conversationId, guideSection: null });
+    },
+    [route.tab],
+  );
 
   // Guide tab updates the URL when the user picks a section from the
   // sidebar. replaceState keeps the back button useful (one entry for
@@ -82,7 +90,12 @@ export function App() {
     const target = `#/guide/${section}`;
     if (window.location.hash === target) return;
     window.history.replaceState(null, "", target);
-    setRoute({ tab: "guide", runId: null, guideSection: section });
+    setRoute({
+      tab: "guide",
+      runId: null,
+      conversationId: null,
+      guideSection: section,
+    });
   }, []);
 
   return (
@@ -119,8 +132,8 @@ export function App() {
         <DiagnosticsBanner />
         {route.tab === "chat" && (
           <ChatTab
-            runId={route.runId}
-            onActiveRunChange={onChatRunChange}
+            conversationId={route.conversationId}
+            onConversationChange={onChatConversationChange}
           />
         )}
         {route.tab === "runs" && (
@@ -128,7 +141,7 @@ export function App() {
             runId={route.runId}
             onSelectRun={(id) => navigate("runs", id)}
             onBackToList={() => navigate("runs")}
-            onOpenInChat={(id) => navigate("chat", id)}
+            onOpenInChat={(conversationId) => navigate("chat", conversationId)}
           />
         )}
         {route.tab === "agents" && <AgentsTab />}

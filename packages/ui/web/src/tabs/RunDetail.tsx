@@ -27,7 +27,8 @@ type RunDetailDto = RunDetailResp;
 interface RunDetailProps {
   runId: string;
   onBack: () => void;
-  onOpenInChat?: (runId: string) => void;
+  /** Jump to the chat tab and hydrate the conversation this run belongs to. */
+  onOpenInChat?: (conversationId: string) => void;
 }
 
 export function RunDetail({ runId, onBack, onOpenInChat }: RunDetailProps) {
@@ -124,7 +125,7 @@ export function RunDetail({ runId, onBack, onOpenInChat }: RunDetailProps) {
     }
   };
 
-  const isChatShape = data?.run.metadata?.["pauseReason"] === "chat_turn_end";
+  const conversationId = data?.run.conversationId ?? null;
 
   return (
     <div className="space-y-4">
@@ -136,12 +137,12 @@ export function RunDetail({ runId, onBack, onOpenInChat }: RunDetailProps) {
         >
           ← back to runs
         </button>
-        {isChatShape && onOpenInChat && (
+        {conversationId && onOpenInChat && (
           <button
             type="button"
-            onClick={() => onOpenInChat(runId)}
+            onClick={() => onOpenInChat(conversationId)}
             className="btn"
-            title="Continue this conversation in the Chat tab."
+            title="Open the parent conversation in the Chat tab."
           >
             open in chat
           </button>

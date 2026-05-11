@@ -10,24 +10,24 @@ import {
 } from "@assistant-ui/react";
 import { useCallback, useEffect, useState } from "react";
 import { type AgentSummary, ApiError, listAgents } from "../api.js";
-import { useChatSession } from "../chat/runtime.js";
+import { useConversationSession } from "../chat/runtime.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { Markdown } from "../components/Markdown.js";
 
 interface ChatTabProps {
-  /** When set, hydrate this specific run instead of using `/runs/active`. */
-  runId: string | null;
-  /** Called whenever the active runId changes (so the parent can update the URL). */
-  onActiveRunChange: (runId: string | null) => void;
+  /** When set, hydrate this specific conversation; otherwise start blank. */
+  conversationId: string | null;
+  /** Called whenever the active conversationId changes (so the parent can update the URL). */
+  onConversationChange: (conversationId: string | null) => void;
 }
 
 /**
  * Top-level Chat tab. Lists the available agents, lets the operator pick
- * one, and renders an assistant-ui Thread bound to a long-lived run via
- * `useChatSession`. Each user message either creates a new run (first turn)
- * or appends to the paused chat-shape run (subsequent turns).
+ * one, and renders an assistant-ui Thread bound to a conversation via
+ * `useConversationSession`. The first user message creates the
+ * conversation up front; subsequent turns enqueue new runs against it.
  */
-export function ChatTab({ runId, onActiveRunChange }: ChatTabProps) {
+export function ChatTab({ conversationId, onConversationChange }: ChatTabProps) {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(true);
   const [agentError, setAgentError] = useState<Error | null>(null);
@@ -70,8 +70,8 @@ export function ChatTab({ runId, onActiveRunChange }: ChatTabProps) {
         agents={agents}
         selectedAgent={selectedAgent}
         onSelectAgent={setSelectedAgent}
-        runId={runId}
-        onActiveRunChange={onActiveRunChange}
+        conversationId={conversationId}
+        onConversationChange={onConversationChange}
       />
     </AsyncBoundary>
   );
@@ -81,27 +81,27 @@ interface ChatBodyProps {
   agents: AgentSummary[];
   selectedAgent: string | null;
   onSelectAgent: (name: string) => void;
-  runId: string | null;
-  onActiveRunChange: (runId: string | null) => void;
+  conversationId: string | null;
+  onConversationChange: (conversationId: string | null) => void;
 }
 
 function ChatBody({
   agents,
   selectedAgent,
   onSelectAgent,
-  runId,
-  onActiveRunChange,
+  conversationId,
+  onConversationChange,
 }: ChatBodyProps) {
-  const session = useChatSession({
+  const session = useConversationSession({
     agentName: selectedAgent,
-    initialRunId: runId,
-    onRunIdChange: onActiveRunChange,
+    conversationId,
+    onConversationIdChange: onConversationChange,
   });
 
   const onNewChat = useCallback(() => {
     session.reset();
-    onActiveRunChange(null);
-  }, [session, onActiveRunChange]);
+    onConversationChange(null);
+  }, [session, onConversationChange]);
 
   const activeAgent = agents.find((a) => a.name === selectedAgent) ?? null;
 
@@ -111,7 +111,7 @@ function ChatBody({
         agents={agents}
         selectedAgent={selectedAgent}
         onSelectAgent={onSelectAgent}
-        runId={session.runId}
+        conversationId={session.conversationId}
         status={session.status}
         onNewChat={onNewChat}
       />
@@ -153,7 +153,7 @@ interface ChatToolbarProps {
   agents: AgentSummary[];
   selectedAgent: string | null;
   onSelectAgent: (name: string) => void;
-  runId: string | null;
+  conversationId: string | null;
   status: string | null;
   onNewChat: () => void;
 }
@@ -162,7 +162,7 @@ function ChatToolbar({
   agents,
   selectedAgent,
   onSelectAgent,
-  runId,
+  conversationId,
   status,
   onNewChat,
 }: ChatToolbarProps) {
@@ -187,9 +187,9 @@ function ChatToolbar({
         </select>
       )}
 
-      <span className="label ml-3">session:</span>
-      {runId ? (
-        <span className="font-mono">{runId.slice(0, 16)}…</span>
+      <span className="label ml-3">conversation:</span>
+      {conversationId ? (
+        <span className="font-mono">{conversationId.slice(0, 16)}…</span>
       ) : (
         <span className="text-muted">// new chat</span>
       )}
@@ -205,8 +205,8 @@ function ChatToolbar({
         type="button"
         onClick={onNewChat}
         className="btn ml-auto"
-        disabled={!runId}
-        title="Start a new chat session (the previous one stays in the Runs tab)."
+        disabled={!conversationId}
+        title="Start a new conversation (the previous one stays in the Runs tab)."
       >
         new chat
       </button>

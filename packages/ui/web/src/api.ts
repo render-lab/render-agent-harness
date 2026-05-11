@@ -13,15 +13,22 @@ import type {
   AgentSummary,
   CancelRunResp,
   ContentBlock,
+  ConversationDetailResp,
+  ConversationSummary,
+  CreateConversationBody,
+  CreateConversationResp,
   CreateRunBody,
   CreateRunResp,
   DiagnosticCheck,
   HealthInfo,
+  ListConversationsResp,
   ListRunsResp,
   MessageRecord,
   RunDetailResp,
   RunStatus,
   RunSummary,
+  SendConversationMessageBody,
+  SendConversationMessageResp,
   SendInputResp,
   ToolCallRecord,
   UsageRow,
@@ -30,6 +37,7 @@ import type {
 export type {
   AgentSummary,
   ContentBlock,
+  ConversationSummary,
   DiagnosticCheck,
   HealthInfo,
   MessageRecord,
@@ -108,18 +116,59 @@ export function createRun(body: CreateRunBody): Promise<CreateRunResp> {
   });
 }
 
-/**
- * Look up the caller's most recent non-terminal run for an agent. The Chat
- * tab uses this to "continue last session" on page load. Returns
- * `{ run: null }` (200) when no active session exists.
- */
-export function getActiveRun(agentName?: string): Promise<{ run: RunSummary | null }> {
-  const qs = agentName ? `?agent=${encodeURIComponent(agentName)}` : "";
-  return request<{ run: RunSummary | null }>(`/runs/active${qs}`);
-}
-
 export function getRun(id: string): Promise<RunDetailResp> {
   return request<RunDetailResp>(`/runs/${encodeURIComponent(id)}`);
+}
+
+// --------------------------------------------------------------------
+// Conversations
+// --------------------------------------------------------------------
+
+export interface ListConversationsParams {
+  agent?: string[];
+  limit?: number;
+  cursor?: string;
+  allUsers?: boolean;
+}
+
+export function listConversations(
+  params: ListConversationsParams = {},
+): Promise<ListConversationsResp> {
+  const usp = new URLSearchParams();
+  for (const a of params.agent ?? []) usp.append("agent", a);
+  if (params.limit) usp.set("limit", String(params.limit));
+  if (params.cursor) usp.set("cursor", params.cursor);
+  if (params.allUsers) usp.set("allUsers", "1");
+  const qs = usp.toString();
+  return request<ListConversationsResp>(`/conversations${qs ? `?${qs}` : ""}`);
+}
+
+export function createConversation(
+  body: CreateConversationBody = {},
+): Promise<CreateConversationResp> {
+  return request<CreateConversationResp>("/conversations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getConversation(id: string): Promise<ConversationDetailResp> {
+  return request<ConversationDetailResp>(`/conversations/${encodeURIComponent(id)}`);
+}
+
+export function sendConversationMessage(
+  id: string,
+  body: SendConversationMessageBody,
+): Promise<SendConversationMessageResp> {
+  return request<SendConversationMessageResp>(
+    `/conversations/${encodeURIComponent(id)}/messages`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function getToolCalls(id: string): Promise<{ toolCalls: ToolCallRecord[] }> {
@@ -212,6 +261,57 @@ export function streamRun(id: string, handlers: StreamHandlers): () => void {
   es.addEventListener("done", () => {
     handlers.onDone?.();
     es.close();
+  });
+  es.addEventListener("error", (event) => {
+    handlers.onError?.(event);
+  });
+  return () => es.close();
+}
+
+export interface ConversationStreamHandlers {
+  onMessage?: (msg: MessageRecord) => void;
+  /** Per-run status flips inside the conversation. `runId` identifies which run. */
+  onStatus?: (runId: string, status: RunStatus) => void;
+  /** A new run was created on the conversation. Use to track the active runId. */
+  onRunCreated?: (runId: string) => void;
+  onError?: (err: Event) => void;
+}
+
+/**
+ * Subscribe to a conversation's SSE stream. The stream stays open across
+ * run boundaries — terminal status on one run does NOT close it, because
+ * the next user message enqueues a fresh run that pushes more events
+ * down the same channel. Caller closes by invoking the returned dispose.
+ */
+export function streamConversation(
+  id: string,
+  handlers: ConversationStreamHandlers,
+): () => void {
+  const url = `/conversations/${encodeURIComponent(id)}/stream`;
+  const es = new EventSource(url, { withCredentials: true });
+  es.addEventListener("message", (event) => {
+    try {
+      const data = JSON.parse(event.data) as MessageRecord;
+      handlers.onMessage?.(data);
+    } catch {
+      // ignore malformed payloads
+    }
+  });
+  es.addEventListener("status", (event) => {
+    try {
+      const data = JSON.parse(event.data) as { runId: string; status: RunStatus };
+      handlers.onStatus?.(data.runId, data.status);
+    } catch {
+      // ignore
+    }
+  });
+  es.addEventListener("run_created", (event) => {
+    try {
+      const data = JSON.parse(event.data) as { runId: string };
+      handlers.onRunCreated?.(data.runId);
+    } catch {
+      // ignore
+    }
   });
   es.addEventListener("error", (event) => {
     handlers.onError?.(event);

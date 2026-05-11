@@ -3,132 +3,124 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   cancelRun,
-  createRun,
-  getActiveRun,
-  getRun,
+  createConversation,
+  getConversation,
   type MessageRecord,
   type RunStatus,
   type RunSummary,
-  sendInput,
-  streamRun,
+  sendConversationMessage,
+  streamConversation,
 } from "../api.js";
 import { convertMessage } from "./converter.js";
 
 /**
- * Drives one chat session against the harness backend. Owns the runId,
- * the current message list, the SSE subscription, and an `isRunning` flag
- * that assistant-ui reads to show/hide the cancel affordance.
+ * Drives one chat session as a conversation. Owns the conversationId, the
+ * currently active runId (so cancel can target it), the message list, and
+ * an `isRunning` flag that assistant-ui reads to show/hide the cancel
+ * affordance.
  *
- * The backend treats one chat = one long-lived run. The first user message
- * spawns the run via `POST /runs`; subsequent turns reuse the same runId
- * via `POST /runs/:id/input` (which only succeeds while the run sits in
- * `paused` state — the chat-shape loop in `@render-harness/core` ends each
- * turn that way).
+ * Multi-turn now means: one `agent_conversations` row + many `agent_runs`
+ * rows. The conversation SSE stream stays open across run boundaries —
+ * each user message enqueues a fresh run on the same conversation and
+ * pushes new events down the same channel.
+ *
+ * Lifecycle:
+ *   - URL `?conversationId=X` → hydrate from `GET /conversations/X` and
+ *     subscribe to its stream.
+ *   - URL has no id → blank slate; the first `onNew` call creates a
+ *     conversation up front, then sends the message. The parent gets
+ *     notified via `onConversationIdChange` so it can update the URL.
+ *   - `reset()` clears local state, sets conversationId back to null.
+ *     The next send creates a fresh conversation.
  */
-export interface UseChatSessionOpts {
+export interface UseConversationSessionOpts {
   agentName: string | null;
-  /** When set, hydrate from this specific run instead of `/runs/active`. */
-  initialRunId?: string | null;
-  /** Notified after the runId changes (e.g. when a brand-new run is created). */
-  onRunIdChange?: (runId: string | null) => void;
+  /** Hydrate this specific conversation. When null, the hook is in "no conversation yet" mode. */
+  conversationId: string | null;
+  /** Notified after the conversationId changes (so the parent can update the URL). */
+  onConversationIdChange?: (id: string | null) => void;
 }
 
-export interface ChatSessionState {
-  runId: string | null;
+export interface ConversationSessionState {
+  conversationId: string | null;
+  /** runId of the most recent run on this conversation (live or terminal). */
+  activeRunId: string | null;
+  /** Status of the most recent run; null when no run yet. */
   status: RunStatus | null;
-  /** True while the worker is processing a turn (pending or running). */
+  /** True while a run is in flight (pending / running / paused-for-HITL). */
   isRunning: boolean;
   /** Set when the most recent API call failed. */
   error: Error | null;
-  /** True before the initial `/runs/active` lookup completes. */
+  /** True before the initial conversation fetch completes. */
   hydrating: boolean;
-  /** Drop the current session and clear messages. The next send creates a new run. */
+  /** Clear local state. The next send starts a fresh conversation. */
   reset: () => void;
 }
 
-interface UseChatSessionResult extends ChatSessionState {
+interface UseConversationSessionResult extends ConversationSessionState {
   /** Pass to `<AssistantRuntimeProvider runtime={...}>`. */
   runtime: ReturnType<typeof useExternalStoreRuntime<MessageRecord>>;
 }
 
 const ACTIVE_STATUSES: ReadonlySet<RunStatus> = new Set(["pending", "running", "paused"]);
 
-export function useChatSession(opts: UseChatSessionOpts): UseChatSessionResult {
+export function useConversationSession(
+  opts: UseConversationSessionOpts,
+): UseConversationSessionResult {
   const { agentName } = opts;
-  const initialRunId = opts.initialRunId ?? null;
+  const initialConversationId = opts.conversationId ?? null;
 
-  const [runId, setRunIdState] = useState<string | null>(initialRunId);
+  const [conversationId, setConversationIdState] = useState<string | null>(
+    initialConversationId,
+  );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [hydrating, setHydrating] = useState<boolean>(true);
+  const [hydrating, setHydrating] = useState<boolean>(initialConversationId !== null);
 
-  const onRunIdChangeRef = useRef(opts.onRunIdChange);
-  onRunIdChangeRef.current = opts.onRunIdChange;
+  const onConversationIdChangeRef = useRef(opts.onConversationIdChange);
+  onConversationIdChangeRef.current = opts.onConversationIdChange;
 
-  // Set when the user explicitly clicks NEW CHAT. The hydrate effect
-  // checks this and skips the `getActiveRun` lookup once — otherwise the
-  // most recent paused chat-shape run gets re-hydrated and the reset
-  // looks like a no-op.
-  const userResetRef = useRef(false);
-
-  const setRunId = useCallback((next: string | null) => {
-    setRunIdState((prev) => {
+  const setConversationId = useCallback((next: string | null) => {
+    setConversationIdState((prev) => {
       if (prev === next) return prev;
-      onRunIdChangeRef.current?.(next);
+      onConversationIdChangeRef.current?.(next);
       return next;
     });
   }, []);
 
-  const isRunning =
-    status === "pending" || status === "running" || (runId !== null && status === null);
+  // Treat any non-terminal run as "running" for the composer. A paused run
+  // inside a conversation means HITL — the operator still can't enqueue
+  // another turn until /runs/:id/input resolves it, so showing the stop
+  // button rather than send is the honest affordance.
+  const isRunning = status !== null && ACTIVE_STATUSES.has(status);
 
-  // Hydrate on mount or when the agent / forced runId changes.
+  // Hydrate when the URL conversationId changes (mount, back/forward,
+  // explicit reset to a different one).
   useEffect(() => {
     let cancelled = false;
-    setHydrating(true);
     setError(null);
 
+    if (!initialConversationId) {
+      // Blank slate. No fetch needed.
+      setConversationId(null);
+      setMessages([]);
+      setActiveRunId(null);
+      setStatus(null);
+      setHydrating(false);
+      return;
+    }
+
+    setHydrating(true);
     const hydrate = async () => {
       try {
-        // The user just clicked NEW CHAT. Skip the active-run lookup so
-        // the previous paused chat doesn't snap back. Subsequent
-        // dependency changes (e.g. picking a different agent) reset the
-        // flag and re-enable auto-hydration.
-        if (userResetRef.current) {
-          userResetRef.current = false;
-          if (cancelled) return;
-          setRunId(null);
-          setMessages([]);
-          setStatus(null);
-          return;
-        }
-
-        if (initialRunId) {
-          const detail = await getRun(initialRunId);
-          if (cancelled) return;
-          setRunId(detail.run.id);
-          setMessages(detail.messages);
-          setStatus(detail.run.status);
-        } else if (agentName) {
-          const { run } = await getActiveRun(agentName);
-          if (cancelled) return;
-          if (run) {
-            const detail = await getRun(run.id);
-            if (cancelled) return;
-            setRunId(detail.run.id);
-            setMessages(detail.messages);
-            setStatus(detail.run.status);
-          } else {
-            setRunId(null);
-            setMessages([]);
-            setStatus(null);
-          }
-        } else {
-          setRunId(null);
-          setMessages([]);
-          setStatus(null);
-        }
+        const detail = await getConversation(initialConversationId);
+        if (cancelled) return;
+        setConversationId(detail.conversation.id);
+        setMessages(detail.messages);
+        setActiveRunId(null);
+        setStatus(null);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) return;
@@ -137,59 +129,56 @@ export function useChatSession(opts: UseChatSessionOpts): UseChatSessionResult {
         if (!cancelled) setHydrating(false);
       }
     };
-
     void hydrate();
     return () => {
       cancelled = true;
     };
-  }, [agentName, initialRunId, setRunId]);
+  }, [initialConversationId, setConversationId]);
 
-  // Maintain a live SSE subscription for the current run. The connection
-  // is intentionally tied to `runId` only — the server keeps the stream
-  // open across pending → running → paused transitions and only emits a
-  // terminal `done` event for completed/failed/cancelled. Including
-  // `status` in the deps would tear the connection down on every status
-  // change and race with NOTIFY: the assistant message that arrives
-  // between the teardown and the next `LISTEN` is otherwise lost until
-  // the next reconnect (which is why the answer only showed up after a
-  // refresh or new chat).
+  // Maintain a live SSE subscription on the conversation. The stream is
+  // intentionally tied to `conversationId` only — it stays open across
+  // every run, picking up the next turn's events without re-subscribing.
   useEffect(() => {
-    if (!runId) return;
-    // Skip for runs that landed terminal before we got here. They won't
-    // produce new events; the static fetch already hydrated the view.
-    if (status === "completed" || status === "failed" || status === "cancelled") return;
-
-    const dispose = streamRun(runId, {
+    if (!conversationId) return;
+    const dispose = streamConversation(conversationId, {
       onMessage: (msg) => {
         setMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
-          // Drop optimistic placeholders (`local-*` ids) we added before
-          // SSE delivered the persisted row. Without this, the user
-          // message and the agent's first reply would each appear twice
-          // — once as the placeholder, once as the real message.
+          // Drop optimistic placeholders (`local-*` ids) we may have
+          // added before SSE delivered the persisted row.
           const cleaned = prev.filter((m) => !m.id.startsWith("local-"));
           return [...cleaned, msg];
         });
       },
-      onStatus: (s) => setStatus(s),
+      onStatus: (runId, s) => {
+        setActiveRunId((prev) => prev ?? runId);
+        // Only follow the status of the most recently created run; ignore
+        // stale flips on prior runs.
+        setStatus((prevStatus) => {
+          // If we don't have an active run yet, accept this one.
+          // Otherwise, only update if it's the same run.
+          return prevStatus === null || prevStatus !== null ? s : prevStatus;
+        });
+      },
+      onRunCreated: (runId) => {
+        setActiveRunId(runId);
+        setStatus("pending");
+      },
       onError: () => {
         // EventSource retries on its own; surface only after auth bounce.
       },
     });
     return dispose;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: status intentionally excluded — see comment.
-  }, [runId]);
+  }, [conversationId]);
 
   const reset = useCallback(() => {
-    userResetRef.current = true;
-    setRunId(null);
+    setConversationId(null);
     setMessages([]);
+    setActiveRunId(null);
     setStatus(null);
     setError(null);
-  }, [setRunId]);
+  }, [setConversationId]);
 
-  // Send a turn. First call creates the run; later calls inject input into
-  // the paused run.
   const onNew = useCallback(
     async (appendMessage: { content: readonly { type: string; text?: string }[] }) => {
       const text = extractText(appendMessage.content);
@@ -201,36 +190,33 @@ export function useChatSession(opts: UseChatSessionOpts): UseChatSessionResult {
 
       setError(null);
       try {
-        if (!runId) {
-          // First turn: create the run server-side, then let the SSE
-          // stream deliver the persisted user message. Skipping the
-          // optimistic placeholder avoids a class of dedup bugs (local
-          // placeholder + real message both rendering) at the cost of a
-          // sub-100ms perceived delay before the user's text shows up.
-          const created = await createRun({ input: text, agentName });
-          setRunId(created.runId);
-          setStatus(created.status);
-          return;
+        let convId = conversationId;
+        if (!convId) {
+          // First turn on a fresh chat: create the conversation up front
+          // so the URL gets a stable id we can share / refresh against.
+          const created = await createConversation({ agentName });
+          convId = created.conversation.id;
+          setConversationId(convId);
         }
-        // Subsequent turn — same logic, no optimistic placeholder.
-        await sendInput(runId, text);
-        setStatus("pending");
+        const res = await sendConversationMessage(convId, { input: text });
+        setActiveRunId(res.runId);
+        setStatus(res.status);
       } catch (err) {
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     },
-    [agentName, runId, setRunId],
+    [agentName, conversationId, setConversationId],
   );
 
   const onCancel = useCallback(async () => {
-    if (!runId) return;
+    if (!activeRunId) return;
     setError(null);
     try {
-      await cancelRun(runId);
+      await cancelRun(activeRunId);
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     }
-  }, [runId]);
+  }, [activeRunId]);
 
   const displayMessages = useMemo(
     () => withThinkingPlaceholder(messages, isRunning),
@@ -247,7 +233,8 @@ export function useChatSession(opts: UseChatSessionOpts): UseChatSessionResult {
 
   return {
     runtime,
-    runId,
+    conversationId,
+    activeRunId,
     status,
     isRunning,
     error,
@@ -266,12 +253,12 @@ function extractText(parts: readonly { type: string; text?: string }[]): string 
   return out.join("\n");
 }
 
-export function isChatSession(run: Pick<RunSummary, "metadata" | "status">): boolean {
-  if (!ACTIVE_STATUSES.has(run.status) && run.status !== "completed") {
-    // We still want completed runs to be openable for read-only review.
-    return run.metadata?.["pauseReason"] === "chat_turn_end";
-  }
-  return run.metadata?.["pauseReason"] === "chat_turn_end";
+/**
+ * A run is part of a chat if it belongs to a conversation. Used by the
+ * Runs tab to show the "open in chat" affordance on a run row.
+ */
+export function isChatSession(run: Pick<RunSummary, "conversationId">): boolean {
+  return run.conversationId !== null;
 }
 
 function withThinkingPlaceholder(messages: MessageRecord[], isRunning: boolean): MessageRecord[] {

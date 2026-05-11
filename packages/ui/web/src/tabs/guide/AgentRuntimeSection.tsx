@@ -19,7 +19,7 @@ For other shapes the harness has \`@render-harness/runtime-cron\` (one-shot sche
 `;
 
 const PROSE_CHAT_SHAPE = `
-\`shape: "chat"\` is what makes the conversation feel like a chat. After each model response with no tool calls, the run transitions to \`paused\` instead of \`completed\`. The Chat tab uses \`POST /runs/:id/input\` to append the next user message and re-enqueues the same run. The whole conversation lives on one persistent \`agent_runs\` row, with metadata like \`pauseReason: "chat_turn_end"\` so the operator can tell chat-shape runs apart from one-shots.
+Multi-turn chat is built on \`agent_conversations\`: one row groups many runs together. Each user turn enqueues a fresh run on the same \`conversationId\`; the run loads message history across every prior run in the conversation, completes normally, and the next user turn starts another run. The Chat tab uses \`POST /conversations/:id/messages\` for every turn and subscribes to \`GET /conversations/:id/stream\` (which stays open across run boundaries). Runs always end in a terminal state — \`paused\` is now strictly HITL (\`ask_user\`, approval gates), never "waiting for the next user message."
 `;
 
 export function AgentRuntimeSection() {
@@ -50,7 +50,6 @@ export function buildDemoAgent(): AgentDefinition {
     },
     systemPrompt: SYSTEM_PROMPT,
     sampling: { temperature: 0.4, maxOutputTokens: 1024 },
-    shape: "chat",
   });
 }`}
           </CodeBlock>
@@ -86,7 +85,7 @@ await startWorkerAndWait({
             Locally they share the same image — Compose just runs <code className="bg-code-bg px-1">node dist/web.js</code> for one and <code className="bg-code-bg px-1">node dist/worker.js</code> for the other.
           </p>
 
-          <h3 className="label mt-6">why "chat" shape?</h3>
+          <h3 className="label mt-6">how multi-turn chat works</h3>
           <Markdown text={PROSE_CHAT_SHAPE} />
         </>
       }
