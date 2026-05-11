@@ -12,7 +12,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * boot of every runtime. Returns the list of migration files applied.
  */
 export async function applyMigrations(pool: Pool): Promise<string[]> {
-  const migrations = ["0001_init.sql"];
+  const migrations = ["0001_init.sql", "0002_conversations.sql"];
   const applied: string[] = [];
   for (const name of migrations) {
     // sql/ ships next to the built dist/, copied via package.json `files`.

@@ -1,5 +1,5 @@
-import type { MessageRecord, RunSummary } from "@render-harness/contracts";
-import type { AgentRun, Message } from "@render-harness/core";
+import type { ConversationSummary, MessageRecord, RunSummary } from "@render-harness/contracts";
+import type { AgentConversation, AgentRun, Message } from "@render-harness/core";
 
 export function serializeMessage(m: Message): MessageRecord {
   return {
@@ -18,6 +18,7 @@ export function serializeRun(run: AgentRun): RunSummary {
     agentVersion: run.agentVersion,
     status: run.status,
     userId: run.userId,
+    conversationId: run.conversationId,
     cursor: run.cursor,
     totalCostUsd: run.totalCostUsd,
     metadata: run.metadata,
@@ -25,5 +26,20 @@ export function serializeRun(run: AgentRun): RunSummary {
     updatedAt: run.updatedAt.toISOString(),
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
+  };
+}
+
+export function serializeConversation(c: AgentConversation): ConversationSummary {
+  return {
+    id: c.id,
+    userId: c.userId,
+    agentName: c.agentName,
+    agentVersion: c.agentVersion,
+    title: c.title,
+    totalCostUsd: c.totalCostUsd,
+    metadata: c.metadata,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+    lastActiveAt: c.lastActiveAt.toISOString(),
   };
 }

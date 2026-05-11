@@ -24,6 +24,7 @@ export type RunId = string;
 export type ToolCallId = string;
 export type MessageId = string;
 export type UserId = string;
+export type ConversationId = string;
 
 // --------------------------------------------------------------------
 // Messages and content blocks
@@ -130,6 +131,7 @@ export interface RunSummary {
   agentVersion: string;
   status: RunStatus;
   userId: UserId | null;
+  conversationId: ConversationId | null;
   totalCostUsd: number;
   cursor: RunCursor;
   metadata: Record<string, unknown>;
@@ -137,6 +139,23 @@ export interface RunSummary {
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+}
+
+/**
+ * Wire shape of an `AgentConversation` row. Dates are ISO strings;
+ * `userId` and `title` surface as `null` when absent.
+ */
+export interface ConversationSummary {
+  id: ConversationId;
+  userId: UserId | null;
+  agentName: string;
+  agentVersion: string;
+  title: string | null;
+  totalCostUsd: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  lastActiveAt: string;
 }
 
 export interface MessageRecord {
@@ -233,6 +252,38 @@ export interface ListRunsResp {
 export interface RunDetailResp {
   run: RunSummary;
   messages: MessageRecord[];
+}
+
+export interface ListConversationsResp {
+  conversations: ConversationSummary[];
+  nextCursor: string | null;
+}
+
+export interface ConversationDetailResp {
+  conversation: ConversationSummary;
+  runs: RunSummary[];
+  messages: MessageRecord[];
+}
+
+export interface CreateConversationBody {
+  agentName?: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateConversationResp {
+  conversation: ConversationSummary;
+}
+
+export interface SendConversationMessageBody {
+  input: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SendConversationMessageResp {
+  conversationId: ConversationId;
+  runId: RunId;
+  status: RunStatus;
 }
 
 export interface ToolCallsResp {

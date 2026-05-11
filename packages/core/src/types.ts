@@ -14,6 +14,7 @@
 import type {
   Budget,
   ContentBlock,
+  ConversationId,
   MessageId,
   MessageRole,
   Permissions,
@@ -34,6 +35,7 @@ import type { Logger } from "pino";
 export type {
   Budget,
   ContentBlock,
+  ConversationId,
   CostEstimate,
   MessageId,
   MessageRole,
@@ -114,6 +116,13 @@ export interface AgentRun {
   agentVersion: string;
   status: RunStatus;
   userId: UserId | null;
+  /**
+   * When set, this run belongs to a multi-turn conversation. The loop loads
+   * message history across every run in the conversation (not just this one)
+   * and updates `agent_conversations.last_active_at` / `total_cost_usd` on
+   * terminal transitions.
+   */
+  conversationId: ConversationId | null;
   cursor: RunCursor;
   totalCostUsd: number;
   createdAt: Date;
@@ -122,6 +131,24 @@ export interface AgentRun {
   finishedAt?: Date;
   /** Free-form metadata supplied at run creation. */
   metadata: Record<string, unknown>;
+}
+
+/**
+ * Runtime form of an `agent_conversations` row. Groups many runs into one
+ * ongoing thread. Created up front; new user turns enqueue runs that always
+ * end in a terminal state.
+ */
+export interface AgentConversation {
+  id: ConversationId;
+  userId: UserId | null;
+  agentName: string;
+  agentVersion: string;
+  title: string | null;
+  metadata: Record<string, unknown>;
+  totalCostUsd: number;
+  createdAt: Date;
+  updatedAt: Date;
+  lastActiveAt: Date;
 }
 
 // --------------------------------------------------------------------
@@ -160,7 +187,7 @@ export type RunStepResult =
   | { status: "completed"; finalMessage: Message }
   | {
       status: "paused";
-      reason: "awaiting_input" | "awaiting_approval" | "chat_turn_end";
+      reason: "awaiting_input" | "awaiting_approval";
       payload: unknown;
     }
   | { status: "checkpoint"; cursor: RunCursor }
@@ -249,16 +276,6 @@ export interface AgentDefinition {
   budget?: Partial<Budget>;
   /** Optional sampling params (temperature, top_p, etc.). */
   sampling?: SamplingParams;
-  /**
-   * Conversation shape. `single-turn` (default) ends each run in `completed`
-   * once the model returns a final answer. `chat` keeps the run open across
-   * turns: when the model returns an answer with no tool calls the loop sets
-   * status to `paused` (with `metadata.pauseReason = "chat_turn_end"`) so the
-   * caller can append the next user message via `POST /runs/:id/input` and
-   * re-enqueue the same run. The full message history accumulates on the run
-   * and is fed back to the model on every turn.
-   */
-  shape?: "single-turn" | "chat";
   /**
    * Names of capability packs the agent has been composed with — declarative
    * metadata only; the harness doesn't read this for behavior. The operator

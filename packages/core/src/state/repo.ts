@@ -1,7 +1,9 @@
 import type { Pool, PoolClient } from "pg";
 import type {
+  AgentConversation,
   AgentRun,
   ContentBlock,
+  ConversationId,
   Message,
   RunCursor,
   RunId,
@@ -30,6 +32,7 @@ interface RunRow {
   agent_version: string;
   status: RunStatus;
   user_id: string | null;
+  conversation_id: string | null;
   cursor: RunCursor;
   total_cost_usd: string;
   metadata: Record<string, unknown>;
@@ -43,11 +46,25 @@ interface RunRow {
 interface MessageRow {
   id: string;
   run_id: string;
+  conversation_id: string | null;
   seq: number;
   role: Message["role"];
   content: ContentBlock[];
   usage: TokenUsage | null;
   created_at: Date;
+}
+
+interface ConversationRow {
+  id: string;
+  user_id: string | null;
+  agent_name: string;
+  agent_version: string;
+  title: string | null;
+  metadata: Record<string, unknown>;
+  total_cost_usd: string;
+  created_at: Date;
+  updated_at: Date;
+  last_active_at: Date;
 }
 
 interface ToolCallRow {
@@ -84,23 +101,30 @@ export async function createRun(
     agentName: string;
     agentVersion: string;
     userId?: UserId | null;
+    conversationId?: ConversationId | null;
     metadata?: Record<string, unknown>;
   },
 ): Promise<AgentRun> {
   const { rows } = await pool.query<RunRow>(
-    `INSERT INTO agent_runs (id, agent_name, agent_version, status, user_id, metadata)
-       VALUES ($1, $2, $3, 'pending', $4, $5)
+    `INSERT INTO agent_runs
+       (id, agent_name, agent_version, status, user_id, conversation_id, metadata)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6)
        RETURNING *`,
     [
       args.id,
       args.agentName,
       args.agentVersion,
       args.userId ?? null,
+      args.conversationId ?? null,
       JSON.stringify(args.metadata ?? {}),
     ],
   );
   const row = expectOne(rows, "createRun");
-  await notify(pool, { runId: row.id, kind: "run_created" });
+  await notify(pool, {
+    runId: row.id,
+    kind: "run_created",
+    ...(row.conversation_id ? { conversationId: row.conversation_id } : {}),
+  });
   return rowToRun(row);
 }
 
@@ -117,12 +141,14 @@ export async function ensureRun(
     agentName: string;
     agentVersion: string;
     userId?: UserId | null;
+    conversationId?: ConversationId | null;
     metadata?: Record<string, unknown>;
   },
 ): Promise<AgentRun> {
   const { rows } = await pool.query<RunRow>(
-    `INSERT INTO agent_runs (id, agent_name, agent_version, status, user_id, metadata)
-       VALUES ($1, $2, $3, 'pending', $4, $5)
+    `INSERT INTO agent_runs
+       (id, agent_name, agent_version, status, user_id, conversation_id, metadata)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6)
        ON CONFLICT (id) DO NOTHING
        RETURNING *`,
     [
@@ -130,12 +156,17 @@ export async function ensureRun(
       args.agentName,
       args.agentVersion,
       args.userId ?? null,
+      args.conversationId ?? null,
       JSON.stringify(args.metadata ?? {}),
     ],
   );
   if (rows.length > 0) {
     const row = rows[0] as RunRow;
-    await notify(pool, { runId: row.id, kind: "run_created" });
+    await notify(pool, {
+      runId: row.id,
+      kind: "run_created",
+      ...(row.conversation_id ? { conversationId: row.conversation_id } : {}),
+    });
     return rowToRun(row);
   }
   const existing = await loadRun(pool, args.id);
@@ -170,7 +201,7 @@ export async function setRunStatus(
 ): Promise<void> {
   const now = new Date();
   const finalize = opts?.finalize ?? ["completed", "failed", "cancelled"].includes(status);
-  await pool.query(
+  const { rows } = await pool.query<{ conversation_id: string | null }>(
     `UPDATE agent_runs
        SET status = $2,
            updated_at = $3::timestamptz,
@@ -180,10 +211,17 @@ export async function setRunStatus(
            ),
            finished_at = CASE WHEN $4 THEN $3::timestamptz ELSE finished_at END,
            final_error = COALESCE($5::jsonb, final_error)
-       WHERE id = $1`,
+       WHERE id = $1
+       RETURNING conversation_id`,
     [runId, status, now, finalize, opts?.error ? JSON.stringify(opts.error) : null],
   );
-  await notify(pool, { runId, kind: "run_status", status });
+  const conversationId = rows[0]?.conversation_id ?? null;
+  await notify(pool, {
+    runId,
+    kind: "run_status",
+    status,
+    ...(conversationId ? { conversationId } : {}),
+  });
 }
 
 /**
@@ -227,7 +265,16 @@ export async function updateRunCursor(
 
 export async function appendMessage(
   pool: Pool,
-  msg: Omit<Message, "id" | "createdAt"> & { id?: string; runId: RunId },
+  msg: Omit<Message, "id" | "createdAt"> & {
+    id?: string;
+    runId: RunId;
+    /**
+     * When set, this message is also tagged with the conversation id so
+     * `loadConversationMessages` can fetch the full history without joining
+     * back to `agent_runs`. Pass `run.conversationId` from the loop.
+     */
+    conversationId?: ConversationId | null;
+  },
 ): Promise<Message> {
   const id = msg.id ?? cryptoRandomId();
   const client = await pool.connect();
@@ -238,12 +285,14 @@ export async function appendMessage(
     ]);
     const seq = seqRes.rows[0]?.seq ?? 1;
     const { rows } = await client.query<MessageRow>(
-      `INSERT INTO agent_messages (id, run_id, seq, role, content, usage)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+      `INSERT INTO agent_messages
+         (id, run_id, conversation_id, seq, role, content, usage)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
          RETURNING *`,
       [
         id,
         msg.runId,
+        msg.conversationId ?? null,
         seq,
         msg.role,
         JSON.stringify(msg.content),
@@ -256,6 +305,7 @@ export async function appendMessage(
       runId: msg.runId,
       kind: "message",
       messageId: row.id,
+      ...(row.conversation_id ? { conversationId: row.conversation_id } : {}),
     });
     return rowToMessage(row);
   } catch (err) {
@@ -302,7 +352,11 @@ export async function countRunMessages(pool: Pool, runId: RunId): Promise<number
  */
 export async function ensureInitialMessage(
   pool: Pool,
-  args: { runId: RunId; content: ContentBlock[] },
+  args: {
+    runId: RunId;
+    content: ContentBlock[];
+    conversationId?: ConversationId | null;
+  },
 ): Promise<void> {
   if (!args.content || args.content.length === 0) return;
   const count = await countRunMessages(pool, args.runId);
@@ -311,6 +365,7 @@ export async function ensureInitialMessage(
     runId: args.runId,
     role: "user",
     content: args.content,
+    conversationId: args.conversationId ?? null,
   });
 }
 
@@ -433,6 +488,187 @@ function decodeCursor(raw: string | undefined): RunCursorKey | null {
   } catch {
     return null;
   }
+}
+
+// --------------------------------------------------------------------
+// Conversations
+// --------------------------------------------------------------------
+
+export async function createConversation(
+  pool: Pool,
+  args: {
+    id?: ConversationId;
+    userId?: UserId | null;
+    agentName: string;
+    agentVersion: string;
+    title?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<AgentConversation> {
+  const id = args.id ?? cryptoRandomId();
+  const { rows } = await pool.query<ConversationRow>(
+    `INSERT INTO agent_conversations
+       (id, user_id, agent_name, agent_version, title, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       RETURNING *`,
+    [
+      id,
+      args.userId ?? null,
+      args.agentName,
+      args.agentVersion,
+      args.title ?? null,
+      JSON.stringify(args.metadata ?? {}),
+    ],
+  );
+  return rowToConversation(expectOne(rows, "createConversation"));
+}
+
+export async function loadConversation(
+  pool: Pool,
+  id: ConversationId,
+): Promise<AgentConversation | null> {
+  const { rows } = await pool.query<ConversationRow>(
+    "SELECT * FROM agent_conversations WHERE id = $1",
+    [id],
+  );
+  const row = rows[0];
+  return row ? rowToConversation(row) : null;
+}
+
+export async function loadConversationForUser(
+  pool: Pool,
+  id: ConversationId,
+  userId: UserId,
+): Promise<AgentConversation | null> {
+  const { rows } = await pool.query<ConversationRow>(
+    "SELECT * FROM agent_conversations WHERE id = $1 AND user_id = $2",
+    [id, userId],
+  );
+  const row = rows[0];
+  return row ? rowToConversation(row) : null;
+}
+
+export interface ListConversationsFilter {
+  userId?: UserId;
+  agentName?: string | string[];
+  limit?: number;
+  /** Keyset cursor opaquely encoding `(last_active_at, id)` of the last row. */
+  cursor?: string;
+}
+
+export interface ListConversationsPage {
+  conversations: AgentConversation[];
+  nextCursor: string | null;
+}
+
+export async function listConversations(
+  pool: Pool,
+  filter: ListConversationsFilter = {},
+): Promise<ListConversationsPage> {
+  const limit = clampLimit(filter.limit);
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter.userId !== undefined) {
+    params.push(filter.userId);
+    where.push(`user_id = $${params.length}`);
+  }
+  const agentNames = toArray(filter.agentName).filter((s) => s.length > 0);
+  if (agentNames.length > 0) {
+    params.push(agentNames);
+    where.push(`agent_name = ANY($${params.length}::text[])`);
+  }
+
+  const cursor = decodeCursor(filter.cursor);
+  if (cursor) {
+    params.push(cursor.createdAt.toISOString(), cursor.id);
+    where.push(
+      `(last_active_at, id) < ($${params.length - 1}::timestamptz, $${params.length}::text)`,
+    );
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  params.push(limit + 1);
+  const sql = `
+    SELECT * FROM agent_conversations
+    ${whereSql}
+    ORDER BY last_active_at DESC, id DESC
+    LIMIT $${params.length}
+  `;
+
+  const { rows } = await pool.query<ConversationRow>(sql, params);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last ? encodeCursor({ createdAt: last.last_active_at, id: last.id }) : null;
+  return { conversations: page.map(rowToConversation), nextCursor };
+}
+
+/**
+ * Load every message in a conversation in turn order. The loop calls this
+ * instead of `listMessages(runId)` when the run belongs to a conversation,
+ * so the model sees full multi-turn history across all the runs in this
+ * conversation. Ordered by `created_at, seq` — `seq` is per-run, so
+ * `created_at` is the primary key and `seq` is the tie-breaker within a
+ * single run.
+ */
+export async function loadConversationMessages(
+  pool: Pool,
+  conversationId: ConversationId,
+): Promise<Message[]> {
+  const { rows } = await pool.query<MessageRow>(
+    `SELECT * FROM agent_messages
+      WHERE conversation_id = $1
+      ORDER BY created_at ASC, seq ASC`,
+    [conversationId],
+  );
+  return rows.map(rowToMessage);
+}
+
+/**
+ * Return the active (non-terminal) run for a conversation, if any. Used by
+ * `POST /conversations/:id/messages` to enforce the sequential-only
+ * invariant (returns 409 when this finds a row).
+ */
+export async function findActiveRunForConversation(
+  pool: Pool,
+  conversationId: ConversationId,
+): Promise<AgentRun | null> {
+  const { rows } = await pool.query<RunRow>(
+    `SELECT * FROM agent_runs
+      WHERE conversation_id = $1
+        AND status IN ('pending','running','paused')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [conversationId],
+  );
+  const row = rows[0];
+  return row ? rowToRun(row) : null;
+}
+
+/**
+ * Bump a conversation's denormalised rollup fields. Called from the loop
+ * when a run that belongs to the conversation reaches a terminal state.
+ * Idempotent on caller side — pass the run's *full* `total_cost_usd`, not
+ * a delta, and `agent_conversations.total_cost_usd` is recomputed from
+ * `agent_runs` in the same statement to stay correct under retries.
+ */
+export async function rollupConversation(
+  pool: Pool,
+  conversationId: ConversationId,
+): Promise<void> {
+  await pool.query(
+    `UPDATE agent_conversations c
+       SET total_cost_usd = COALESCE(
+             (SELECT SUM(total_cost_usd) FROM agent_runs WHERE conversation_id = c.id),
+             0
+           ),
+           last_active_at = now(),
+           updated_at = now()
+     WHERE c.id = $1`,
+    [conversationId],
+  );
 }
 
 // --------------------------------------------------------------------
@@ -697,12 +933,18 @@ export async function aggregateUsage(
 // LISTEN/NOTIFY
 // --------------------------------------------------------------------
 
+/**
+ * Pointer-over-NOTIFY payload. `conversationId` is set on every variant
+ * when the originating run belongs to a conversation, so the conversation
+ * SSE stream can fan in across runs without joining `agent_runs` per event.
+ * Optional everywhere to keep single-turn / cron one-shot payloads compact.
+ */
 export type NotifyPayload =
-  | { runId: string; kind: "run_created" }
-  | { runId: string; kind: "run_status"; status: RunStatus }
-  | { runId: string; kind: "message"; messageId: string }
-  | { runId: string; kind: "tool_call"; toolCallId: string }
-  | { runId: string; kind: "tool_result"; toolCallId: string };
+  | { runId: string; kind: "run_created"; conversationId?: string }
+  | { runId: string; kind: "run_status"; status: RunStatus; conversationId?: string }
+  | { runId: string; kind: "message"; messageId: string; conversationId?: string }
+  | { runId: string; kind: "tool_call"; toolCallId: string; conversationId?: string }
+  | { runId: string; kind: "tool_result"; toolCallId: string; conversationId?: string };
 
 async function notify(pool: Pool, payload: NotifyPayload): Promise<void> {
   // Payload is small (pointer-sized) and always under the 8 KB NOTIFY cap.
@@ -722,6 +964,7 @@ function rowToRun(row: RunRow): AgentRun {
     agentVersion: row.agent_version,
     status: row.status,
     userId: row.user_id,
+    conversationId: row.conversation_id,
     cursor: row.cursor ?? ZERO_CURSOR,
     totalCostUsd: Number(row.total_cost_usd ?? 0),
     metadata: row.metadata ?? {},
@@ -729,6 +972,21 @@ function rowToRun(row: RunRow): AgentRun {
     updatedAt: row.updated_at,
     ...(row.started_at ? { startedAt: row.started_at } : {}),
     ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
+  };
+}
+
+function rowToConversation(row: ConversationRow): AgentConversation {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    agentName: row.agent_name,
+    agentVersion: row.agent_version,
+    title: row.title,
+    metadata: row.metadata ?? {},
+    totalCostUsd: Number(row.total_cost_usd ?? 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastActiveAt: row.last_active_at,
   };
 }
 

@@ -240,27 +240,16 @@ export async function pauseForAwaitingInput(args: {
 
 /**
  * Called when the model returns an assistant turn with no tool_use blocks
- * — i.e. a final answer. For chat-shaped agents the run pauses awaiting
- * the next user message; otherwise it completes.
+ * — i.e. a final answer. The run always completes; multi-turn behaviour is
+ * driven by enqueueing a *new* run on the same `conversationId` rather than
+ * pausing this one.
  */
 export async function finishWithoutToolCalls(args: {
   pool: Pool;
   runId: RunId;
-  agentDef: AgentDefinition;
   assistant: Message;
-  logger: Logger;
 }): Promise<RunStepResult> {
-  const { pool, runId, agentDef, assistant, logger } = args;
-  if (agentDef.shape === "chat") {
-    await mergeRunMetadata(pool, runId, { pauseReason: "chat_turn_end" });
-    await setRunStatus(pool, runId, "paused");
-    logger.info({ messageId: assistant.id }, "chat turn complete; paused for next input");
-    return {
-      status: "paused",
-      reason: "chat_turn_end",
-      payload: { messageId: assistant.id },
-    };
-  }
+  const { pool, runId, assistant } = args;
   await setRunStatus(pool, runId, "completed");
   return { status: "completed", finalMessage: assistant };
 }

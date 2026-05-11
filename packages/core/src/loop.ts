@@ -223,7 +223,7 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
 
       const toolUses = collectToolUses(assistantContent);
       if (toolUses.length === 0) {
-        return await finishWithoutToolCalls({ pool, runId, agentDef, assistant, logger: log });
+        return await finishWithoutToolCalls({ pool, runId, assistant });
       }
 
       // Execute each tool call. A single assistant turn can request multiple

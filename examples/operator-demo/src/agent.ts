@@ -11,14 +11,13 @@ Keep answers short — usually one or two paragraphs. If the user asks for a
 long explanation, structure it with a heading and bullet points.`;
 
 /**
- * Tiny chat-shaped agent used by the operator-demo example. Has no MCP
- * servers and no local tools; the point of the example is the Chat tab in
- * the operator UI, not the agent itself.
+ * Tiny agent used by the operator-demo example. Has no MCP servers and no
+ * local tools; the point of the example is the Chat tab in the operator UI,
+ * not the agent itself.
  *
- * `shape: "chat"` makes the runner end each turn in `paused` (with
- * `metadata.pauseReason = "chat_turn_end"`) instead of `completed`, so the
- * UI can append the next user message via `POST /runs/:id/input` and reuse
- * the same run for the whole session.
+ * Multi-turn chat is driven by the conversations API — each user turn
+ * enqueues a new run on the same `conversationId`, and the loop loads full
+ * message history across the conversation. No flag on the agent is required.
  */
 export function buildDemoAgent(): AgentDefinition {
   return defineAgent({
@@ -30,6 +29,5 @@ export function buildDemoAgent(): AgentDefinition {
     },
     systemPrompt: SYSTEM_PROMPT,
     sampling: { temperature: 0.4, maxOutputTokens: 1024 },
-    shape: "chat",
   });
 }
