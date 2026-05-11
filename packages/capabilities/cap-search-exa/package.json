@@ -23,6 +23,12 @@
     "search",
     "mcp"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Exa web search",
+      "envHint": "EXA_API_KEY"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

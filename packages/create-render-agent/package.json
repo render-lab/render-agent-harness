@@ -1,0 +1,42 @@
+{
+  "name": "create-render-agent",
+  "version": "0.1.0",
+  "description": "Scaffold a new Render agent harness project. Run via `npm init render-agent` or `npx create-render-agent`.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "create-render-agent": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "bundled-gallery"
+  ],
+  "scripts": {
+    "prebuild": "tsx scripts/bundle-gallery.ts",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@render-harness/registry": "workspace:*",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

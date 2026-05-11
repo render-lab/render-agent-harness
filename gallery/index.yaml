@@ -1,0 +1,44 @@
+schemaVersion: 1
+
+# Curated agent templates the CLI (and future UI scaffolder) offer as
+# starting points. Capabilities are NOT listed here — they're discovered
+# from `packages/capabilities/*` via the `render-harness-cap` keyword.
+#
+# Adding an entry:
+#   1. Create `gallery/agents/<slug>/render-harness.yaml` (must parse
+#      against HarnessConfigSchema).
+#   2. (Optional) Add `gallery/agents/<slug>/README.md` for the wizard
+#      preview.
+#   3. Add a row below.
+#   4. `pnpm --filter @render-harness/registry test` must still pass —
+#      the loader cross-checks that runtimeKinds here matches the
+#      manifest's runtimes[].kind.
+
+agents:
+  - slug: chat
+    name: "Chat assistant"
+    description: "Minimal single-turn HTTP chat agent. The simplest starting point."
+    path: ./agents/chat
+    categories: ["starter"]
+    runtimeKinds: ["web"]
+    capabilities: []
+    author: "render-harness"
+
+  - slug: support-bot
+    name: "Support bot"
+    description: "Web + worker shape for queue-driven support flows (Slack, email, web form)."
+    path: ./agents/support-bot
+    categories: ["support", "queue"]
+    runtimeKinds: ["web", "worker"]
+    capabilities: []
+    author: "render-harness"
+
+  - slug: research-cron
+    name: "Research cron"
+    description: "Scheduled research agent that runs on a cron and uses Exa web search."
+    path: ./agents/research-cron
+    categories: ["research", "scheduled"]
+    runtimeKinds: ["cron"]
+    capabilities:
+      - "@render-harness/cap-search-exa"
+    author: "render-harness"

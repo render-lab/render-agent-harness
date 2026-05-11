@@ -21,6 +21,12 @@
     "render-harness",
     "filesystem"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Filesystem (path-scoped fs tools)",
+      "envHint": null
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

@@ -23,6 +23,12 @@
     "browserbase",
     "mcp"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Browserbase remote browser",
+      "envHint": "BROWSERBASE_API_KEY"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

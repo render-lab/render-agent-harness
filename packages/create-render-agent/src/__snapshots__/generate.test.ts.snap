@@ -1,0 +1,1913 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildFileMap > emits a complete file map for cron 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **cron** — scheduled, single-shot. Schedule expression lives in \`render-harness.yaml\`.
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs the runtime under \`tsx\` for fast iteration.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-cron": "^0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: cron
+    plan: starter
+    schedule: 0 13 * * *
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/main.ts": "/**
+ * Cron runtime entrypoint. Render schedules this process per the
+ * \`runtimes[].schedule\` cron expression in render-harness.yaml. The
+ * runtime owns wall-time budget (defaults to 11h to fit the 12h platform
+ * cap) and migrations.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { runCronAndExit } from "@render-harness/runtime-cron";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  await runCronAndExit({
+    agent,
+    logger,
+    skipMigrations: true,
+    metadata: { source: "render-cron" },
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: { main: "src/main.ts" },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;
+
+exports[`buildFileMap > emits a complete file map for web 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **web** — HTTP service, accepts run requests and streams responses (sub-30s synchronous shape).
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs the runtime under \`tsx\` for fast iteration.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-web": "^0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: web
+    plan: starter
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/main.ts": "/**
+ * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
+ * which boots an HTTP server that accepts run requests and streams results.
+ */
+
+import { serveAgent } from "@render-harness/runtime-web";
+import { agent } from "../agent/index.js";
+
+await serveAgent({ agent });
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: { main: "src/main.ts" },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;
+
+exports[`buildFileMap > emits a complete file map for web+cron 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **web** — HTTP service, accepts run requests and streams responses (sub-30s synchronous shape).
+- **cron** — scheduled, single-shot. Schedule expression lives in \`render-harness.yaml\`.
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs all 2 runtimes (web, cron) under \`concurrently\` with colour-coded prefixes. Use \`npm run dev:web\` etc. to run one at a time.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/web.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev:web": "tsx watch src/web.ts",
+    "start:web": "node dist/web.js",
+    "dev:cron": "tsx watch src/cron.ts",
+    "start:cron": "node dist/cron.js",
+    "dev": "concurrently --kill-others-on-fail --names web,cron npm:dev:web npm:dev:cron"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-web": "^0.1",
+    "@render-harness/runtime-cron": "^0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "concurrently": "^9.2.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: web
+    plan: starter
+  - kind: cron
+    plan: starter
+    schedule: 0 13 * * *
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/cron.ts": "/**
+ * Cron runtime entrypoint. Render schedules this process per the
+ * \`runtimes[].schedule\` cron expression in render-harness.yaml. The
+ * runtime owns wall-time budget (defaults to 11h to fit the 12h platform
+ * cap) and migrations.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { runCronAndExit } from "@render-harness/runtime-cron";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  await runCronAndExit({
+    agent,
+    logger,
+    skipMigrations: true,
+    metadata: { source: "render-cron" },
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "src/web.ts": "/**
+ * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
+ * which boots an HTTP server that accepts run requests and streams results.
+ */
+
+import { serveAgent } from "@render-harness/runtime-web";
+import { agent } from "../agent/index.js";
+
+await serveAgent({ agent });
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    web: "src/web.ts",
+    cron: "src/cron.ts",
+  },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;
+
+exports[`buildFileMap > emits a complete file map for web+worker 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **web** — HTTP service, accepts run requests and streams responses (sub-30s synchronous shape).
+- **worker** — always-on queue consumer. Reads jobs from the pg-boss queue declared in \`render-harness.yaml\`.
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs all 2 runtimes (web, worker) under \`concurrently\` with colour-coded prefixes. Use \`npm run dev:web\` etc. to run one at a time.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/web.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev:web": "tsx watch src/web.ts",
+    "start:web": "node dist/web.js",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start:worker": "node dist/worker.js",
+    "dev": "concurrently --kill-others-on-fail --names web,worker npm:dev:web npm:dev:worker"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-web": "^0.1",
+    "@render-harness/runtime-worker": "^0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "concurrently": "^9.2.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: web
+    plan: starter
+  - kind: worker
+    plan: starter
+    queue: my-agent-runs
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/web.ts": "/**
+ * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
+ * which boots an HTTP server that accepts run requests and streams results.
+ */
+
+import { serveAgent } from "@render-harness/runtime-web";
+import { agent } from "../agent/index.js";
+
+await serveAgent({ agent });
+",
+  "src/worker.ts": "/**
+ * Worker runtime entrypoint. Consumes run jobs off the pg-boss queue
+ * configured in render-harness.yaml. Reads WORKER_QUEUE for overrides;
+ * the literal default below mirrors the queue declared in YAML.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { startWorkerAndWait } from "@render-harness/runtime-worker";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  const queue = process.env.WORKER_QUEUE ?? "my-agent-runs";
+
+  await startWorkerAndWait({
+    agent,
+    queue,
+    logger,
+    skipMigrations: true,
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    web: "src/web.ts",
+    worker: "src/worker.ts",
+  },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;
+
+exports[`buildFileMap > emits a complete file map for web+worker+cron 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **web** — HTTP service, accepts run requests and streams responses (sub-30s synchronous shape).
+- **worker** — always-on queue consumer. Reads jobs from the pg-boss queue declared in \`render-harness.yaml\`.
+- **cron** — scheduled, single-shot. Schedule expression lives in \`render-harness.yaml\`.
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs all 3 runtimes (web, worker, cron) under \`concurrently\` with colour-coded prefixes. Use \`npm run dev:web\` etc. to run one at a time.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/web.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev:web": "tsx watch src/web.ts",
+    "start:web": "node dist/web.js",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start:worker": "node dist/worker.js",
+    "dev:cron": "tsx watch src/cron.ts",
+    "start:cron": "node dist/cron.js",
+    "dev": "concurrently --kill-others-on-fail --names web,worker,cron npm:dev:web npm:dev:worker npm:dev:cron"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-web": "^0.1",
+    "@render-harness/runtime-worker": "^0.1",
+    "@render-harness/runtime-cron": "^0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "concurrently": "^9.2.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: web
+    plan: starter
+  - kind: worker
+    plan: starter
+    queue: my-agent-runs
+  - kind: cron
+    plan: starter
+    schedule: 0 13 * * *
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/cron.ts": "/**
+ * Cron runtime entrypoint. Render schedules this process per the
+ * \`runtimes[].schedule\` cron expression in render-harness.yaml. The
+ * runtime owns wall-time budget (defaults to 11h to fit the 12h platform
+ * cap) and migrations.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { runCronAndExit } from "@render-harness/runtime-cron";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  await runCronAndExit({
+    agent,
+    logger,
+    skipMigrations: true,
+    metadata: { source: "render-cron" },
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "src/web.ts": "/**
+ * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
+ * which boots an HTTP server that accepts run requests and streams results.
+ */
+
+import { serveAgent } from "@render-harness/runtime-web";
+import { agent } from "../agent/index.js";
+
+await serveAgent({ agent });
+",
+  "src/worker.ts": "/**
+ * Worker runtime entrypoint. Consumes run jobs off the pg-boss queue
+ * configured in render-harness.yaml. Reads WORKER_QUEUE for overrides;
+ * the literal default below mirrors the queue declared in YAML.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { startWorkerAndWait } from "@render-harness/runtime-worker";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  const queue = process.env.WORKER_QUEUE ?? "my-agent-runs";
+
+  await startWorkerAndWait({
+    agent,
+    queue,
+    logger,
+    skipMigrations: true,
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    web: "src/web.ts",
+    worker: "src/worker.ts",
+    cron: "src/cron.ts",
+  },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;
+
+exports[`buildFileMap > emits a complete file map for worker 1`] = `
+{
+  ".env.example": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
+  ".gitignore": "node_modules
+dist
+.env
+*.log
+",
+  "README.md": "## my-agent
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/my-agent)
+
+> A test agent.
+
+This is a [Render agent harness](https://github.com/render-examples/render-harness) entry. Configuration lives in [\`render-harness.yaml\`](./render-harness.yaml).
+
+## Runtime topology
+
+- **worker** — always-on queue consumer. Reads jobs from the pg-boss queue declared in \`render-harness.yaml\`.
+
+## Local development
+
+Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
+
+\`\`\`sh
+npm install
+cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+npm run db:up               # Postgres + Valkey via docker-compose
+npm run dev
+\`\`\`
+
+\`npm run dev\` runs the runtime under \`tsx\` for fast iteration.
+
+Other datastore commands:
+
+\`\`\`sh
+npm run db:down    # stop containers (data preserved)
+npm run db:reset   # nuke volumes and restart
+npm run db:logs    # tail logs
+\`\`\`
+
+## Customizing the agent
+
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+
+| Field | What to change |
+|---|---|
+| \`agent.systemPrompt\` | The agent's persona / instructions. |
+| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
+| \`mcpServers\` | Add an MCP server (stdio or http transport). |
+| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
+| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+
+Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+
+## Regenerating render.yaml
+
+After changing \`render-harness.yaml\`, regenerate \`render.yaml\` so the Render Blueprint reflects your config:
+
+\`\`\`sh
+npm run build:bp     # writes render.yaml from render-harness.yaml
+npm run build:check  # CI-friendly: exit non-zero if render.yaml is stale
+\`\`\`
+
+## Deploying
+
+End users click the Deploy-to-Render badge above. Render reads the committed \`render.yaml\`, prompts for env vars, and provisions services.
+
+## Adding capabilities
+
+Pull first-party packs in as regular npm deps and reference them in \`render-harness.yaml\`:
+
+\`\`\`sh
+npm install @render-harness/cap-search-exa
+\`\`\`
+
+\`\`\`yaml
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+\`\`\`
+
+Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render.yaml\`.
+",
+  "agent/index.ts": "/**
+ * The agent definition for this entry.
+ *
+ * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
+ * this file just calls \`defineFromConfig()\` and re-exports the result.
+ *
+ * For TS-driven entries (\`agent.kind: custom\`), replace this body with
+ * a \`defineAgent({ ... })\` call and update the YAML to point at this
+ * file:
+ *
+ *   agent:
+ *     kind: custom
+ *     entrypoint: ./agent/index.ts
+ */
+
+import { defineFromConfig } from "@render-harness/registry";
+
+const { agent } = await defineFromConfig({
+  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+});
+
+export default agent;
+export { agent };
+",
+  "docker-compose.yml": "name: my-agent
+
+# Local datastore stack for my-agent. Versions match Render Managed Postgres
+# and Render Key Value. Bound to 127.0.0.1 only.
+#
+#   pnpm db:up      bring the stack up (waits for healthy)
+#   pnpm db:down    stop the stack (data preserved in the named volume)
+#   pnpm db:reset   nuke volumes and restart
+#   pnpm db:logs    tail logs
+#
+# Port overrides if 55432 / 56379 are taken on your host:
+#   PG_PORT=15432 KV_PORT=16379 pnpm db:up
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness
+    ports:
+      - "127.0.0.1:\${PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: my-agent-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:\${KV_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  pgdata:
+",
+  "package.json": "{
+  "name": "my-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A test agent.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist",
+    "render-harness.yaml",
+    "render.yaml"
+  ],
+  "scripts": {
+    "build": "render-harness-build && tsup",
+    "build:bp": "render-harness-build",
+    "build:check": "render-harness-build --check",
+    "build:tsup": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@render-harness/core": "^0.1",
+    "@render-harness/registry": "^0.1",
+    "@render-harness/runtime-worker": "^0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+",
+  "render-harness.yaml": "schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: You are a helpful assistant.
+runtimes:
+  - kind: worker
+    plan: starter
+    queue: my-agent-runs
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+",
+  "src/main.ts": "/**
+ * Worker runtime entrypoint. Consumes run jobs off the pg-boss queue
+ * configured in render-harness.yaml. Reads WORKER_QUEUE for overrides;
+ * the literal default below mirrors the queue declared in YAML.
+ */
+
+import { applyMigrations, buildLogger, getPool } from "@render-harness/core";
+import { startWorkerAndWait } from "@render-harness/runtime-worker";
+import { config as loadEnv } from "dotenv";
+import { agent } from "../agent/index.js";
+
+loadEnv({ quiet: true });
+
+async function main(): Promise<void> {
+  const logger = buildLogger({ service: agent.name });
+  const pool = getPool({ applicationName: agent.name });
+  await applyMigrations(pool);
+
+  const queue = process.env.WORKER_QUEUE ?? "my-agent-runs";
+
+  await startWorkerAndWait({
+    agent,
+    queue,
+    logger,
+    skipMigrations: true,
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});
+",
+  "tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "agent/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
+",
+  "tsup.config.ts": "import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: { main: "src/main.ts" },
+  format: ["esm"],
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
+});
+",
+}
+`;

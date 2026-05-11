@@ -1,0 +1,20 @@
+schemaVersion: 1
+name: chat-agent
+description: A minimal single-turn HTTP chat agent.
+harnessVersion: "^0.1"
+license: MIT
+
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: |
+    You are a helpful assistant deployed on Render via the agent harness.
+    Each request is a single-turn conversation. Be concise.
+
+runtimes:
+  - kind: web
+    plan: starter
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6

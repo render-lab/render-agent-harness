@@ -22,6 +22,12 @@
     "memory",
     "postgres"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Postgres long-term memory",
+      "envHint": "DATABASE_URL"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

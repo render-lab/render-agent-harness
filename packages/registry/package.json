@@ -22,6 +22,10 @@
     "./emitter": {
       "types": "./dist/emitter.d.ts",
       "import": "./dist/emitter.js"
+    },
+    "./gallery": {
+      "types": "./dist/gallery.d.ts",
+      "import": "./dist/gallery.js"
     }
   },
   "bin": {

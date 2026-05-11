@@ -3,12 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     index: "src/index.ts",
-    schema: "src/schema.ts",
-    capability: "src/capability.ts",
-    emitter: "src/emitter.ts",
-    gallery: "src/gallery.ts",
-    "builtin-chat": "src/builtin-chat.ts",
-    "bin/build": "src/bin/build.ts",
+    bin: "src/bin.ts",
   },
   format: ["esm"],
   dts: { compilerOptions: { ignoreDeprecations: "6.0" } },

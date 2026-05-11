@@ -32,6 +32,20 @@ export {
   defineFromConfig,
 } from "./load-config.js";
 export { type LoadedPack, type LoadPacksOpts, loadPacks, makePackContext } from "./load-pack.js";
+export {
+  type GalleryAgentEntryInput,
+  GalleryAgentEntrySchema,
+  type GalleryIndex,
+  GalleryIndexSchema,
+  type GalleryRuntimeKind,
+  type ResolvedAgentEntry,
+  type ResolvedCapabilityEntry,
+  type ResolvedGallery,
+  ResolvedGallerySchema,
+  loadGalleryFromBundle,
+  loadGalleryFromSource,
+  serializeGallery,
+} from "./gallery.js";
 export { type EnvLookup, interpolate, interpolateTree } from "./interpolate.js";
 export {
   type AgentBlockInput,

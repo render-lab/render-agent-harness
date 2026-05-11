@@ -23,6 +23,12 @@
     "scrape",
     "mcp"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Firecrawl page scrape",
+      "envHint": "FIRECRAWL_API_KEY"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

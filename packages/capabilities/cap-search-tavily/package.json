@@ -23,6 +23,12 @@
     "search",
     "mcp"
   ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Tavily web search",
+      "envHint": "TAVILY_API_KEY"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

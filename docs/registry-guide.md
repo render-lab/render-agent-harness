@@ -29,23 +29,39 @@ If the entry needs Postgres or Key Value, the Blueprint already declares them �
 
 You'll need: Node 22+, pnpm 10+, Docker (for local Postgres + Valkey via [`compose.yaml`](../compose.yaml)), a GitHub repo to publish to.
 
-### 1. Scaffold from the template
+### 1. Scaffold a new project
 
-The [`templates/render-harness-entry/`](../templates/render-harness-entry/) directory is the canonical starter. Copy it into a new repo:
+Run the wizard:
 
 ```sh
-# Eventually this'll be a GitHub "Use this template" repo. For now:
-cp -r path/to/render-harness/templates/render-harness-entry my-agent
-cd my-agent
-git init
+npx create-render-agent my-agent
+# or, equivalently:
+npm init render-agent my-agent
 ```
 
-The template includes:
+The wizard asks for:
 
-- `render-harness.yaml` — your entry's declarative config.
+- Agent name, description, and system prompt.
+- Model (defaults to `claude-sonnet-4-6`).
+- Trigger surfaces — pick one or more of **web**, **cron**, **worker**. Single selection emits `src/main.ts`; multi-runtime emits `src/<kind>.ts` per surface, with dual `dev:<kind>` / `start:<kind>` scripts wired up.
+- Capability packs (optional) — first-party packs are listed; add more by hand-editing the YAML afterwards.
+- License, `git init`, and whether to run `pnpm install` for you.
+
+The generated project includes:
+
+- `render-harness.yaml` — your entry's declarative config (validated against `HarnessConfigSchema` before it lands on disk).
 - `agent/index.ts` — calls `defineFromConfig()` to assemble the agent at boot.
-- `src/main.ts` — runtime entrypoint (defaults to `runtime-web`; swap based on your `runtimes[]` block).
+- Per-runtime entrypoints under `src/`.
 - `package.json` with `build` running `render-harness-build && tsup`.
+
+**Manual alternative.** If you'd rather start from the in-repo template, copy [`templates/render-harness-entry/`](../templates/render-harness-entry/) directly:
+
+```sh
+cp -r path/to/render-harness/templates/render-harness-entry my-agent
+cd my-agent && git init
+```
+
+The template emits a single web-runtime shape — for multi-runtime topologies, the CLI is the path of least resistance.
 
 ### 2. Edit `render-harness.yaml`
 
