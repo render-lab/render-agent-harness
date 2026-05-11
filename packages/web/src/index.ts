@@ -15,6 +15,7 @@ import { PgBoss } from "pg-boss";
 import { defaultApiKeyAuth } from "./auth.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
+import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.js";
 import { registerRunRoutes } from "./routes/runs.js";
 import { registerUsageRoutes } from "./routes/usage.js";
@@ -45,7 +46,20 @@ export type { UiMountConfig } from "./ui-mount.js";
  *                                   it between turns and tool calls and
  *                                   aborts cooperatively.
  *   POST /runs/:id/input         — inject a user message into a paused run
- *                                   and re-enqueue it. HITL endpoint.
+ *                                   and re-enqueue it. HITL-only — `ask_user`
+ *                                   / approval. Chat-turn-end is handled by
+ *                                   the conversations API.
+ *   POST /conversations          — create an ongoing thread the model loads
+ *                                   history from across runs.
+ *   GET  /conversations          — list conversations (keyset paginated).
+ *   GET  /conversations/:id      — single conversation + full message stream.
+ *   POST /conversations/:id/messages
+ *                                 — append a user turn; enqueues a new run on
+ *                                   this conversation. 409 if a prior turn is
+ *                                   still in flight.
+ *   GET  /conversations/:id/stream
+ *                                 — SSE that fans in across every run in the
+ *                                   conversation; stays open between turns.
  *   GET  /agents                 — summary of agents loaded into this service.
  *   GET  /usage                  — daily/per-agent rollups of runs, cost,
  *                                   and tokens.
@@ -143,6 +157,16 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
   );
 
   registerRunRoutes(app, {
+    pool,
+    boss,
+    auth,
+    logger,
+    agents,
+    queue,
+    connectionString,
+    pathPrefix,
+  });
+  registerConversationRoutes(app, {
     pool,
     boss,
     auth,

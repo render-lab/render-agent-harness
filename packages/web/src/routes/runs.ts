@@ -275,11 +275,11 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
       });
     }
 
-    // For runs sitting `paused` (chat-shape between turns, HITL waiting,
-    // etc.) there's no worker process currently running to observe a KV
-    // flag. Just flip the DB status directly. We *also* set the KV flag
-    // for symmetry — a producer racing to re-enqueue it would still see
-    // the cancel.
+    // A `paused` run is parked waiting on HITL input — `ask_user` or an
+    // approval gate. There's no worker process currently running to
+    // observe a KV flag, so just flip the DB status directly. We *also*
+    // set the KV flag for symmetry — a producer racing to re-enqueue
+    // would still see the cancel.
     if (run.status === "paused") {
       await setRunStatus(pool, id, "cancelled");
       const kv = getKvSafe(logger);
@@ -300,6 +300,13 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
     return c.json({ runId: id, cancelRequested: true, status: run.status });
   });
 
+  /**
+   * HITL input. Injects a user message into a `paused` run and re-enqueues
+   * it. The only thing that puts a run into `paused` is human-in-the-loop:
+   * `ask_user` (awaiting_input) or `permissions.requireApproval`
+   * (awaiting_approval). Chat-turn-end is *not* a pause reason — multi-turn
+   * chat is driven by POST /conversations/:id/messages.
+   */
   app.post(r("/runs/:id/input"), async (c) => {
     const userId = await auth(c.req.raw);
     if (!userId) return c.json({ error: "unauthorized" }, 401);
@@ -318,14 +325,19 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
       return c.json({ error: "invalid_input" }, 400);
     }
     const content: ContentBlock[] = [{ type: "text", text: body.input }];
-    await appendMessage(pool, { runId: id, role: "user", content });
+    await appendMessage(pool, {
+      runId: id,
+      ...(run.conversationId ? { conversationId: run.conversationId } : {}),
+      role: "user",
+      content,
+    });
     await setRunStatus(pool, id, "pending");
     await boss.send(queue, {
       runId: id,
       agentName: run.agentName,
       ...(run.userId ? { userId: run.userId } : {}),
     });
-    logger.info({ runId: id, userId }, "input injected; run re-enqueued");
+    logger.info({ runId: id, userId }, "HITL input injected; run re-enqueued");
     return c.json({ runId: id, status: "pending" });
   });
 }

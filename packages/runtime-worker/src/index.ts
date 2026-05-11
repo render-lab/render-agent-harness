@@ -271,6 +271,15 @@ export async function enqueueRun(opts: {
   agentName: string;
   agentVersion: string;
   userId?: UserId;
+  /**
+   * Tag the new run as part of this conversation. The loop will load
+   * cross-run history and the run will count toward the conversation's
+   * rollup. Callers must enforce the sequential-only invariant themselves
+   * (the unique partial index on agent_runs will raise an integrity error
+   * otherwise — POST /conversations/:id/messages catches this and returns
+   * 409).
+   */
+  conversationId?: string;
   initialContent?: ContentBlock[];
   metadata?: Record<string, unknown>;
   /** Optional fixed run id; otherwise a UUID is generated. */
@@ -282,10 +291,15 @@ export async function enqueueRun(opts: {
     agentName: opts.agentName,
     agentVersion: opts.agentVersion,
     ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+    ...(opts.conversationId !== undefined ? { conversationId: opts.conversationId } : {}),
     metadata: { runtime: "worker", ...(opts.metadata ?? {}) },
   });
   if (opts.initialContent && opts.initialContent.length > 0) {
-    await ensureInitialMessage(opts.pool, { runId, content: opts.initialContent });
+    await ensureInitialMessage(opts.pool, {
+      runId,
+      content: opts.initialContent,
+      ...(opts.conversationId !== undefined ? { conversationId: opts.conversationId } : {}),
+    });
   }
   const job: RunJob = {
     runId,
