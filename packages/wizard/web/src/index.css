@@ -1,0 +1,205 @@
+@import "tailwindcss";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+
+/* --------------------------------------------------------------------
+ * Brutalist black-and-white CLI theme.
+ *
+ * Mirrors @render-harness/ui's index.css so the wizard SPA and the
+ * operator UI share the same visual language. Light/dark swaps via
+ * prefers-color-scheme; Tailwind utilities (`bg-canvas`, `text-ink`,
+ * `border-line`, `text-accent`) resolve through CSS custom properties.
+ * -------------------------------------------------------------------- */
+
+@theme {
+  --font-sans: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+
+  --color-canvas: #ffffff;
+  --color-ink: #000000;
+  --color-muted: #555555;
+  --color-line: #000000;
+  --color-accent: #a855f7;
+  --color-err: #b40000;
+  --color-code-bg: #e4e4e7;
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-canvas: #000000;
+      --color-ink: #ffffff;
+      --color-muted: #999999;
+      --color-line: #ffffff;
+      --color-accent: #c084fc;
+      --color-err: #ff5555;
+      --color-code-bg: #27272a;
+    }
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "calt", "ss01";
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Square corners, everywhere. */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-canvas);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  input,
+  textarea,
+  select {
+    border: 1px solid var(--color-line);
+    background: var(--color-canvas);
+    padding: 0.35rem 0.55rem;
+    caret-color: var(--color-accent);
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 0;
+    border-color: var(--color-accent);
+  }
+
+  input:focus-visible,
+  textarea:focus-visible {
+    animation: rh-caret-blink 1.06s steps(2, jump-none) infinite;
+  }
+
+  button:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  details > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details > summary::before {
+    content: ">";
+    display: inline-block;
+    margin-right: 0.45rem;
+    color: var(--color-accent);
+    transition: transform 80ms linear;
+  }
+
+  details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  @keyframes rh-caret-blink {
+    0%,
+    50% {
+      caret-color: var(--color-accent);
+    }
+    51%,
+    100% {
+      caret-color: transparent;
+    }
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-canvas border border-line;
+  }
+
+  .label {
+    @apply uppercase tracking-wider text-muted;
+    font-size: 0.72rem;
+  }
+
+  .hr-section {
+    @apply flex items-center gap-2 uppercase text-muted;
+    letter-spacing: 0.1em;
+    font-size: 0.72rem;
+  }
+  .hr-section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center bg-canvas text-ink border border-line uppercase;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    transition:
+      background 80ms linear,
+      color 80ms linear,
+      border-color 80ms linear;
+  }
+  .btn:hover:not(:disabled) {
+    @apply text-accent border-accent;
+  }
+  .btn-primary {
+    @apply bg-accent text-canvas border-accent;
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-canvas text-accent;
+  }
+  .btn-danger {
+    @apply text-err border-err;
+  }
+  .btn-danger:hover:not(:disabled) {
+    @apply bg-err text-canvas;
+  }
+
+  .badge {
+    @apply inline-flex items-center border border-line uppercase;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+  }
+}

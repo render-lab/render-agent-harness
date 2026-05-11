@@ -1,0 +1,47 @@
+{
+  "name": "@render-harness/wizard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser wizard that scaffolds a Render agent project, creates a managed GitHub repo, and returns a Deploy-to-Render link. Phase 3 of the onboarding direction.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/main.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm run build:server && pnpm run build:web",
+    "build:server": "tsup",
+    "build:web": "vite build --config web/vite.config.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev:server": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.2",
+    "@octokit/auth-app": "^8.0.1",
+    "@octokit/rest": "^22.0.0",
+    "@render-harness/core": "workspace:*",
+    "@render-harness/registry": "workspace:*",
+    "create-render-agent": "workspace:*",
+    "hono": "^4.12.18"
+  },
+  "devDependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.7",
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/node": "^25.6.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.1.13",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5"
+  }
+}

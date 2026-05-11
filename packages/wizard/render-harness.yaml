@@ -1,0 +1,50 @@
+schemaVersion: 1
+name: render-lab-wizard
+description: Browser wizard that scaffolds Render agent projects and creates managed GitHub repos.
+harnessVersion: "^0.1"
+license: MIT
+
+# Custom agent: the wizard isn't an LLM-driven agent itself — it's a
+# Hono service that wraps the scaffolder. We declare it as `kind: custom`
+# so the harness build bin emits the service block in render.yaml; the
+# agent entrypoint just exports a no-op placeholder.
+agent:
+  kind: custom
+  entrypoint: ./src/main.ts
+
+runtimes:
+  - kind: web
+    plan: starter
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+
+# Env vars the wizard service needs at runtime. The Render Blueprint
+# emitter reads this and surfaces them as secret inputs at deploy time.
+envSchema:
+  - name: GITHUB_APP_ID
+    required: true
+    secret: false
+    description: GitHub App ID for the Render Lab Wizard App.
+  - name: GITHUB_APP_PRIVATE_KEY
+    required: true
+    secret: true
+    description: PEM-encoded private key for the GitHub App.
+  - name: GITHUB_APP_INSTALLATION_ID
+    required: true
+    secret: false
+    description: Installation ID of the App in the render-lab-agents org.
+  - name: MANAGED_ORG
+    required: false
+    secret: false
+    default: render-lab-agents
+    description: GitHub org where managed agent repos are created.
+  - name: TURNSTILE_SECRET_KEY
+    required: false
+    secret: true
+    description: Cloudflare Turnstile server secret for /api/scaffold verification.
+  - name: WIZARD_PUBLIC_URL
+    required: false
+    secret: false
+    description: Public URL of the wizard, used in deploy-link composition.
