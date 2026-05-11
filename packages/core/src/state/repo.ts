@@ -232,7 +232,7 @@ export async function setRunStatus(
 
 /**
  * Shallow-merge keys into `runs.metadata`. Used by the agent loop to stash
- * per-run flags (e.g. `pauseReason: "chat_turn_end"`) without overwriting
+ * per-run flags (e.g. `pauseReason: "awaiting_input"`) without overwriting
  * metadata the runtime set when the run was created.
  */
 export async function mergeRunMetadata(

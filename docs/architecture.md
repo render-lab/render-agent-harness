@@ -174,8 +174,21 @@ See [`packages/core/src/run.ts`](../packages/core/src/run.ts) for the full type 
 |---|---|---|
 | What happened (steps ran, retries, position) | Workflow run metadata | Owned by Render Workflows |
 | What the work produced (messages, tool calls, results) | Postgres | Survives steps, deploys, and runtime swaps |
+| Multi-turn grouping (chat sessions) | Postgres `agent_conversations` + nullable `conversation_id` on runs/messages | First-class thread the loop reads history from |
 | Ephemeral signals (cancel flags, locks) | Key Value | Single hop, low-latency reads |
 | Streaming deltas | Postgres `agent_messages` row + LISTEN/NOTIFY pointer | NOTIFY 8 KB cap doesn't bite |
+
+### Conversations
+
+Multi-turn chat is modelled as one `agent_conversations` row that owns many `agent_runs` rows. Each user turn enqueues a *new* run on the same `conversation_id`; the run loads message history with `loadConversationMessages(conversation_id)` so the model sees the full multi-turn context. Runs always end in a terminal state — `paused` means HITL only (`ask_user`, approval gates), never "waiting for the next user message."
+
+- `conversation_id` is **nullable** on `agent_runs` and `agent_messages`. Single-turn web hits and cron one-shots don't synthesize singleton conversations — the column just stays null.
+- `conversation_id` on `agent_messages` is denormalised (redundant with the run's value) so the loop's per-turn history load is a single indexed scan with no join.
+- The **sequential-only invariant** is enforced by a unique partial index on `agent_runs(conversation_id) WHERE status IN ('pending','running','paused')`. `POST /conversations/:id/messages` returns 409 if a prior turn is in flight.
+- The conversation's `total_cost_usd` and `last_active_at` are kept fresh inside `setRunStatus`: any flip on a conversation-bound run re-runs the rollup (SUM over the conversation's runs). Single source of truth — no per-caller bookkeeping.
+- The NOTIFY pointer carries an optional `conversationId` so `GET /conversations/:id/stream` can fan in across every run in the conversation without joining `agent_runs` per event. The stream stays open across run boundaries — terminal status on one run does not close it.
+
+See [`conversations-plan.md`](conversations-plan.md) for the design discussion and follow-up backlog (auto-generated titles, per-conversation rollups in `GET /usage`, branching).
 
 ## Locked decisions (recap)
 

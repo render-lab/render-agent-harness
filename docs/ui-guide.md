@@ -4,15 +4,15 @@
 
 The split between the two packages is deliberate:
 
-- `@render-harness/web` owns **all** HTTP endpoints — the existing JSON+SSE surface (`POST /runs`, `GET /runs/:id`, `GET /runs/:id/stream`, `POST /runs/:id/cancel`, `POST /runs/:id/input`) plus the read APIs the UI needs (`GET /runs`, `GET /runs/active`, `GET /runs/:id/tool-calls`, `GET /agents`, `GET /usage`).
+- `@render-harness/web` owns **all** HTTP endpoints — the JSON+SSE surface for runs (`POST /runs`, `GET /runs/:id`, `GET /runs/:id/stream`, `POST /runs/:id/cancel`, `POST /runs/:id/input`) and the conversations surface that drives chat (`POST /conversations`, `GET /conversations`, `GET /conversations/:id`, `POST /conversations/:id/messages`, `GET /conversations/:id/stream`), plus the read APIs the UI consumes (`GET /agents`, `GET /usage`).
 - `@render-harness/ui` owns **only** the browser-facing surface — the React SPA bundle, the `/ui/*` routes (shell, assets, login form, logout), and a cookie-session helper that web plugs into its auth resolver.
 
 That keeps the API surface in one place. Any non-browser client can hit the read APIs over HTTP without involving the UI package at all.
 
 ## What's in the UI
 
-- **Chat** *(default tab)*: a Claude-Code-style chat surface that talks directly to your agent. Each conversation lives on one long-lived run; turns stream in via SSE and the same run stays open across page refreshes and across the operator's session. Built on [`@assistant-ui/react`](https://www.assistant-ui.com/), so the composer, autoscrolling viewport, and stop button come for free. Requires the agent to declare `shape: "chat"` in `defineAgent()` — without it the runner ends each turn in `completed` and the next user message starts a fresh run instead of continuing.
-- **Runs**: list with status/agent filters and keyset pagination. Click a row for a detail view that merges the message stream and the tool-call timeline, updates live via SSE, and exposes Cancel and HITL Send-input controls. Runs that came from the Chat tab show a `chat` badge in the status column and an **Open in chat** button on the detail view.
+- **Chat** *(default tab)*: a Claude-Code-style chat surface that talks directly to your agent. Each session is one `agent_conversations` row; every user turn enqueues a fresh run on the same conversation, and the SSE stream stays open across run boundaries. Built on [`@assistant-ui/react`](https://www.assistant-ui.com/), so the composer, autoscrolling viewport, and stop button come for free. No flag on the agent is needed — multi-turn behaviour comes from the route, not from the loop.
+- **Runs**: list with status/agent filters and keyset pagination. Click a row for a detail view that merges the message stream and the tool-call timeline, updates live via SSE, and exposes Cancel and HITL Send-input controls. Runs that belong to a conversation show a `chat` badge in the status column and an **Open in chat** button that jumps to the parent conversation on the detail view.
 - **Agents**: read-only inspector for the agents loaded into this web service — model, system prompt preview, MCP servers, permissions, budget, sampling.
 - **Usage**: daily and per-agent rollups of run count, cost, and tokens across a 7/30/90-day window.
 
@@ -20,11 +20,11 @@ What it deliberately doesn't do (yet):
 
 - Doesn't redefine agents. They stay code-first via `defineAgent()`.
 - Doesn't edit env vars or secrets. That's planned for Phase 2/3 of the UI roadmap.
-- Doesn't model conversations as a first-class object. One chat session = one run; if you want list-of-past-sessions UI, branching, or per-conversation cost rollups, that calls for a real `conversations` table — out of scope for this iteration.
+- Doesn't auto-generate conversation titles, surface a sidebar of past conversations, or support branching. Tracked as follow-ups now that conversations are first-class — see [`conversations-plan.md`](conversations-plan.md) for the punch list.
 
-## Chat shape: how the multi-turn loop works
+## Chat: how the multi-turn loop works
 
-The Chat tab leans entirely on existing primitives in `@render-harness/core` plus one small flag:
+The Chat tab is driven by the conversations API. No flag on the agent — anything you pass to `defineAgent()` can hold a conversation.
 
 ```ts
 defineAgent({
@@ -32,13 +32,14 @@ defineAgent({
   version: "0.2.0",
   model: { provider: "anthropic", model: "claude-sonnet-4-6" },
   systemPrompt: "...",
-  shape: "chat",
 });
 ```
 
-When `shape: "chat"` is set, the agent loop in [packages/core/src/loop.ts](../packages/core/src/loop.ts) ends each turn in `paused` (with `metadata.pauseReason = "chat_turn_end"`) instead of `completed`. The Chat tab appends the next user message via the existing `POST /runs/:id/input` rail, which sets the run back to `pending` and re-enqueues it. The next iteration loads the full message history from Postgres and feeds it to the model. No new endpoints, no schema migration, no separate `conversations` table — just a small behavior flip on the loop's terminal branch.
+One session = one `agent_conversations` row + many `agent_runs` rows. The first user message creates the conversation up front (so the URL gets a stable `conversationId`) via `POST /conversations`, then enqueues the first turn with `POST /conversations/:id/messages`. Subsequent turns just call the messages endpoint — each enqueues a new run tagged with the same `conversationId`. The agent loop in [packages/core/src/loop.ts](../packages/core/src/loop.ts) sees a conversation-bound run and loads message history from `loadConversationMessages(conversationId)` so the model gets the full multi-turn context across every run.
 
-Cancel works as before: the **stop** button issues `POST /runs/:id/cancel`, the worker observes the KV flag between turns and tool calls, and the in-flight turn ends in `cancelled`. The chat session is gone at that point — clicking **new chat** starts a fresh run.
+Runs always end in a terminal state (`completed`, `failed`, `cancelled`). `paused` is now strictly HITL — `ask_user` or `permissions.requireApproval`. There is no chat-turn-end pause anymore. The Chat tab subscribes to `GET /conversations/:id/stream`, which fans in across every run in the conversation and stays open between turns — terminal status on one run does not close the stream, the next user message pushes more events down the same channel.
+
+The sequential-only invariant is enforced by a unique partial index on `agent_runs(conversation_id) WHERE status IN ('pending','running','paused')`. `POST /conversations/:id/messages` returns 409 `conversation_busy` if a prior turn is still in flight; the UI's stop button issues `POST /runs/:activeRunId/cancel` (the active run id is tracked from the conversation's SSE `run_created` events), which lets the worker observe the KV cancel flag and abort the in-flight turn before the next message can land.
 
 ## Enabling the UI
 

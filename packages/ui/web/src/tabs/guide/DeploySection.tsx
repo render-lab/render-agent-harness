@@ -39,7 +39,7 @@ const PROSE_DEPLOY = `
 3. Render reads the file, prompts for the \`sync: false\` env vars, and provisions all four services together.
 4. Once the build finishes, your operator UI is at the assigned \`*.onrender.com\` URL plus \`/ui\`.
 
-For zero-downtime rolling deploys, keep the agent's \`shape: "chat"\` runs idempotent (each turn is independent state-wise) and let Render's rolling deploy handle the rest. Worker jobs in flight finish before the old container exits — the worker has a SIGTERM handler that waits up to 30s for in-flight runs.
+For zero-downtime rolling deploys, keep each conversation turn idempotent (state lives in \`agent_conversations\` + \`agent_runs\`, not in process memory) and let Render's rolling deploy handle the rest. Worker jobs in flight finish before the old container exits — the worker has a SIGTERM handler that waits up to 30s for in-flight runs.
 `;
 
 const PROSE_OTHER_RUNTIMES = `

@@ -162,7 +162,7 @@ export function findHandler(
 }
 
 // --------------------------------------------------------------------
-// Pause shapes (paused: awaiting_approval, awaiting_input, chat_turn_end)
+// Pause shapes (paused: awaiting_approval, awaiting_input — HITL only)
 // --------------------------------------------------------------------
 
 export async function pauseForApproval(args: {

@@ -11,7 +11,7 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 | `runtime-worker` | Queue / event | Streaming output, low latency, always-on, webhook receivers, multi-tenant. Production shape. |
 | `runtime-workflows` | Render Workflows task | Long-running, durable, human-in-the-loop, survives deploys. Each checkpoint is a subtask in the Workflows UI. |
 
-For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, and a HITL `/runs/:id/input` endpoint. Operators can opt into `@render-harness/ui` (`serveWeb({ ui: true })`) for a browser control plane: list/inspect runs, watch live, cancel, inject HITL input, see loaded agents, and view usage rollups. See [`docs/ui-guide.md`](docs/ui-guide.md).
+For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, a HITL `/runs/:id/input` endpoint, and a first-class conversations API (`POST /conversations`, `POST /conversations/:id/messages`, `GET /conversations/:id/stream`) for multi-turn chat that groups many runs under one conversation. Operators can opt into `@render-harness/ui` (`serveWeb({ ui: true })`) for a browser control plane: chat with the agent across multi-turn sessions, list/inspect runs, watch live, cancel, inject HITL input, see loaded agents, and view usage rollups. See [`docs/ui-guide.md`](docs/ui-guide.md).
 
 ## Status
 
