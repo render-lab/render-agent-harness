@@ -16,7 +16,7 @@ This plan is the wizard frontend, the wizard backend, the GitHub App integration
 
 ## Dependencies
 
-- **`docs/publish-plan.md` ideally lands first.** The wizard's emitted manifests reference `@render-lab/*` deps; if the harness is still `@render-harness/*` at first wizard ship, generated scaffolds either need local-link (which assumes a checkout — defeats the no-code purpose) or won't `pnpm install`. Not strictly blocking — the wizard itself works during publish gaps — but the *generated* agents will only run after publish.
+- **`docs/publish-plan.md` ideally lands first.** The wizard's emitted manifests reference `@render-harness/*` deps; until those packages exist on npm, generated scaffolds need local-link (which assumes a harness checkout — defeats the no-code purpose) or `pnpm install` fails. Not strictly blocking — the wizard itself works during publish gaps — but the *generated* agents only run after publish.
 - **`create-render-agent` exports `buildFileMap` as a pure function.** Today it exports `generate` (disk-writing) and `runWizard` (TTY-prompt-driven). The wizard backend needs the pure file-map function to commit via GitHub API instead of fs. Trivial follow-up: export the existing `buildFileMap` from `generate.ts`. ~3 lines.
 - **GitHub App registration.** Out-of-repo: someone with Render-org GitHub admin creates the App and gives the wizard backend its client ID + private key + installation ID via env vars. Blocking for execution but not for planning.
 - **Managed-repo GitHub org.** New GitHub org (proposed name: `render-lab-agents`) where managed agent repos live. Out-of-repo creation step.
@@ -298,8 +298,7 @@ These don't block the plan; flagging them so execution doesn't accidentally comm
 ### Unit / integration
 
 ```sh
-pnpm --filter @render-lab/wizard test            # server unit tests
-pnpm --filter @render-lab/wizard-web test        # SPA unit tests (if any)
+pnpm --filter @render-harness/wizard test        # server unit tests
 ```
 
 - `routes/scaffold.test.ts` — POST with valid + invalid answers, mock Octokit, asserts the file-map is computed from the right inputs and that GitHub create/commit calls fire in the right order.

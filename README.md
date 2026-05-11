@@ -13,7 +13,32 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 
 For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, a HITL `/runs/:id/input` endpoint, and a first-class conversations API (`POST /conversations`, `POST /conversations/:id/messages`, `GET /conversations/:id/stream`) for multi-turn chat that groups many runs under one conversation. Operators can opt into `@render-harness/ui` (`serveWeb({ ui: true })`) for a browser control plane: chat with the agent across multi-turn sessions, list/inspect runs, watch live, cancel, inject HITL input, see loaded agents, and view usage rollups. See [`docs/ui-guide.md`](docs/ui-guide.md).
 
+## Quickstart: scaffold a new agent
+
+The fastest path to a working agent is the wizard CLI:
+
+```sh
+npx create-render-agent my-agent
+# or: npm init render-agent my-agent / pnpm dlx create-render-agent my-agent
+```
+
+It asks for the trigger surfaces (web / cron / worker, multi-select), system prompt, model, capability packs, and optional operator UI. The output is a ready-to-run project with `render-harness.yaml`, a `docker-compose.yml` for Postgres + Valkey, a Deploy-to-Render button in the README, and all the runtime entrypoints wired up.
+
+```sh
+cd my-agent
+pnpm install
+cp .env.example .env       # fill in ANTHROPIC_API_KEY
+pnpm db:up                 # local Postgres + Valkey via docker-compose
+pnpm dev
+```
+
+There's also a **browser wizard** (`@render-harness/wizard`, Phase 3) that runs the same flow no-code: pick template → fill prompt → click Deploy. It creates a managed GitHub repo and returns a one-click Deploy-to-Render link. See [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
+
+**Note:** until the harness publishes to npm (see [`docs/publish-plan.md`](docs/publish-plan.md)), use `npx create-render-agent --harness-root /path/to/render-harness my-agent` to wire `link:` deps to a local checkout. Once published, the flag becomes a contributor-only convenience.
+
 ## Status
+
+Core platform:
 
 - Phase 0 — verifications: **done** (see [`docs/architecture.md`](docs/architecture.md))
 - Phase 1 — core skeleton: **done**
@@ -22,6 +47,14 @@ For multi-tenant production deployments, the `@render-harness/web` package front
 - Phase 3 — Worker runtime + multi-tenant web service + support-agent: **done**
 - Phase 4 — Workflows runtime + deploy-agent: **done**
 - Phase 5 — Hardened mode + docs: planned
+
+Onboarding & distribution (see [`docs/onboarding-plan.md`](docs/onboarding-plan.md)):
+
+- Phase 1 — CLI scaffolder (`npx create-render-agent`): **done** ([`docs/cli-scaffolder-plan.md`](docs/cli-scaffolder-plan.md))
+- Phase 2 — In-monorepo gallery + capability discovery: **done** ([`docs/gallery-plan.md`](docs/gallery-plan.md))
+- Phase 3 v1 — Browser wizard + managed-repo (anonymous): **done** ([`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md))
+- Phase 3 v2 — "My agents" dashboard, auth, graduation flow: planned
+- Publish to npm — changesets + GHA release workflow: planned ([`docs/publish-plan.md`](docs/publish-plan.md))
 
 ## Built-in tools
 
@@ -48,20 +81,29 @@ For path-scoped filesystem access, install [`@render-harness/cap-filesystem`](pa
 ```
 packages/
   core/                  # Shared loop, adapters, MCP, state, skills, prompt, tools
+  contracts/             # Wire types shared between server (web) and SPA (ui/wizard)
   runtime-cron/          # Cron one-shot runtime
   runtime-web/           # Synchronous HTTP request handler runtime
   runtime-worker/        # pg-boss queue consumer with soft checkpoint
   runtime-workflows/     # Render Workflows: per-step task with HITL approval
   web/                   # Multi-tenant public web service in front of runtime-worker
   ui/                    # Optional operator control-plane UI (mounts on `web`)
+  registry/              # Config registry: schema, defineFromConfig(), emitter,
+                         # gallery loader, render-harness-build bin
+  capabilities/          # First-party capability packs (search / scrape / memory /
+                         # browser / filesystem)
+  create-render-agent/   # CLI scaffolder — `npx create-render-agent`
+  wizard/                # Browser scaffolder (Hono + React SPA) — Phase 3 v1
 
-  registry/              # Config registry: schema, defineFromConfig(), emitter, render-harness-build bin
-  capabilities/          # First-party capability packs (search/scrape/memory/browser/filesystem)
+gallery/
+  index.yaml             # Curated agent templates surfaced by the CLI + wizard
+  agents/<slug>/         # Per-template render-harness.yaml + README
 
 examples/
   citations-monitor/     # Cron: AEO citations tracker
   web-chat/              # Web: chat agent with optional Render MCP
   support-agent/         # Worker: Slack-driven agent with Slack MCP
+  operator-demo/         # Web + worker + operator UI mounted at /ui
   deploy-agent/          # Workflows: deploys repos to Render via Render MCP
 
 blueprints/
@@ -71,7 +113,7 @@ blueprints/
   render.hardened.yaml   # Private + egress allowlist + audit (Phase 5)
 
 templates/
-  render-harness-entry/  # Starter template for new registry entries
+  render-harness-entry/  # Starter template (manual `cp -r` alternative to the CLI)
 
 registry-index/
   index.json             # Decentralized registry index (entries by repo + SHA)
@@ -79,39 +121,64 @@ registry-index/
   site/                  # Static discovery site
 
 docs/
-  architecture.md        # The architecture and Phase 0 verifications
+  architecture.md        # Architecture + Phase 0 verifications
+  onboarding-plan.md     # Direction doc: CLI + gallery + UI scaffolder
+  cli-scaffolder-plan.md # Phase 1 plan (shipped)
+  gallery-plan.md        # Phase 2 plan (shipped)
+  ui-scaffolder-plan.md  # Phase 3 plan (v1 shipped)
+  publish-plan.md        # Changesets + GHA + first npm publish (planned)
+  registry-guide.md      # End-user + author + contributor guide for the registry
+  ui-guide.md            # Operator-UI feature documentation
+  connectors-plan.md     # Inbound connectors (Slack, webhook generic)
+  conversations-plan.md  # Threaded runs / first-class conversations
+  recurring-tasks-plan.md
 ```
 
-## Quickstart: deploy a chat agent in 5 minutes
+## Deploy paths
 
-The `web-chat` example is the smallest possible deployment: one Render web service, one process, agent runs in the HTTP request handler.
+Three first-class ways to ship an agent on Render, in order of friction:
 
-1. Fork this repo.
-2. In the [Render Dashboard](https://dashboard.render.com), create a new Blueprint pointing at your fork. Pick `blueprints/render.demo.yaml`.
-3. Render provisions a managed Postgres and the web service.
-4. Set the secret env var on the web service:
-   - `ANTHROPIC_API_KEY` — required, the model the agent uses.
-   - `RENDER_API_KEY` — optional, enables Render MCP tools (read-only by default).
-5. `curl` the assigned `https://*.onrender.com` URL:
+### 1. Browser wizard (Phase 3 v1)
+
+`packages/wizard` — a Hono service serving a React SPA at `/`. Pick a template, fill the prompt, click Create. Backend creates a managed GitHub repo and returns a Deploy-to-Render URL. Anonymous; no login needed.
+
+Local dev:
+
+```sh
+cd packages/wizard
+pnpm build
+MOCK_SCAFFOLD=1 pnpm start
+# open http://127.0.0.1:8090
+```
+
+See [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
+
+### 2. CLI scaffolder (Phase 1)
+
+`npx create-render-agent my-agent` — same questions, terminal UX. Output is a self-contained project repo with docker-compose, env templates, the right runtime entrypoints, and `render-harness.yaml`. See the [Quickstart](#quickstart-scaffold-a-new-agent) above and [`docs/cli-scaffolder-plan.md`](docs/cli-scaffolder-plan.md).
+
+### 3. Fork + Blueprint (original path)
+
+Fork this repo, point Render at one of the [`blueprints/*.yaml`](blueprints/) files, set the secret env vars, deploy. Best for hacking on the harness itself rather than running an agent built on top of it.
+
+```sh
+# In the Render Dashboard:
+#   1. New Blueprint → point at your fork → pick blueprints/render.demo.yaml
+#   2. Set ANTHROPIC_API_KEY (required), RENDER_API_KEY (optional)
+#   3. Wait ~2 min for provisioning
+```
+
+Then:
 
 ```sh
 curl -sS https://your-app.onrender.com/runs \
   -H 'content-type: application/json' \
   -d '{"input":"List my Render services"}' | jq
-
-# Streaming
-curl -N https://your-app.onrender.com/runs/stream \
-  -H 'content-type: application/json' \
-  -d '{"input":"What's my newest deploy?"}'
 ```
 
 See [`examples/web-chat/README.md`](examples/web-chat/README.md) for the full walkthrough.
 
-### Alt quickstart: scheduled audits with the citations-monitor cron
-
-For an unattended cron variant of demo mode (audits queries against an AI search engine, summarizes results to Postgres), use `blueprints/render.demo-cron.yaml`. See [`examples/citations-monitor/README.md`](examples/citations-monitor/README.md).
-
-### Headline: Workflows-driven deploy agent
+### Workflows-driven deploy agent
 
 `examples/deploy-agent` takes a GitHub repo URL and deploys it to Render via Render MCP. The whole loop is visible in the Render Workflows UI: each agent checkpoint is a chained subtask, and every destructive Render API call (create/update/delete service, postgres, key value, env vars) pauses for human approval.
 
@@ -159,17 +226,17 @@ Each runtime can be packaged as a registry entry: a small repo with a declarativ
 
 Where things live:
 
-- [`packages/registry/`](packages/registry) — schema, `defineFromConfig()` runtime library, Blueprint emitter, `render-harness-build` bin.
-- [`packages/capabilities/`](packages/capabilities) — first-party capability packs: search (Exa, Tavily), scraping (Firecrawl), long-term memory (Postgres), browser automation (Browserbase). Community packs live on npm with the `render-harness-cap` keyword.
-- [`templates/render-harness-entry/`](templates/render-harness-entry) — starter template for a new entry.
+- [`packages/registry/`](packages/registry) — schema, `defineFromConfig()` runtime library, Blueprint emitter, `render-harness-build` bin, gallery loader.
+- [`packages/capabilities/`](packages/capabilities) — first-party capability packs: search (Exa, Tavily), scraping (Firecrawl), long-term memory (Postgres), browser automation (Browserbase), filesystem. Community packs live on npm with the `render-harness-cap` keyword.
+- [`gallery/`](gallery) — curated starter templates surfaced by both the CLI and the browser wizard.
+- [`templates/render-harness-entry/`](templates/render-harness-entry) — manual starter template (the CLI is the recommended path).
 - [`registry-index/`](registry-index) — the decentralized index file, validation CI, and discovery static site.
 
 See [`docs/architecture.md`](docs/architecture.md#config-registry) for the full contract, namespacing rules, and the Blueprint shape table.
 
 ## Local development
 
-Requires Node 22+, pnpm 10+, and Docker (for the local Postgres + Valkey
-stack).
+Requires Node 22+, pnpm 10+, and Docker (for the local Postgres + Valkey stack).
 
 ### One-time setup
 
@@ -182,9 +249,7 @@ pnpm test
 
 ### Bring up the local primitives
 
-The repo ships a `compose.yaml` that runs the same primitives Render gives
-you in production: Postgres 17 (matches the `render.demo.yaml` Blueprint)
-and Valkey 8 (Redis-compatible, matches Render Key Value).
+The repo ships a `compose.yaml` that runs the same primitives Render gives you in production: Postgres 17 (matches the `render.demo.yaml` Blueprint) and Valkey 8 (Redis-compatible, matches Render Key Value).
 
 ```sh
 pnpm db:up        # start postgres + valkey, wait for healthchecks
@@ -195,18 +260,15 @@ pnpm db:reset     # nuke volumes and restart with a fresh DB
 pnpm db:down      # stop everything
 ```
 
-Both services bind to `127.0.0.1` only and use non-standard host ports
-(`55432` for Postgres, `56379` for Valkey) so they don't collide with a
-host-installed Postgres or Redis. If even those ports are taken, override:
+Both services bind to `127.0.0.1` only and use non-standard host ports (`55432` for Postgres, `56379` for Valkey) so they don't collide with a host-installed Postgres or Redis. If even those ports are taken, override:
 
 ```sh
 HARNESS_PG_PORT=15432 HARNESS_KV_PORT=16379 pnpm db:up
 ```
 
-Inside containers the services still listen on the canonical 5432/6379, so
-nothing else needs to change.
+Inside containers the services still listen on the canonical 5432/6379, so nothing else needs to change.
 
-### Run the web-chat agent end to end
+### Run the web-chat example end to end
 
 ```sh
 pnpm db:up
@@ -240,7 +302,26 @@ SELECT role, jsonb_array_length(content) AS blocks FROM agent_messages ORDER BY 
 SELECT query_id, was_cited, response_excerpt FROM aeo_audits ORDER BY created_at DESC;
 ```
 
-### Cancel a running agent (worker / future runtimes)
+### Run the operator-demo (web + worker + UI)
+
+```sh
+pnpm db:up
+cp examples/operator-demo/.env.example examples/operator-demo/.env  # fill ANTHROPIC_API_KEY
+pnpm dev:operator-web      # terminal 1
+pnpm dev:operator-worker   # terminal 2
+# open http://127.0.0.1:8082/ui/login — sign in with WEB_API_KEY
+```
+
+### Run the browser wizard locally
+
+```sh
+cd packages/wizard
+pnpm build
+MOCK_SCAFFOLD=1 pnpm start
+# open http://127.0.0.1:8090 to click through the no-code scaffolder
+```
+
+### Cancel a running agent
 
 Cancellation is KV-backed. To cancel a run from another shell:
 
@@ -249,7 +330,7 @@ pnpm db:valkey
 > SET cancel:<run-id> user_requested EX 3600
 ```
 
-The cron runtime polls this flag every 500 ms between turns and tool calls.
+The cron runtime polls this flag every 500 ms between turns and tool calls; the worker checks at the same boundaries.
 
 ## Locked decisions
 
@@ -261,6 +342,7 @@ These are documented in [`docs/architecture.md`](docs/architecture.md). They're 
 4. **State in Postgres, signals in Key Value, streaming via LISTEN/NOTIFY.** No Redis dependency.
 5. **Private services as the production default.** Demo mode collapses to one service.
 6. **MCP for tools.** Both stdio and Streamable HTTP supported in v1.
+7. **`@render-harness` is the npm scope, independent of the `render-lab` GitHub org.** See [`docs/publish-plan.md`](docs/publish-plan.md).
 
 ## License
 
