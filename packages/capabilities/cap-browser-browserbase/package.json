@@ -16,6 +16,9 @@
     "dist",
     "skills"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "render-harness-cap",
     "render-harness",
