@@ -95,6 +95,27 @@ describe("POST /api/scaffold", () => {
     expect(body.error).toBe("github_not_configured");
   });
 
+  it("returns actionable details when GitHub rejects repo creation", async () => {
+    const err = Object.assign(new Error("Resource not accessible by integration"), { status: 403 });
+    const { app } = makeApp({
+      createScaffoldedRepo: vi.fn(async () => {
+        throw err;
+      }),
+    });
+    const res = await app.request("/api/scaffold", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(VALID_BODY),
+    });
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; details: string };
+    expect(body.error).toBe("github_failure");
+    expect(body.details).toContain("POST /orgs/render-lab-agents/repos");
+    expect(body.details).toContain("installationId=2");
+    expect(body.details).toContain("Administration: Read and write");
+  });
+
   it("returns 400 for invalid JSON", async () => {
     const { app } = makeApp();
     const res = await app.request("/api/scaffold", {

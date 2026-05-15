@@ -205,10 +205,15 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
       };
       return c.json(response, 201);
     } catch (err) {
+      const details = githubFailureDetails(err, {
+        org: opts.org,
+        installationId: opts.github.installationId,
+        desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
+      });
       return c.json<ErrorResponse>(
         {
           error: "github_failure",
-          details: err instanceof Error ? err.message : String(err),
+          details,
         },
         502,
       );
@@ -220,6 +225,22 @@ function applyRepoPrefix(prefix: string, name: string): string {
   const cleanPrefix = prefix.trim();
   if (!cleanPrefix) return name;
   return name.startsWith(cleanPrefix) ? name : `${cleanPrefix}${name}`;
+}
+
+function githubFailureDetails(
+  err: unknown,
+  context: { org: string; installationId: string; desiredName: string },
+): string {
+  const status =
+    typeof err === "object" && err !== null && "status" in err
+      ? `status=${String((err as { status: unknown }).status)} `
+      : "";
+  const message = err instanceof Error ? err.message : String(err);
+  const target = `target=POST /orgs/${context.org}/repos desiredName=${context.desiredName} installationId=${context.installationId}`;
+  if (/Resource not accessible by integration/i.test(message)) {
+    return `${status}${message}. ${target}. The GitHub App installation token still cannot create repositories in this org. Verify the app installation on ${context.org} has Repository permissions > Administration: Read and write, Repository permissions > Contents: Read and write, access to all repositories, and no pending org approval for changed permissions.`;
+  }
+  return `${status}${message}. ${target}.`;
 }
 
 function clientIp(req: Request, forwardedFor: string | undefined): string {
