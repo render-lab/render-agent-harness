@@ -118,6 +118,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
     expect(services.find((s) => s.type === "web")?.name).toBe("support-agent-web");
     expect(services.find((s) => s.type === "pserv")?.name).toBe("support-agent-worker");
     expect(services.find((s) => s.type === "keyvalue")?.name).toBe("support-agent-kv");
+    expect(services.find((s) => s.type === "keyvalue")?.plan).toBe("starter");
     const web = services.find((s) => s.type === "web");
     expect(web?.envVars?.find((e) => e.key === "KV_URL")?.fromService).toMatchObject({
       name: "support-agent-kv",
@@ -417,8 +418,16 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     expect(trigger?.envVars?.find((e) => e.key === "WORKFLOW_SLUG")?.value).toBe(
       "mixed-cron-workflows",
     );
-    // RENDER_API_KEY is a deploy-time secret (sync: false).
-    expect(trigger?.envVars?.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(false);
+    const projectTrigger = blueprint.projects?.[0]?.environments[0]?.services?.find(
+      (s) => s.name === "mixed-cron-cron-trigger-weekly-recap",
+    );
+    // RENDER_API_KEY is shared through the environment group in serialized project YAML.
+    expect(projectTrigger?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
+    expect(
+      blueprint.projects?.[0]?.environments[0]?.envVarGroups?.[0]?.envVars.find(
+        (e) => e.key === "RENDER_API_KEY",
+      )?.sync,
+    ).toBe(false);
 
     // Trigger services have no model env — they don't run inference.
     expect(trigger?.envVars?.some((e) => e.key === "LLM_MODEL")).toBe(false);
@@ -429,7 +438,7 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     expect(dashboardSteps[0]).not.toContain("`fast-check`");
   });
 
-  it("wires WORKFLOW_SLUG + RENDER_API_KEY into web/worker when the bundle has workflow-task agents", async () => {
+  it("wires WORKFLOW_SLUG locally and RENDER_API_KEY through the env group", async () => {
     const withWorkflowTask = HarnessConfigSchema.parse({
       schemaVersion: 1,
       name: "delegator",
@@ -456,12 +465,20 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     });
     const web = blueprint.services?.find((s) => s.type === "web");
     const worker = blueprint.services?.find((s) => s.type === "pserv");
+    const projectServices = blueprint.projects?.[0]?.environments[0]?.services ?? [];
+    const projectWeb = projectServices.find((s) => s.type === "web");
+    const projectWorker = projectServices.find((s) => s.type === "pserv");
     expect(web?.envVars?.find((e) => e.key === "WORKFLOW_SLUG")?.value).toBe("delegator-workflows");
-    expect(web?.envVars?.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(false);
+    expect(projectWeb?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
     expect(worker?.envVars?.find((e) => e.key === "WORKFLOW_SLUG")?.value).toBe(
       "delegator-workflows",
     );
-    expect(worker?.envVars?.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(false);
+    expect(projectWorker?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
+    expect(
+      blueprint.projects?.[0]?.environments[0]?.envVarGroups?.[0]?.envVars.find(
+        (e) => e.key === "RENDER_API_KEY",
+      )?.sync,
+    ).toBe(false);
   });
 
   it("does NOT wire workflow env when the bundle has no workflow-task agents", async () => {

@@ -146,7 +146,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
     services.push({
       type: "keyvalue",
       name: kvName(cfg),
-      plan: "free",
+      plan: "starter",
       region,
       ipAllowList: [],
     });
@@ -514,18 +514,14 @@ function workerService(args: WorkerArgs): BlueprintService {
 }
 
 /**
- * Wires `WORKFLOW_SLUG` + `RENDER_API_KEY` into a runtime service's env
- * when the bundle has any workflow-task agent. Required for the
- * `trigger_workflow` builtin to register inside that service. Returns
- * an empty array for bundles with no workflow-task agents — no point
- * shipping a sync:false env var the user has to fill in for nothing.
+ * Wires `WORKFLOW_SLUG` into runtime services when the bundle has any
+ * workflow-task agent. `RENDER_API_KEY` is shared through the env group.
+ * Required for the `trigger_workflow` builtin to register inside that
+ * service.
  */
 function workflowEnvIfNeeded(cfg: HarnessConfig): BlueprintEnvVar[] {
   if (workflowTaskAgents(cfg).length === 0) return [];
-  return [
-    { key: "WORKFLOW_SLUG", value: workflowServiceSlug(cfg) },
-    { key: "RENDER_API_KEY", sync: false },
-  ];
+  return [{ key: "WORKFLOW_SLUG", value: workflowServiceSlug(cfg) }];
 }
 
 function cronService(args: CronArgs): BlueprintService {
@@ -587,7 +583,6 @@ function cronTriggerService(args: CronTriggerArgs): BlueprintService {
       { key: "HARNESS_AGENT_ID", value: agent.id },
       { key: "WORKFLOW_SLUG", value: workflowSlug },
       { key: "WORKFLOW_TASK_REF", value: taskRef },
-      { key: "RENDER_API_KEY", sync: false },
       ...sharedRuntimeEnv(cfg),
       ...explicitEntryEnv(cfg),
     ],
@@ -692,6 +687,9 @@ function buildEnvVarGroups(cfg: HarnessConfig): BlueprintEnvVarGroup[] {
     if (model.provider === "openai-compat") {
       add({ key: "OPENAI_API_KEY", sync: false });
     }
+  }
+  if (workflowTaskAgents(cfg).length > 0) {
+    add({ key: "RENDER_API_KEY", sync: false });
   }
 
   for (const spec of cfg.envSchema ?? []) {

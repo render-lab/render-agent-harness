@@ -332,6 +332,21 @@ function SubmittingScreen({
             at: new Date().toISOString(),
           },
         ];
+  const latestFileProgress = [...displayEvents]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "progress" &&
+        event.phase === "writing_files" &&
+        typeof event.index === "number" &&
+        typeof event.total === "number",
+    ) as Extract<ScaffoldProgressEvent, { type: "progress" }> | undefined;
+  const doneEvent = displayEvents.find((event) => event.type === "done");
+  const progressPercent = doneEvent
+    ? 100
+    : latestFileProgress?.total
+      ? Math.round(((latestFileProgress.index ?? 0) / latestFileProgress.total) * 100)
+      : Math.min(95, Math.round((displayEvents.length / 7) * 100));
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-10">
@@ -349,7 +364,20 @@ function SubmittingScreen({
           <div className="font-mono text-xs text-muted">{elapsed}s elapsed</div>
         </div>
 
-        <ol className="mt-5 space-y-2 text-xs">
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted">
+            <span>progress</span>
+            <span>{progressPercent}%</span>
+          </div>
+          <div className="h-2 border border-line bg-canvas">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        <ol className="mt-5 max-h-[360px] space-y-2 overflow-y-auto pr-2 text-xs">
           {displayEvents.map((event) => {
             const active =
               event === displayEvents[displayEvents.length - 1] && event.type === "progress";
