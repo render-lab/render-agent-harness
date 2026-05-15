@@ -61,6 +61,12 @@ export interface CreateScaffoldedRepoOpts {
    * commit back to.
    */
   beforeCommit?: (info: { org: string; repoName: string }) => Map<string, string>;
+  onProgress?: (event: {
+    phase: "repo_created" | "writing_files";
+    message: string;
+    index?: number;
+    total?: number;
+  }) => void | Promise<void>;
 }
 
 export interface CreateScaffoldedRepoResult {
@@ -84,6 +90,10 @@ export async function createScaffoldedRepo(
     has_projects: false,
     has_wiki: false,
   });
+  await opts.onProgress?.({
+    phase: "repo_created",
+    message: `Created ${repoName}`,
+  });
 
   // GitHub rejects Git tree creation in truly empty repositories with
   // "Git Repository is empty." The Contents API can create the first
@@ -95,7 +105,16 @@ export async function createScaffoldedRepo(
     }
   }
   let commitSha = "";
+  let index = 0;
+  const total = files.size;
   for (const [path, content] of files) {
+    index += 1;
+    await opts.onProgress?.({
+      phase: "writing_files",
+      message: `Writing ${path}`,
+      index,
+      total,
+    });
     const { data } = await opts.octokit.repos.createOrUpdateFileContents({
       owner: opts.org,
       repo: repoName,

@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
-import { fetchGallery, postBundleScaffold, postScaffold } from "./lib/api.js";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { fetchGallery, postBundleScaffold, postScaffold, watchScaffoldJob } from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
-import type { Gallery, GalleryAgent, ScaffoldResponse, WizardState } from "./lib/types.js";
+import type {
+  Gallery,
+  GalleryAgent,
+  ScaffoldProgressEvent,
+  ScaffoldResponse,
+  WizardState,
+} from "./lib/types.js";
 import { Basics } from "./steps/Basics.js";
 import { BundleReview } from "./steps/BundleReview.js";
 import { Capabilities } from "./steps/Capabilities.js";
@@ -17,7 +23,12 @@ type Phase =
   | { kind: "loading" }
   | { kind: "ready"; step: number; state: WizardState }
   | { kind: "bundle-review"; bundle: GalleryAgent }
-  | { kind: "submitting"; state: WizardState }
+  | {
+      kind: "submitting";
+      state: WizardState;
+      jobId: string | null;
+      events: ScaffoldProgressEvent[];
+    }
   | { kind: "success"; state: WizardState; result: ScaffoldResponse }
   | { kind: "error"; state: WizardState; message: string };
 
@@ -30,14 +41,6 @@ const STEP_TITLES = [
   "Operator UI",
   "Capabilities",
   "Review",
-] as const;
-
-const SUBMIT_MESSAGES = [
-  "Creating a private GitHub repository",
-  "Preparing the scaffolded file tree",
-  "Writing the initial harness files",
-  "Adding render-harness metadata",
-  "Building the Deploy to Render link",
 ] as const;
 
 export function App() {
@@ -62,7 +65,7 @@ export function App() {
   }
 
   if (phase.kind === "submitting") {
-    return <SubmittingScreen state={phase.state} />;
+    return <SubmittingScreen state={phase.state} jobId={phase.jobId} events={phase.events} />;
   }
   if (phase.kind === "error") {
     return (
@@ -83,14 +86,22 @@ export function App() {
         agentName: args.agentName,
         description: args.description,
       };
-      setPhase({ kind: "submitting", state: fakeState });
+      setPhase({ kind: "submitting", state: fakeState, jobId: null, events: [] });
       try {
-        const result = await postBundleScaffold({
+        const { jobId } = await postBundleScaffold({
           bundleSlug: phase.bundle.slug,
           agentName: args.agentName,
           description: args.description,
           turnstileToken: "",
         });
+        setPhase((current) =>
+          current.kind === "submitting" && current.state === fakeState
+            ? { ...current, jobId }
+            : current,
+        );
+        const result = await watchScaffoldJob(jobId, (event) =>
+          appendScaffoldEvent(fakeState, event, setPhase),
+        );
         setPhase({ kind: "success", state: fakeState, result });
       } catch (err) {
         setPhase({
@@ -118,9 +129,15 @@ export function App() {
   const goPrev = () => setPhase({ kind: "ready", step: Math.max(step - 1, 0), state });
 
   const submit = async () => {
-    setPhase({ kind: "submitting", state });
+    setPhase({ kind: "submitting", state, jobId: null, events: [] });
     try {
-      const result = await postScaffold({ state, turnstileToken: "" });
+      const { jobId } = await postScaffold({ state, turnstileToken: "" });
+      setPhase((current) =>
+        current.kind === "submitting" && current.state === state ? { ...current, jobId } : current,
+      );
+      const result = await watchScaffoldJob(jobId, (event) =>
+        appendScaffoldEvent(state, event, setPhase),
+      );
       setPhase({ kind: "success", state, result });
     } catch (err) {
       setPhase({
@@ -170,6 +187,17 @@ export function App() {
       {step === 7 && <Review state={state} onSubmit={submit} onPrev={goPrev} />}
     </Shell>
   );
+}
+
+function appendScaffoldEvent(
+  state: WizardState,
+  event: ScaffoldProgressEvent,
+  setPhase: Dispatch<SetStateAction<Phase>>,
+): void {
+  setPhase((current) => {
+    if (current.kind !== "submitting" || current.state !== state) return current;
+    return { ...current, events: [...current.events, event] };
+  });
 }
 
 function Shell({
@@ -274,7 +302,15 @@ function Progress({ current, total }: { current: number; total: number }) {
   );
 }
 
-function SubmittingScreen({ state }: { state: WizardState }) {
+function SubmittingScreen({
+  state,
+  jobId,
+  events,
+}: {
+  state: WizardState;
+  jobId: string | null;
+  events: ScaffoldProgressEvent[];
+}) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -285,7 +321,17 @@ function SubmittingScreen({ state }: { state: WizardState }) {
     return () => window.clearInterval(id);
   }, []);
 
-  const activeIndex = Math.min(SUBMIT_MESSAGES.length - 1, Math.floor(elapsed / 6));
+  const displayEvents =
+    events.length > 0
+      ? events
+      : [
+          {
+            type: "progress" as const,
+            phase: "building_file_map" as const,
+            message: "Starting scaffold job",
+            at: new Date().toISOString(),
+          },
+        ];
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-10">
@@ -297,28 +343,36 @@ function SubmittingScreen({ state }: { state: WizardState }) {
           <div>
             <div className="text-sm font-bold">{state.agentName}</div>
             <div className="mt-1 text-xs text-muted">
-              GitHub repo creation and initial file writes can take a minute.
+              {jobId ? `Job ${jobId.slice(0, 8)} is running.` : "Starting job…"}
             </div>
           </div>
           <div className="font-mono text-xs text-muted">{elapsed}s elapsed</div>
         </div>
 
         <ol className="mt-5 space-y-2 text-xs">
-          {SUBMIT_MESSAGES.map((message, idx) => {
-            const done = idx < activeIndex;
-            const active = idx === activeIndex;
+          {displayEvents.map((event) => {
+            const active =
+              event === displayEvents[displayEvents.length - 1] && event.type === "progress";
+            const done = event !== displayEvents[displayEvents.length - 1] || event.type === "done";
             return (
               <li
-                key={message}
+                key={`${event.at}-${event.type}-${event.phase}`}
                 className={`flex items-center justify-between border border-line p-3 ${
                   active ? "bg-surface-hover text-ink" : "text-muted"
                 }`}
               >
                 <span className="flex items-center gap-2">
                   <span className={active ? "text-accent" : ""}>
-                    {done ? "✓" : active ? "▊" : "·"}
+                    {event.type === "error" ? "!" : done ? "✓" : active ? "▊" : "·"}
                   </span>
-                  <span>{message}</span>
+                  <span>
+                    {event.message}
+                    {event.type === "progress" && event.total ? (
+                      <span className="ml-2 text-muted">
+                        {event.index ?? 0}/{event.total}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
                 {active && <span className="cli-dots" aria-hidden="true" />}
               </li>

@@ -89,3 +89,38 @@ export interface ScaffoldResponse {
   deployUrl: string;
   repoSlug: string;
 }
+
+export interface ScaffoldJobResponse {
+  jobId: string;
+}
+
+export type ScaffoldProgressEvent =
+  | {
+      type: "progress";
+      phase:
+        | "building_file_map"
+        | "generating_blueprint"
+        | "authenticating_github"
+        | "creating_repo"
+        | "repo_created"
+        | "writing_files";
+      message: string;
+      at: string;
+      index?: number;
+      total?: number;
+    }
+  | {
+      type: "done";
+      phase: "done";
+      message: string;
+      at: string;
+      result: ScaffoldResponse;
+    }
+  | {
+      type: "error";
+      phase: "error";
+      message: string;
+      at: string;
+      error: string;
+      details?: string;
+    };

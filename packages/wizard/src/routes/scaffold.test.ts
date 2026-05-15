@@ -54,23 +54,42 @@ const VALID_BODY = {
   turnstileToken: "",
 };
 
+async function startScaffold(app: Hono, body: unknown = VALID_BODY): Promise<string> {
+  const res = await app.request("/api/scaffold", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  expect(res.status).toBe(202);
+  const parsed = (await res.json()) as { jobId: string };
+  expect(parsed.jobId).toBeTruthy();
+  return parsed.jobId;
+}
+
+async function readScaffoldEvents(
+  app: Hono,
+  jobId: string,
+): Promise<Array<Record<string, unknown>>> {
+  const stream = await app.request(`/api/scaffold/${jobId}/stream`);
+  expect(stream.status).toBe(200);
+  const text = await stream.text();
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => JSON.parse(line.slice("data: ".length)) as Record<string, unknown>);
+}
+
 describe("POST /api/scaffold", () => {
   it("creates a managed repo and returns deploy URL", async () => {
     const { app, createScaffoldedRepo } = makeApp();
-    const res = await app.request("/api/scaffold", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(VALID_BODY),
-    });
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as {
-      repoUrl: string;
-      deployUrl: string;
-      repoSlug: string;
-    };
-    expect(body.repoUrl).toBe("https://github.com/render-lab-agents/my-agent-aaaa");
-    expect(body.deployUrl).toContain("render.com/deploy");
-    expect(body.repoSlug).toBe("my-agent-aaaa");
+    const jobId = await startScaffold(app);
+    const events = await readScaffoldEvents(app, jobId);
+    const done = events.find((event) => event.type === "done") as
+      | { result?: { repoUrl: string; deployUrl: string; repoSlug: string } }
+      | undefined;
+    expect(done?.result?.repoUrl).toBe("https://github.com/render-lab-agents/my-agent-aaaa");
+    expect(done?.result?.deployUrl).toContain("render.com/deploy");
+    expect(done?.result?.repoSlug).toBe("my-agent-aaaa");
     expect(createScaffoldedRepo).toHaveBeenCalledTimes(1);
     expect(createScaffoldedRepo).toHaveBeenCalledWith(
       expect.objectContaining({ desiredName: "RAH-my-agent" }),
@@ -104,18 +123,15 @@ describe("POST /api/scaffold", () => {
         throw err;
       }),
     });
-    const res = await app.request("/api/scaffold", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(VALID_BODY),
-    });
-
-    expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string; details: string };
-    expect(body.error).toBe("github_failure");
-    expect(body.details).toContain("POST /orgs/render-lab-agents/repos");
-    expect(body.details).toContain("installationId=2");
-    expect(body.details).toContain("Administration: Read and write");
+    const jobId = await startScaffold(app);
+    const events = await readScaffoldEvents(app, jobId);
+    const error = events.find((event) => event.type === "error") as
+      | { details?: string; error?: string }
+      | undefined;
+    expect(error?.error).toBe("scaffold_failed");
+    expect(error?.details).toContain("POST /orgs/render-lab-agents/repos");
+    expect(error?.details).toContain("installationId=2");
+    expect(error?.details).toContain("Administration: Read and write");
   });
 
   it("returns 400 for invalid JSON", async () => {
@@ -130,32 +146,22 @@ describe("POST /api/scaffold", () => {
 
   it("returns 400 when the answers fail schema validation", async () => {
     const { app } = makeApp();
-    const res = await app.request("/api/scaffold", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...VALID_BODY, agentName: "" }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("invalid_answers");
+    const jobId = await startScaffold(app, { ...VALID_BODY, agentName: "" });
+    const events = await readScaffoldEvents(app, jobId);
+    expect(events.find((event) => event.type === "error")).toBeDefined();
   });
 
   it("emits a complete openai-compat model block when the body carries a custom spec", async () => {
     const { app, createScaffoldedRepo } = makeApp();
-    const res = await app.request("/api/scaffold", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...VALID_BODY,
-        model: {
-          provider: "openai-compat",
-          model: "openai/gpt-4o",
-          baseURL: "https://openrouter.ai/api/v1",
-          apiKeyEnv: "OPENROUTER_API_KEY",
-        },
-      }),
+    await startScaffold(app, {
+      ...VALID_BODY,
+      model: {
+        provider: "openai-compat",
+        model: "openai/gpt-4o",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKeyEnv: "OPENROUTER_API_KEY",
+      },
     });
-    expect(res.status).toBe(201);
     const call = createScaffoldedRepo.mock.calls[0]?.[0] as { files: Map<string, string> };
     const yaml = call.files.get("render-harness.yaml") ?? "";
     expect(yaml).toContain("provider: openai-compat");
@@ -189,7 +195,7 @@ describe("POST /api/scaffold", () => {
       body: JSON.stringify(VALID_BODY),
     };
     const first = await app.request("/api/scaffold", opts);
-    expect(first.status).toBe(201);
+    expect(first.status).toBe(202);
     const second = await app.request("/api/scaffold", opts);
     expect(second.status).toBe(429);
   });

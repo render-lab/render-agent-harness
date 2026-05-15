@@ -52,6 +52,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
     expect(yaml).toContain("projects:");
     expect(yaml).toContain("envVarGroups:");
     expect(yaml).not.toMatch(/^services:/m);
+    expect(yaml).not.toMatch(/type: keyvalue[\s\S]*?envVars:/);
     expect(blueprint.databases).toEqual([
       {
         name: "web-chat-db",

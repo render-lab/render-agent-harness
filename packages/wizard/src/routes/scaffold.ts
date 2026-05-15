@@ -10,7 +10,13 @@ import {
 } from "../github-app.js";
 import type { RateLimiter } from "../rate-limit.js";
 import { verifyTurnstile } from "../turnstile.js";
-import type { ErrorResponse, ScaffoldRequest, ScaffoldResponse } from "../types.js";
+import type {
+  ErrorResponse,
+  ScaffoldJobResponse,
+  ScaffoldProgressEvent,
+  ScaffoldRequest,
+  ScaffoldResponse,
+} from "../types.js";
 
 /**
  * Indirection for the Octokit-creating side effect so tests can inject
@@ -38,6 +44,15 @@ export interface RegisterScaffoldRouteOpts {
   mockScaffold?: boolean;
   deps?: Partial<ScaffoldDeps>;
 }
+
+interface ScaffoldJob {
+  id: string;
+  events: ScaffoldProgressEvent[];
+  listeners: Set<(event: ScaffoldProgressEvent) => void>;
+  done: boolean;
+}
+
+const jobs = new Map<string, ScaffoldJob>();
 
 export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts): void {
   const deps: ScaffoldDeps = {
@@ -105,120 +120,236 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
       );
     }
 
-    let fileMap: Map<string, string>;
-    try {
-      const answers: Answers = bundleEntry
-        ? {
-            directory: "/managed",
-            agentName: body.agentName,
-            description: body.description,
-            systemPrompt: "",
-            model: body.model,
-            runtimes: [],
-            capabilities: bundleEntry.capabilities.map((pack) => ({ pack })),
-            templateManifest: bundleEntry.manifest as unknown as Record<string, unknown>,
-            bundle: {
-              slug: bundleEntry.slug,
-              manifest: bundleEntry.manifest as unknown as Record<string, unknown>,
-              sourceFiles: bundleEntry.sourceFiles,
-              runtimeKinds: bundleEntry.runtimeKinds,
-              capabilities: bundleEntry.capabilities,
-            },
-            ui: bundleEntry.manifest.shared?.ui ?? false,
-            packageManager: "npm",
-            harnessRoot: null,
-            gitInit: false,
-            installDeps: false,
-          }
-        : {
-            directory: "/managed", // placeholder; buildFileMap doesn't use it for path construction in the file map
-            agentName: body.agentName,
-            description: body.description,
-            systemPrompt: body.systemPrompt,
-            model: body.model,
-            runtimes: body.runtimes,
-            capabilities: body.capabilities,
-            templateManifest: template
-              ? (template.manifest as unknown as Record<string, unknown>)
-              : null,
-            bundle: null,
-            ui: body.ui,
-            packageManager: "npm", // managed-repo doesn't know its consumer; npm is the lowest-common-denominator default
-            harnessRoot: null, // published deps, not link:
-            gitInit: false,
-            installDeps: false,
-          };
-      fileMap = buildFileMap(answers);
-      await addBlueprintFilesToMap(fileMap, body.agentName);
-    } catch (err) {
-      return c.json<ErrorResponse>(
-        {
-          error: "invalid_answers",
-          details: err instanceof Error ? err.message : String(err),
+    const answers = buildAnswers({ body, template, bundleEntry });
+    const job = createScaffoldJob();
+    void runScaffoldJob({ job, body, answers, opts, deps });
+    return c.json<ScaffoldJobResponse>({ jobId: job.id }, 202);
+  });
+
+  app.get("/api/scaffold/:jobId/stream", (c) => {
+    const job = jobs.get(c.req.param("jobId"));
+    if (!job) return c.json<ErrorResponse>({ error: "job_not_found" }, 404);
+    return new Response(scaffoldStream(job), {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      },
+    });
+  });
+}
+
+interface BuildAnswersArgs {
+  body: ScaffoldRequest;
+  template: ResolvedGallery["agents"][number] | null;
+  bundleEntry: ResolvedGallery["agents"][number] | null;
+}
+
+function buildAnswers({ body, template, bundleEntry }: BuildAnswersArgs): Answers {
+  return bundleEntry
+    ? {
+        directory: "/managed",
+        agentName: body.agentName,
+        description: body.description,
+        systemPrompt: "",
+        model: body.model,
+        runtimes: [],
+        capabilities: bundleEntry.capabilities.map((pack) => ({ pack })),
+        templateManifest: bundleEntry.manifest as unknown as Record<string, unknown>,
+        bundle: {
+          slug: bundleEntry.slug,
+          manifest: bundleEntry.manifest as unknown as Record<string, unknown>,
+          sourceFiles: bundleEntry.sourceFiles,
+          runtimeKinds: bundleEntry.runtimeKinds,
+          capabilities: bundleEntry.capabilities,
         },
-        400,
-      );
-    }
+        ui: bundleEntry.manifest.shared?.ui ?? false,
+        packageManager: "npm",
+        harnessRoot: null,
+        gitInit: false,
+        installDeps: false,
+      }
+    : {
+        directory: "/managed",
+        agentName: body.agentName,
+        description: body.description,
+        systemPrompt: body.systemPrompt,
+        model: body.model,
+        runtimes: body.runtimes,
+        capabilities: body.capabilities,
+        templateManifest: template
+          ? (template.manifest as unknown as Record<string, unknown>)
+          : null,
+        bundle: null,
+        ui: body.ui,
+        packageManager: "npm",
+        harnessRoot: null,
+        gitInit: false,
+        installDeps: false,
+      };
+}
+
+async function runScaffoldJob(args: {
+  job: ScaffoldJob;
+  body: ScaffoldRequest;
+  answers: Answers;
+  opts: RegisterScaffoldRouteOpts;
+  deps: ScaffoldDeps;
+}): Promise<void> {
+  const { job, body, answers, opts, deps } = args;
+  try {
+    emitProgress(job, "building_file_map", "Preparing the scaffolded file tree");
+    const fileMap = buildFileMap(answers);
+
+    emitProgress(job, "generating_blueprint", "Generating render.yaml Blueprint");
+    await addBlueprintFilesToMap(fileMap, body.agentName);
 
     if (opts.mockScaffold || !opts.github) {
       const mockSlug = applyRepoPrefix(opts.repoPrefix, `${body.agentName}-mock`);
       const mockUrl = `https://example.com/${opts.org}/${mockSlug}`;
-      const response: ScaffoldResponse = {
+      emitDone(job, {
         repoUrl: mockUrl,
         deployUrl: buildDeployUrl(mockUrl),
         repoSlug: mockSlug,
-      };
-      return c.json(response, 201);
+      });
+      return;
     }
 
-    try {
-      const octokit = await deps.createOctokit({ creds: opts.github });
-      const installationId = opts.github.installationId;
-      const agentSlug = body.agentName;
-      const result = await deps.createScaffoldedRepo({
-        octokit,
-        org: opts.org,
-        desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
-        description: body.description,
-        files: fileMap,
-        beforeCommit: ({ org, repoName }) =>
-          new Map([
-            [
-              ".render-harness/agent.json",
-              `${JSON.stringify(
-                {
-                  schemaVersion: 1,
-                  agentSlug,
-                  org,
-                  repo: repoName,
-                  installationId,
-                },
-                null,
-                2,
-              )}\n`,
-            ],
-          ]),
-      });
-      const response: ScaffoldResponse = {
-        repoUrl: result.repoUrl,
-        deployUrl: buildDeployUrl(result.repoUrl),
-        repoSlug: result.repoName,
+    emitProgress(job, "authenticating_github", "Minting a GitHub App installation token");
+    const octokit = await deps.createOctokit({ creds: opts.github });
+    const installationId = opts.github.installationId;
+    const agentSlug = body.agentName;
+
+    emitProgress(job, "creating_repo", "Creating the private GitHub repository");
+    const result = await deps.createScaffoldedRepo({
+      octokit,
+      org: opts.org,
+      desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
+      description: body.description,
+      files: fileMap,
+      onProgress: (event) =>
+        emitProgress(job, event.phase, event.message, {
+          ...(event.index !== undefined ? { index: event.index } : {}),
+          ...(event.total !== undefined ? { total: event.total } : {}),
+        }),
+      beforeCommit: ({ org, repoName }) =>
+        new Map([
+          [
+            ".render-harness/agent.json",
+            `${JSON.stringify(
+              {
+                schemaVersion: 1,
+                agentSlug,
+                org,
+                repo: repoName,
+                installationId,
+              },
+              null,
+              2,
+            )}\n`,
+          ],
+        ]),
+    });
+
+    emitProgress(job, "creating_repo", "Building the Deploy to Render link");
+    emitDone(job, {
+      repoUrl: result.repoUrl,
+      deployUrl: buildDeployUrl(result.repoUrl),
+      repoSlug: result.repoName,
+    });
+  } catch (err) {
+    const details =
+      opts.github &&
+      /Resource not accessible by integration/i.test(
+        err instanceof Error ? err.message : String(err),
+      )
+        ? githubFailureDetails(err, {
+            org: opts.org,
+            installationId: opts.github.installationId,
+            desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
+          })
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    emitError(job, "scaffold_failed", details);
+  }
+}
+
+function createScaffoldJob(): ScaffoldJob {
+  const job: ScaffoldJob = {
+    id: crypto.randomUUID(),
+    events: [],
+    listeners: new Set(),
+    done: false,
+  };
+  jobs.set(job.id, job);
+  setTimeout(() => jobs.delete(job.id), 15 * 60 * 1_000).unref?.();
+  return job;
+}
+
+function emitProgress(
+  job: ScaffoldJob,
+  phase: ScaffoldProgressEvent["phase"] & string,
+  message: string,
+  opts: { index?: number; total?: number } = {},
+): void {
+  emit(job, {
+    type: "progress",
+    phase: phase as Exclude<ScaffoldProgressEvent["phase"], "done" | "error">,
+    message,
+    at: new Date().toISOString(),
+    ...opts,
+  });
+}
+
+function emitDone(job: ScaffoldJob, result: ScaffoldResponse): void {
+  emit(job, {
+    type: "done",
+    phase: "done",
+    message: "Repository created",
+    at: new Date().toISOString(),
+    result,
+  });
+  job.done = true;
+}
+
+function emitError(job: ScaffoldJob, error: string, details?: string): void {
+  emit(job, {
+    type: "error",
+    phase: "error",
+    message: details ? `${error}: ${details}` : error,
+    at: new Date().toISOString(),
+    error,
+    ...(details ? { details } : {}),
+  });
+  job.done = true;
+}
+
+function emit(job: ScaffoldJob, event: ScaffoldProgressEvent): void {
+  job.events.push(event);
+  for (const listener of job.listeners) listener(event);
+}
+
+function scaffoldStream(job: ScaffoldJob): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      const send = (event: ScaffoldProgressEvent) => {
+        controller.enqueue(
+          encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`),
+        );
+        if (event.type === "done" || event.type === "error") {
+          job.listeners.delete(send);
+          controller.close();
+        }
       };
-      return c.json(response, 201);
-    } catch (err) {
-      const details = githubFailureDetails(err, {
-        org: opts.org,
-        installationId: opts.github.installationId,
-        desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
-      });
-      return c.json<ErrorResponse>(
-        {
-          error: "github_failure",
-          details,
-        },
-        502,
-      );
-    }
+      for (const event of job.events) send(event);
+      if (!job.done) job.listeners.add(send);
+    },
+    cancel() {
+      job.listeners.clear();
+    },
   });
 }
 

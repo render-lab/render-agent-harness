@@ -1,4 +1,10 @@
-import type { Gallery, ScaffoldResponse, WizardState } from "./types.js";
+import type {
+  Gallery,
+  ScaffoldJobResponse,
+  ScaffoldProgressEvent,
+  ScaffoldResponse,
+  WizardState,
+} from "./types.js";
 
 export async function fetchGallery(): Promise<Gallery> {
   const res = await fetch("/api/gallery");
@@ -9,7 +15,7 @@ export async function fetchGallery(): Promise<Gallery> {
 export async function postScaffold(args: {
   state: WizardState;
   turnstileToken: string;
-}): Promise<ScaffoldResponse> {
+}): Promise<ScaffoldJobResponse> {
   const res = await fetch("/api/scaffold", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -26,7 +32,7 @@ export async function postScaffold(args: {
       turnstileToken: args.turnstileToken,
     }),
   });
-  return parseScaffoldResponse(res);
+  return parseJsonResponse<ScaffoldJobResponse>(res);
 }
 
 export async function postBundleScaffold(args: {
@@ -34,7 +40,7 @@ export async function postBundleScaffold(args: {
   agentName: string;
   description: string;
   turnstileToken: string;
-}): Promise<ScaffoldResponse> {
+}): Promise<ScaffoldJobResponse> {
   const res = await fetch("/api/scaffold", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -53,10 +59,10 @@ export async function postBundleScaffold(args: {
       turnstileToken: args.turnstileToken,
     }),
   });
-  return parseScaffoldResponse(res);
+  return parseJsonResponse<ScaffoldJobResponse>(res);
 }
 
-async function parseScaffoldResponse(res: Response): Promise<ScaffoldResponse> {
+async function parseJsonResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({ error: "unknown" }))) as {
       error: string;
@@ -64,5 +70,36 @@ async function parseScaffoldResponse(res: Response): Promise<ScaffoldResponse> {
     };
     throw new Error(`${body.error}${body.details ? `: ${body.details}` : ""}`);
   }
-  return (await res.json()) as ScaffoldResponse;
+  return (await res.json()) as T;
+}
+
+export function watchScaffoldJob(
+  jobId: string,
+  onEvent: (event: ScaffoldProgressEvent) => void,
+): Promise<ScaffoldResponse> {
+  return new Promise((resolve, reject) => {
+    const source = new EventSource(`/api/scaffold/${encodeURIComponent(jobId)}/stream`);
+
+    source.addEventListener("progress", (event) => {
+      const parsed = JSON.parse(event.data) as ScaffoldProgressEvent;
+      onEvent(parsed);
+    });
+    source.addEventListener("done", (event) => {
+      const parsed = JSON.parse(event.data) as Extract<ScaffoldProgressEvent, { type: "done" }>;
+      onEvent(parsed);
+      source.close();
+      resolve(parsed.result);
+    });
+    source.addEventListener("error", (event) => {
+      if ("data" in event && typeof event.data === "string" && event.data.length > 0) {
+        const parsed = JSON.parse(event.data) as Extract<ScaffoldProgressEvent, { type: "error" }>;
+        onEvent(parsed);
+        source.close();
+        reject(new Error(parsed.message));
+        return;
+      }
+      source.close();
+      reject(new Error("scaffold progress stream disconnected"));
+    });
+  });
 }

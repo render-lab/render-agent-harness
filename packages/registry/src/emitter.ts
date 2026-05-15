@@ -720,10 +720,13 @@ function attachSharedEnvGroup(
   if (envVarGroups.length === 0) return services;
   const group = envVarGroups[0];
   if (!group) return services;
-  return services.map((service) => ({
-    ...service,
-    envVars: [{ fromGroup: group.name }, ...(service.envVars ?? [])],
-  }));
+  return services.map((service) => {
+    if (!serviceSupportsEnvVars(service)) return service;
+    return {
+      ...service,
+      envVars: [{ fromGroup: group.name }, ...(service.envVars ?? [])],
+    };
+  });
 }
 
 function expandSharedEnvGroup(
@@ -733,12 +736,16 @@ function expandSharedEnvGroup(
   const groupVars = envVarGroups.flatMap((group) => group.envVars);
   if (groupVars.length === 0) return services;
   return services.map((service) => {
-    if (service.type === "keyvalue") return service;
+    if (!serviceSupportsEnvVars(service)) return service;
     return {
       ...service,
       envVars: [...(service.envVars ?? []), ...groupVars],
     };
   });
+}
+
+function serviceSupportsEnvVars(service: BlueprintService): boolean {
+  return service.type !== "keyvalue";
 }
 
 // ----------------------------------------------------------------------

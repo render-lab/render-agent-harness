@@ -37,6 +37,45 @@ export interface ScaffoldResponse {
   repoSlug: string;
 }
 
+export interface ScaffoldJobResponse {
+  jobId: string;
+}
+
+export type ScaffoldPhase =
+  | "building_file_map"
+  | "generating_blueprint"
+  | "authenticating_github"
+  | "creating_repo"
+  | "repo_created"
+  | "writing_files"
+  | "done"
+  | "error";
+
+export type ScaffoldProgressEvent =
+  | {
+      type: "progress";
+      phase: Exclude<ScaffoldPhase, "done" | "error">;
+      message: string;
+      at: string;
+      index?: number;
+      total?: number;
+    }
+  | {
+      type: "done";
+      phase: "done";
+      message: string;
+      at: string;
+      result: ScaffoldResponse;
+    }
+  | {
+      type: "error";
+      phase: "error";
+      message: string;
+      at: string;
+      error: string;
+      details?: string;
+    };
+
 export interface ErrorResponse {
   error: string;
   details?: string;
