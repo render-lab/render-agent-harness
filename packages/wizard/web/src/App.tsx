@@ -350,7 +350,7 @@ function SubmittingScreen({
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="panel w-full max-w-2xl p-6">
+      <div className="panel flex max-h-[calc(100vh-5rem)] w-full max-w-2xl flex-col p-6">
         <div className="hr-section">
           <span>{"// CREATING REPOSITORY"}</span>
         </div>
@@ -377,7 +377,7 @@ function SubmittingScreen({
           </div>
         </div>
 
-        <ol className="mt-5 max-h-[360px] space-y-2 overflow-y-auto pr-2 text-xs">
+        <ol className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 text-xs">
           {displayEvents.map((event) => {
             const active =
               event === displayEvents[displayEvents.length - 1] && event.type === "progress";

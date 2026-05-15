@@ -287,6 +287,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   const blueprint: Blueprint = {
     databases,
     services: expandSharedEnvGroup(services, envVarGroups),
+    ...(envVarGroups.length > 0 ? { envVarGroups } : {}),
     projects: [
       {
         name: cfg.name,
@@ -295,7 +296,6 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
             name: "production",
             databases,
             services: attachSharedEnvGroup(services, envVarGroups),
-            ...(envVarGroups.length > 0 ? { envVarGroups } : {}),
           },
         ],
       },
@@ -924,7 +924,12 @@ const HEADER = `# yaml-language-server: $schema=https://render.com/schema/render
 
 function serializeBlueprint(bp: Blueprint): string {
   const bodyShape: Blueprint =
-    bp.projects && bp.projects.length > 0 ? { projects: bp.projects } : bp;
+    bp.projects && bp.projects.length > 0
+      ? {
+          ...(bp.envVarGroups ? { envVarGroups: bp.envVarGroups } : {}),
+          projects: bp.projects,
+        }
+      : bp;
   const body = stringifyYaml(bodyShape, {
     lineWidth: 100,
     minContentWidth: 40,

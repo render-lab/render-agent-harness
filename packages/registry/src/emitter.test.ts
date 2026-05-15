@@ -49,6 +49,8 @@ describe("emitBlueprint — runtime shape mapping", () => {
     });
     expect(blueprint.projects?.[0]?.name).toBe("web-chat");
     expect(blueprint.projects?.[0]?.environments[0]?.name).toBe("production");
+    expect(blueprint.envVarGroups?.[0]?.name).toBe("web-chat-env");
+    expect(blueprint.projects?.[0]?.environments[0]?.envVarGroups).toBeUndefined();
     expect(yaml).toContain("projects:");
     expect(yaml).toContain("envVarGroups:");
     expect(yaml).not.toMatch(/^services:/m);
@@ -423,11 +425,9 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     );
     // RENDER_API_KEY is shared through the environment group in serialized project YAML.
     expect(projectTrigger?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(
-      blueprint.projects?.[0]?.environments[0]?.envVarGroups?.[0]?.envVars.find(
-        (e) => e.key === "RENDER_API_KEY",
-      )?.sync,
-    ).toBe(false);
+    expect(blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(
+      false,
+    );
 
     // Trigger services have no model env — they don't run inference.
     expect(trigger?.envVars?.some((e) => e.key === "LLM_MODEL")).toBe(false);
@@ -474,11 +474,9 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       "delegator-workflows",
     );
     expect(projectWorker?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(
-      blueprint.projects?.[0]?.environments[0]?.envVarGroups?.[0]?.envVars.find(
-        (e) => e.key === "RENDER_API_KEY",
-      )?.sync,
-    ).toBe(false);
+    expect(blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(
+      false,
+    );
   });
 
   it("does NOT wire workflow env when the bundle has no workflow-task agents", async () => {
