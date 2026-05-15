@@ -263,7 +263,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   if (wfAgents.length > 0) {
     const taskList = wfAgents.map((a) => `\`${a.id}\``).join(", ");
     dashboardSteps.push(
-      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`corepack enable && pnpm install --frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`node examples/${cfg.name}/dist/workflows.js\`. It will host these tasks: ${taskList}.`,
+      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`pnpm install --frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`node examples/${cfg.name}/dist/workflows.js\`. It will host these tasks: ${taskList}.`,
     );
     warnings.push(
       "Render Workflows aren't yet supported in render.yaml. The emitted Blueprint omits the Workflow service; create it from the Render Dashboard following the checklist step above.",
@@ -843,7 +843,7 @@ function envGroupName(cfg: HarnessConfig): string {
 }
 
 function defaultBuildCommand(packageName: string): string {
-  return `corepack enable && pnpm install --frozen-lockfile && pnpm --filter ${packageName} build`;
+  return `pnpm install --frozen-lockfile && pnpm --filter ${packageName} build`;
 }
 
 // ----------------------------------------------------------------------

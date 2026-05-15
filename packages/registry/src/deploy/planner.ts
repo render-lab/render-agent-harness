@@ -116,7 +116,7 @@ export function planFromBlueprint(inputs: PlanInputs): DeployPlan {
         // built by `pnpm --filter <pkg> build`. Combine both so the
         // workflow runtime has a one-shot bootstrap.
         buildConfig: {
-          runCommand: `corepack enable && pnpm install --frozen-lockfile && pnpm --filter ${inputs.packageName} build && node examples/${inputs.config.name}/dist/workflows.js`,
+          runCommand: `pnpm install --frozen-lockfile && pnpm --filter ${inputs.packageName} build && node examples/${inputs.config.name}/dist/workflows.js`,
         },
         region: inputs.region,
         autoDeployTrigger: "commit",
