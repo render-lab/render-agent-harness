@@ -5,6 +5,7 @@
 export interface WizardEnv {
   port: number;
   managedOrg: string;
+  managedRepoPrefix: string;
   publicUrl: string;
   github: {
     appId: string;
@@ -47,6 +48,7 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
     throw new Error(`PORT must be a positive integer, got ${env.PORT}`);
   }
   const managedOrg = env.MANAGED_ORG ?? "render-lab-agents";
+  const managedRepoPrefix = env.MANAGED_REPO_PREFIX ?? "RAH-";
   const publicUrl = env.WIZARD_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 
   const github =
@@ -69,6 +71,7 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
   return {
     port,
     managedOrg,
+    managedRepoPrefix,
     publicUrl,
     github,
     turnstile,

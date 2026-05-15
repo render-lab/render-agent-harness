@@ -36,6 +36,7 @@ async function main(): Promise<void> {
   registerGalleryRoute(app, gallery);
   registerScaffoldRoute(app, {
     org: env.managedOrg,
+    repoPrefix: env.managedRepoPrefix,
     github: env.github,
     turnstileSecret: env.turnstile?.secret ?? null,
     gallery,
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
 
   serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
     process.stdout.write(
-      `wizard listening on http://0.0.0.0:${info.port} (managed-org=${env.managedOrg})\n`,
+      `wizard listening on http://0.0.0.0:${info.port} (managed-org=${env.managedOrg}, repo-prefix=${env.managedRepoPrefix})\n`,
     );
   });
 }

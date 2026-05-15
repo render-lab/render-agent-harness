@@ -25,6 +25,7 @@ function makeApp(overrides?: {
     }));
   registerScaffoldRoute(app, {
     org: "render-lab-agents",
+    repoPrefix: "RAH-",
     github:
       overrides?.github === undefined
         ? { appId: "1", privateKey: "key", installationId: "2" }
@@ -71,6 +72,9 @@ describe("POST /api/scaffold", () => {
     expect(body.deployUrl).toContain("render.com/deploy");
     expect(body.repoSlug).toBe("my-agent-aaaa");
     expect(createScaffoldedRepo).toHaveBeenCalledTimes(1);
+    expect(createScaffoldedRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ desiredName: "RAH-my-agent" }),
+    );
 
     // Confirm the file map contains the expected files.
     const call = createScaffoldedRepo.mock.calls[0]?.[0] as { files: Map<string, string> };
@@ -142,6 +146,7 @@ describe("POST /api/scaffold", () => {
     const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000 });
     registerScaffoldRoute(app, {
       org: "render-lab-agents",
+      repoPrefix: "RAH-",
       github: { appId: "1", privateKey: "key", installationId: "2" },
       turnstileSecret: null,
       gallery: EMPTY_GALLERY,

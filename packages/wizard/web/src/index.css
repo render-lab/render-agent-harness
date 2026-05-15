@@ -20,6 +20,8 @@
   --color-ink: #000000;
   --color-muted: #555555;
   --color-line: #000000;
+  --color-surface: #f8f8f8;
+  --color-surface-hover: #eeeeee;
   --color-accent: #a855f7;
   --color-err: #b40000;
   --color-code-bg: #e4e4e7;
@@ -34,8 +36,10 @@
     :root {
       --color-canvas: #000000;
       --color-ink: #ffffff;
-      --color-muted: #999999;
-      --color-line: #ffffff;
+      --color-muted: #8a8a8a;
+      --color-line: #2a2a2a;
+      --color-surface: #050505;
+      --color-surface-hover: #101010;
       --color-accent: #c084fc;
       --color-err: #ff5555;
       --color-code-bg: #27272a;
@@ -93,7 +97,7 @@
   textarea,
   select {
     border: 1px solid var(--color-line);
-    background: var(--color-canvas);
+    background: var(--color-surface);
     padding: 0.35rem 0.55rem;
     caret-color: var(--color-accent);
   }
@@ -151,7 +155,7 @@
 
 @layer components {
   .panel {
-    @apply bg-canvas border border-line;
+    @apply bg-surface border border-line;
   }
 
   .label {
@@ -171,7 +175,7 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center bg-canvas text-ink border border-line uppercase;
+    @apply inline-flex items-center justify-center bg-surface text-ink border border-line uppercase;
     padding: 0.4rem 0.85rem;
     font-size: 0.78rem;
     letter-spacing: 0.06em;
@@ -181,19 +185,26 @@
       border-color 80ms linear;
   }
   .btn:hover:not(:disabled) {
-    @apply text-accent border-accent;
+    @apply bg-surface-hover text-accent border-accent;
   }
   .btn-primary {
     @apply bg-accent text-canvas border-accent;
   }
   .btn-primary:hover:not(:disabled) {
-    @apply bg-canvas text-accent;
+    @apply bg-surface text-accent;
   }
   .btn-danger {
     @apply text-err border-err;
   }
   .btn-danger:hover:not(:disabled) {
     @apply bg-err text-canvas;
+  }
+
+  .btn-active {
+    @apply bg-accent text-canvas border-accent;
+  }
+  .btn-active:hover:not(:disabled) {
+    @apply bg-surface text-accent border-accent;
   }
 
   .badge {

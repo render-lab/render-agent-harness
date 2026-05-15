@@ -25,6 +25,7 @@ export interface ScaffoldDeps {
 
 export interface RegisterScaffoldRouteOpts {
   org: string;
+  repoPrefix: string;
   github: GithubAppCreds | null;
   turnstileSecret: string | null;
   gallery: ResolvedGallery;
@@ -159,7 +160,7 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
     }
 
     if (opts.mockScaffold || !opts.github) {
-      const mockSlug = `${body.agentName}-mock`;
+      const mockSlug = applyRepoPrefix(opts.repoPrefix, `${body.agentName}-mock`);
       const mockUrl = `https://example.com/${opts.org}/${mockSlug}`;
       const response: ScaffoldResponse = {
         repoUrl: mockUrl,
@@ -176,7 +177,7 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
       const result = await deps.createScaffoldedRepo({
         octokit,
         org: opts.org,
-        desiredName: body.agentName,
+        desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
         description: body.description,
         files: fileMap,
         beforeCommit: ({ org, repoName }) =>
@@ -213,6 +214,12 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
       );
     }
   });
+}
+
+function applyRepoPrefix(prefix: string, name: string): string {
+  const cleanPrefix = prefix.trim();
+  if (!cleanPrefix) return name;
+  return name.startsWith(cleanPrefix) ? name : `${cleanPrefix}${name}`;
 }
 
 function clientIp(req: Request, forwardedFor: string | undefined): string {

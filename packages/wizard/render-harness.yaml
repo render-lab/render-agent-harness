@@ -27,8 +27,13 @@ envSchema:
   - name: MANAGED_ORG
     required: false
     secret: false
-    default: render-lab-agents
+    default: render-lab
     description: GitHub org where managed agent repos are created.
+  - name: MANAGED_REPO_PREFIX
+    required: false
+    secret: false
+    default: RAH-
+    description: Prefix for wizard-created repository names, useful for filtering in a shared org.
   - name: TURNSTILE_SECRET_KEY
     required: false
     secret: true

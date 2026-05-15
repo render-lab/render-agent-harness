@@ -177,21 +177,76 @@ function Shell({
 }) {
   const total = totalSteps ?? STEP_TITLES.length;
   const title = stepTitle ?? STEP_TITLES[currentStep];
+  const navItems =
+    total === STEP_TITLES.length
+      ? STEP_TITLES.map((label) => ({ id: label, label }))
+      : [
+          { id: "template", label: "Template" },
+          { id: "bundle-review", label: title },
+        ];
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <header className="mb-6">
-        <div className="hr-section">
-          <span>{"// CREATE A RENDER AGENT"}</span>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <div>
+            <div className="text-sm font-bold uppercase leading-none tracking-widest">
+              <div>Render</div>
+              <div>Harness Wizard</div>
+            </div>
+            <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
+              managed repo scaffold
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
+            <span>
+              step {currentStep + 1}/{total}
+            </span>
+            <span>/</span>
+            <span className="text-ink">{title}</span>
+          </div>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="label">
-            Step {currentStep + 1}/{total} · {title}
-          </span>
-          <span className="text-muted text-[11px]">render-harness wizard</span>
+        <div className="border-t border-line px-5 py-2">
+          <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto pb-1">
+            {navItems.map((item, idx) => {
+              const isActive = idx === currentStep;
+              const isDone = idx < currentStep;
+              return (
+                <div
+                  key={item.id}
+                  className={`flex shrink-0 items-center gap-2 border px-3 py-1.5 text-[10px] uppercase tracking-wider ${
+                    isActive
+                      ? "border-accent bg-accent text-canvas"
+                      : isDone
+                        ? "border-line bg-surface text-ink"
+                        : "border-line bg-canvas text-muted"
+                  }`}
+                >
+                  <span className="font-mono">{String(idx + 1).padStart(2, "0")}</span>
+                  <span>{item.label}</span>
+                </div>
+              );
+            })}
+          </nav>
         </div>
       </header>
-      <Progress current={currentStep} total={total} />
-      <main className="panel mt-6 p-6">{children}</main>
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
+        <section className="panel p-6">{children}</section>
+        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+          <div className="panel p-4">
+            <div className="label mb-3">progress</div>
+            <Progress current={currentStep} total={total} />
+            <div className="mt-3 text-xs text-muted">
+              Choose a template, tune the runtime, then create a managed repo and deploy.
+            </div>
+          </div>
+          <div className="panel p-4 text-xs">
+            <div className="label mb-2">output</div>
+            <div>GitHub repo</div>
+            <div>render-harness.yaml</div>
+            <div>Deploy to Render link</div>
+          </div>
+        </aside>
+      </main>
     </div>
   );
 }
@@ -203,7 +258,7 @@ function Progress({ current, total }: { current: number; total: number }) {
         (segment) => (
           <div
             key={segment.id}
-            className={`h-1 flex-1 ${segment.active ? "bg-accent" : "border border-line"}`}
+            className={`h-1 flex-1 ${segment.active ? "bg-accent" : "bg-surface-hover"}`}
           />
         ),
       )}

@@ -99,7 +99,7 @@ Product shape:
 
 ## Defer or keep optional
 
-- **Sandboxed code execution** belongs in an opt-in capability pack with a dedicated execution backend. Do not add terminal or arbitrary filesystem tools to core, because the worker service is multi-tenant by design.
+- **Sandboxed code execution** belongs in an opt-in capability pack with a dedicated execution backend. Use [`docs/sandbox-providers-plan.md`](./sandbox-providers-plan.md) to keep Modal, Daytona, E2B, future Render sandboxes, and similar providers behind the same adapter boundary. Do not add terminal or arbitrary filesystem tools to core, because the worker service is multi-tenant by design.
 - **Voice and TTS** can wait. They expand the product surface but do not strengthen the current Render-native deployment story as much as schedules, delegation, connectors, and admin visibility.
 - **Broad messenger support** should follow Slack and generic webhooks. Telegram, WhatsApp, Signal, Discord, and email each bring different auth, retry, threading, and delivery semantics.
 - **Automatic skill writing** should stay behind operator review. Silent skill installation makes agent behavior harder to audit and debug.
