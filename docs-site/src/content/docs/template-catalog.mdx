@@ -1,0 +1,71 @@
+---
+title: Template Catalog
+description: Understand the source catalog currently named `gallery/`.
+---
+
+The template catalog is the repo data that powers starter selection in the CLI and browser wizard.
+
+The directory is currently named `gallery/`, but it is not a standalone gallery service. It is a catalog of starter manifests and source files.
+
+## Directory layout
+
+```text
+gallery/
+  index.yaml
+  agents/
+    chat/
+    support-bot/
+    research-cron/
+    chief-of-staff/
+```
+
+`gallery/index.yaml` lists each available starter. Each starter points at a directory with a `render-harness.yaml` manifest and optional preview/source files.
+
+## Current starters
+
+| Starter | Purpose | Runtime kinds |
+| --- | --- | --- |
+| `chat` | Minimal HTTP chat agent. | `web` |
+| `support-bot` | Queue-driven support flow starter. | `web`, `worker` |
+| `research-cron` | Scheduled research starter with Exa search. | `cron` |
+| `chief-of-staff` | Sealed multi-agent personal assistant bundle. | `web`, `worker`, `cron`, `workflows` |
+
+## How it is loaded
+
+The catalog can be loaded in two ways:
+
+- From source during repo development.
+- From the bundled snapshot shipped with `create-render-agent`.
+
+The CLI wrapper chooses source or bundled mode:
+
+- `--harness-root <path>` loads the live repo checkout.
+- Default mode loads `bundled-gallery/gallery.json`.
+
+## How to add a starter
+
+To add a starter:
+
+1. Create `gallery/agents/<slug>/render-harness.yaml`.
+2. Add a `README.md` if the wizard should show preview text.
+3. Add source files if the starter is a sealed bundle.
+4. Add an entry to `gallery/index.yaml`.
+5. Run registry and scaffolder tests.
+
+The registry cross-checks the declared runtime kinds against the manifest.
+
+## Bundled gallery snapshot
+
+`packages/create-render-agent/scripts/bundle-gallery.ts` serializes the source catalog into:
+
+```text
+packages/create-render-agent/bundled-gallery/gallery.json
+```
+
+That snapshot lets the published CLI work without cloning this repo.
+
+## Naming note
+
+The term “gallery” can be misleading because there is no standalone visual gallery UI. The current visual surface is the wizard’s template picker.
+
+If the project renames this concept later, `template catalog` or `agent templates` would better describe the current behavior.

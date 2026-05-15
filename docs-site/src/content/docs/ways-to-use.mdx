@@ -1,0 +1,133 @@
+---
+title: Ways to Use Render Harness
+description: Choose between the CLI, browser wizard, deployed operator UI, and source-level APIs.
+---
+
+Render Harness has several user surfaces. They serve different stages of the agent lifecycle: creating a project, deploying it, operating it, and extending the framework.
+
+## Choose a surface
+
+| Surface | Use it to | Where it lives |
+| --- | --- | --- |
+| CLI scaffolder | Create a new local project from a blank prompt or starter template. | `packages/create-render-agent` |
+| Browser wizard | Create a managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
+| Operator UI | Chat with deployed agents, inspect runs, view agents, edit config, and read in-product guides. | `packages/ui` mounted by `packages/web` |
+| HTTP API | Create runs, stream results, send conversation turns, cancel work, and inspect usage. | `packages/web` |
+| Template catalog | Store starter agents and bundles consumed by the CLI and wizard. | `gallery/` |
+| Registry APIs | Load manifests, resolve capabilities, and emit Render infrastructure. | `packages/registry` |
+
+## CLI scaffolder
+
+Use the CLI when you want a project on your machine.
+
+```sh
+pnpm dlx create-render-agent my-agent
+```
+
+In this repo, local development commonly uses `--harness-root` so the scaffolded project links to the local workspace packages:
+
+```sh
+pnpm --filter create-render-agent dev
+create-render-agent my-agent --harness-root /path/to/render-harness
+```
+
+The CLI loads the template catalog, asks which starter to use, writes the project files, and prints local next steps.
+
+Use the CLI when:
+
+- You want to inspect and edit generated files immediately.
+- You want to test framework changes against a newly scaffolded project.
+- You want a local project before creating a GitHub repo.
+
+## Browser wizard
+
+Use the browser wizard when you want a guided flow that creates a managed repo and deploy path.
+
+The wizard loads the same template catalog through `GET /api/gallery`. The first screen is a template picker with a blank option and every available starter.
+
+The wizard is the right surface when:
+
+- You want a no-code or low-code onboarding flow.
+- You want a managed GitHub repo created for the user.
+- You want a deploy link instead of a local-only project.
+
+The wizard is implemented as a Hono server plus React SPA in `packages/wizard`.
+
+## Template catalog
+
+The template catalog is currently named `gallery/`. Despite the name, it is not a standalone visual gallery. It is source data consumed by the CLI and browser wizard.
+
+The catalog includes:
+
+- `gallery/index.yaml`: The list of available starters.
+- `gallery/agents/*/render-harness.yaml`: The starter manifests.
+- Optional `README.md` files for template previews.
+- Optional `src/*` files for sealed bundles.
+
+The current starters are:
+
+- `chat`
+- `support-bot`
+- `research-cron`
+- `chief-of-staff`
+
+The Chief of Staff template is a sealed multi-agent bundle. It ships multiple agents and source files together instead of generating a single prompt-based agent.
+
+## Deployed operator UI
+
+The operator UI is mounted at `/ui` when a deployment enables `shared.ui: true`.
+
+Use it after deployment to:
+
+- Chat with an agent.
+- Resume conversations.
+- Inspect runs, messages, tool calls, and tool results.
+- View loaded agents and skipped built-ins.
+- View usage rollups.
+- Edit supported model/config values through the Config tab.
+- Read the in-product Guide.
+
+The UI is not the scaffolder. It operates a harness that is already deployed.
+
+## HTTP API
+
+The web package exposes the production HTTP surface. Use it when you want to integrate an external app, custom frontend, Slack bot, webhook, or internal tool.
+
+Common API actions include:
+
+- Create a run.
+- Stream a run.
+- Create a conversation.
+- Append a conversation message.
+- Cancel a run.
+- Send input to a paused run.
+- List agents and usage.
+
+The web service usually fronts a worker so requests return quickly while jobs continue in the background.
+
+## Registry and framework APIs
+
+Use source-level APIs when you are extending the framework itself.
+
+Important registry responsibilities include:
+
+- Parse and validate `render-harness.yaml`.
+- Load starter templates from source or bundled snapshots.
+- Resolve capability packs.
+- Build `AgentDefinition` objects.
+- Emit `render.yaml` Blueprints.
+- Plan non-Blueprint resources such as Workflow services.
+
+Most application authors should start with the CLI or wizard. Framework contributors usually work directly with the registry, runtimes, and core packages.
+
+## Lifecycle map
+
+| Stage | Primary surface |
+| --- | --- |
+| Pick a starting point | CLI scaffolder or browser wizard |
+| Author agent behavior | Generated TypeScript files |
+| Declare deployment shape | `render-harness.yaml` |
+| Build Render infrastructure | Registry and Blueprint emitter |
+| Start runs | Web API, Cron, Worker, or Workflows |
+| Operate deployed agents | Operator UI |
+| Extend the framework | Core, registry, runtime, and capability packages |

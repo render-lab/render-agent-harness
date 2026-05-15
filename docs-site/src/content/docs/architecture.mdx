@@ -1,0 +1,19 @@
+---
+title: Architecture Graph
+description: Explore packages, runtime paths, and Render primitives in an interactive graph.
+tableOfContents: false
+---
+
+import ArchitectureGraph from "../../components/ArchitectureGraph.tsx";
+
+Click a node to see the package or service boundary it represents. Use the controls to pan and zoom through the graph.
+
+<ArchitectureGraph client:load />
+
+## How to read the graph
+
+The graph separates authoring, deployment, runtime execution, and shared primitives. Workflows are a peer execution target, not a required hop after Cron.
+
+- Manual/API workflow trigger: `web -> workflows`
+- Model-delegated workflow trigger: `web -> worker -> trigger_workflow -> workflows`
+- Scheduled workflow trigger: `cron -> workflows`

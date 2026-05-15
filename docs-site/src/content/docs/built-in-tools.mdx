@@ -1,0 +1,40 @@
+---
+title: Built-in Tools
+description: Understand the tools core can add to every agent.
+---
+
+The core package builds a set of built-in tools before each run. Some tools are always available. Others register only when the required environment variables or primitives exist.
+
+## Always-on tools
+
+| Tool | Purpose |
+| --- | --- |
+| `load_skill` | Load skill content into the run context. |
+| `fetch_full_result` | Retrieve an untruncated stored tool result. |
+| `fetch_url` | Fetch public URLs with SSRF protection. |
+| `current_time` | Return the current time. |
+| `ask_user` | Pause a run and wait for user input. |
+| `todo` | Track agent-visible task state during a run. |
+
+## Environment-gated tools
+
+| Tool | Provider chain |
+| --- | --- |
+| `web_search` | `EXA_API_KEY`, then `TAVILY_API_KEY`, then `BRAVE_API_KEY`. |
+| `web_extract` | `FIRECRAWL_API_KEY`, then `EXA_API_KEY`. |
+| `image_generate` | `OPENAI_API_KEY`, then `FAL_KEY`. |
+
+Provider selection can be overridden with `HARNESS_WEB_SEARCH_PROVIDER`, `HARNESS_WEB_EXTRACT_PROVIDER`, or `HARNESS_IMAGE_PROVIDER`.
+
+## Primitive-gated tools
+
+| Tool | Required primitive |
+| --- | --- |
+| `list_my_runs` | Postgres run state. |
+| `trigger_workflow` | Render API key and a Workflow slug. |
+
+`trigger_workflow` is useful for model-delegated work. For explicit user actions, the web service can trigger Workflows directly.
+
+## Skipped built-ins
+
+When a built-in cannot register, the run records why it was skipped. The operator API surfaces skipped built-ins through agent metadata so users can see which environment variables or primitives are missing.

@@ -1,0 +1,27 @@
+---
+title: Chief of Staff Bundle
+description: Understand the first multi-agent bundle in the gallery.
+---
+
+The Chief of Staff bundle demonstrates why Render Harness needs multiple runtime paths. The bundle deploys one shared harness, but each agent uses the runtime that matches its job.
+
+## Bundle agents
+
+- `chat`: Runs through web and worker services for interactive conversation.
+- `meeting-prep`: Runs on Cron to create meeting briefs before upcoming events.
+- `weekly-recap`: Uses Cron to trigger a durable Workflow recap.
+- `interview-prep`: Uses Cron-triggered Workflows and can also run on demand.
+- `interview-feedback`: Runs as an on-demand Workflow task.
+
+## Shared pieces
+
+All agents share the bundle manifest, model defaults, environment schema, Postgres state, and the memory capability. This keeps the deployment small while still letting each agent choose the right runtime shape.
+
+## Files to inspect
+
+- `gallery/agents/chief-of-staff/render-harness.yaml`
+- `gallery/agents/chief-of-staff/src/chat.ts`
+- `gallery/agents/chief-of-staff/src/meeting-prep.ts`
+- `gallery/agents/chief-of-staff/src/weekly-recap.ts`
+- `gallery/agents/chief-of-staff/src/interview-prep.ts`
+- `gallery/agents/chief-of-staff/src/interview-feedback.ts`

@@ -1,0 +1,55 @@
+---
+title: Deployment Model
+description: Understand how a harness manifest maps to Render services and shared primitives.
+---
+
+The registry turns `render-harness.yaml` into a Render deployment shape. Single-agent projects stay small. Bundles coalesce shared services so multiple agents can run from one deployment.
+
+## Default services
+
+Every deployment includes Postgres. Deployments that include workers or capability packs that need Key Value also include a Key Value instance.
+
+| Manifest shape | Render services |
+| --- | --- |
+| One `web` agent | One web service and Postgres. |
+| `web` plus `worker` | One web service, one worker/private service, Postgres, and Key Value. |
+| One or more `cron` runtimes | One Cron service per schedule. |
+| One or more workflow tasks | One Workflow service managed outside Blueprint generation. |
+
+## Service coalescing
+
+Bundles group similar runtime declarations:
+
+- All `web` agents share one web service.
+- All `worker` agents share one worker service and queue.
+- Each `cron` runtime emits one Cron service.
+- Workflow-task agents register as tasks on one Workflow service.
+
+This keeps a bundle from multiplying Postgres instances, Key Value instances, and web surfaces.
+
+## Shared state
+
+Postgres stores durable state for every runtime:
+
+- Runs and conversations
+- Messages and tool calls
+- Full tool results
+- Usage rollups
+- pg-boss queue jobs
+
+Key Value stores low-latency control signals:
+
+- Cancellation flags
+- Runtime locks
+
+## Workflow triggers
+
+Workflow tasks can start from three places:
+
+| Trigger | Path |
+| --- | --- |
+| Manual user action | `web -> workflows` |
+| Model delegation | `web -> worker -> trigger_workflow -> workflows` |
+| Schedule | `cron -> workflows` |
+
+Cron is only the scheduler path. It is not required for manual Workflow triggers.

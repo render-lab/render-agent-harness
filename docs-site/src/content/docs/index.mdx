@@ -1,0 +1,128 @@
+---
+title: Render Harness
+description: Build, deploy, and operate agents on Render primitives.
+---
+
+Render Harness is a TypeScript framework for building agents that run on Render primitives: Web Services, Workers, Cron Jobs, Workflows, Postgres, and Key Value.
+
+Use it when you want more than a local demo script. Render Harness gives you a shared agent loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI.
+
+## How you use it
+
+Render Harness is not only a runtime library. It has different surfaces for different jobs:
+
+- Use the CLI scaffolder to create a local project.
+- Use the browser wizard to pick a template and create a managed repo/deploy flow.
+- Use the template catalog to define what starters are available.
+- Use the deployed operator UI to chat, inspect runs, view agents, edit config, and read guides.
+- Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
+- Use the registry APIs when you are extending the framework itself.
+
+See [Ways to use Render Harness](/ways-to-use/) for the full map.
+
+## Platform surfaces
+
+Render Harness has four user-facing surfaces:
+
+| Surface | What it does |
+| --- | --- |
+| CLI scaffolder | Creates a local project from a blank prompt or starter template. |
+| Browser wizard | Creates a guided repo/deploy flow from the same template catalog. |
+| Deployed operator UI | Operates a running harness at `/ui`. |
+| HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
+
+It also has framework surfaces for contributors:
+
+- Registry APIs for manifest loading, template loading, capability packs, and Blueprint emission.
+- Runtime packages for web, worker, cron, and Workflows.
+- Core APIs for model loops, tools, MCP, state, and cancellation.
+
+## What you can build
+
+Render Harness supports several agent shapes:
+
+- Chat assistants that respond over HTTP and continue conversations across turns.
+- Support bots that enqueue work, call tools, and stream progress back to an operator UI.
+- Scheduled research agents that run on Cron and write durable reports.
+- Personal assistant bundles with chat, memory, scheduled checks, and Workflow-backed deep work.
+- Human-in-the-loop agents that pause for input or approval before writing state or triggering external actions.
+- Tool-using agents that connect to MCP servers, built-in tools, and capability packs.
+
+The same core loop runs all of these shapes. The runtime changes how work starts, how long it can run, and how users observe it.
+
+## What the harness gives you
+
+The harness handles the platform work around your agent:
+
+- Durable run state in Postgres.
+- Tool calls and full tool result storage.
+- Conversation state and streaming updates.
+- Model adapters for Anthropic and OpenAI-compatible providers.
+- Built-in tools for time, URL fetches, search, extraction, image generation, user input, and Workflow triggers.
+- MCP server wiring for external tools.
+- Capability packs for memory, browser automation, search, scraping, and filesystem access.
+- A `render-harness.yaml` manifest that describes agents, runtimes, capabilities, environment variables, and deployment shape.
+- A registry and Blueprint emitter that turn the manifest into Render services.
+- CLI and browser scaffolding flows for starting from a gallery template.
+- An optional operator UI at `/ui` for chat, run inspection, agents, usage, and guides.
+
+## The mental model
+
+Think of the project as four layers:
+
+1. Define agents in TypeScript and `render-harness.yaml`.
+2. Load the manifest through the registry to produce runnable agent definitions.
+3. Start work through the runtime that matches the job.
+4. Store state in Postgres and control signals in Key Value.
+
+`@render-harness/core` owns the model loop. Runtime packages decide when to call the loop. The registry turns config into code and infrastructure. The web and UI packages expose the product surface.
+
+## Runtime choices
+
+Choose the runtime based on how the work starts:
+
+| Work type | Runtime path |
+| --- | --- |
+| Short request/response demo | `runtime-web` |
+| Interactive chat or API work | `web -> runtime-worker` |
+| Scheduled short work | `runtime-cron` |
+| Scheduled durable work | `runtime-cron -> runtime-workflows` |
+| Manual durable work | `web -> runtime-workflows` |
+| Model-delegated deep work | `web -> runtime-worker -> trigger_workflow -> runtime-workflows` |
+
+Cron is only the scheduler path. Workflows can also start directly from the web service or from a model tool call.
+
+## Start from a template
+
+The gallery includes these starter shapes:
+
+- `chat`: Minimal HTTP chat agent.
+- `support-bot`: Web and worker shape for queued support flows.
+- `research-cron`: Scheduled research agent with search.
+- `chief-of-staff`: Multi-agent bundle with chat, memory, meeting prep, weekly recap, interview prep, and feedback capture.
+
+The Chief of Staff bundle is the most complete example because it uses web, worker, cron, workflows, memory, and multiple agent entrypoints in one deployment.
+
+## What to read first
+
+If you want to understand the system, start here:
+
+- [Architecture graph](/architecture/): Follow the main runtime paths and click nodes to inspect package responsibilities.
+- [Ways to use](/ways-to-use/): Compare the CLI, wizard, template catalog, deployed UI, HTTP API, and registry APIs.
+- [Core loop](/core-loop/): Understand the shared execution engine.
+- [Runtime paths](/runtime-paths/): Compare web, worker, cron, and Workflow execution.
+- [Package map](/package-map/): Find which package owns each part of the system.
+- [Registry and scaffolding](/registry-and-scaffolding/): Understand manifests, templates, and generated projects.
+- [`render-harness.yaml` spec](/yaml-spec/): Learn the manifest format.
+- [Deployment model](/deployment/): See how manifests map to Render services.
+
+If you want to run or change code, start here:
+
+- [Local development](/local-development/): Install dependencies, start Postgres and Key Value, and run examples.
+- [Examples and Blueprints](/examples-and-blueprints/): Map examples to runtime shapes.
+- [Web API](/web-api/): Integrate custom frontends, bots, webhooks, and internal tools.
+- [Operator UI](/operator-ui/): Operate a deployed harness.
+- [Capabilities](/capabilities/): Add tools and integration packs.
+- [Built-in tools](/built-in-tools/): Understand the tools core can add automatically.
+- [State and streaming](/state-and-streaming/): Understand persistence, cancellation, and SSE updates.
+- [Operations](/operations/): Debug deployed harnesses and common failure modes.

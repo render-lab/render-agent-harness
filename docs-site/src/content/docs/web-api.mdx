@@ -1,0 +1,90 @@
+---
+title: Web API
+description: Use the production HTTP surface for runs, conversations, streaming, agents, diagnostics, and usage.
+---
+
+`@render-harness/web` is the production HTTP surface. It fronts `runtime-worker`, stores state in Postgres, streams updates through SSE, and can mount the operator UI.
+
+Use the web API when you want to integrate Render Harness with a custom frontend, webhook, Slack app, internal tool, or automation.
+
+## Service shape
+
+The web service:
+
+- Applies database migrations on boot.
+- Starts pg-boss.
+- Creates the run queue.
+- Authenticates requests.
+- Registers run, conversation, agent, usage, diagnostics, deployment, Blueprint, config, and model routes.
+- Optionally mounts the operator UI at `/ui`.
+
+`serveWeb()` requires `DATABASE_URL`. The default auth checks `Authorization: Bearer <WEB_API_KEY>`.
+
+## Run endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /runs` | Create a run and enqueue worker execution. |
+| `GET /runs` | List runs with filters and keyset pagination. |
+| `GET /runs/:id` | Fetch a run and its message history. |
+| `GET /runs/:id/tool-calls` | List tool calls and joined results for a run. |
+| `GET /runs/:id/stream` | Stream run events over SSE. |
+| `POST /runs/:id/cancel` | Request cooperative cancellation. |
+| `POST /runs/:id/input` | Resume a paused run with human input. |
+
+`POST /runs` accepts an `agentName` when a deployment serves multiple agents.
+
+## Conversation endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /conversations` | Create an ongoing thread. |
+| `GET /conversations` | List conversations. |
+| `GET /conversations/:id` | Fetch one conversation and message stream. |
+| `POST /conversations/:id/messages` | Add a user turn and enqueue the next run. |
+| `GET /conversations/:id/stream` | Stream updates across every run in a conversation. |
+
+Conversations are the chat surface. A conversation can contain many runs over time.
+
+## Operator endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /agents` | Return loaded agents and skipped built-ins. |
+| `GET /usage` | Return daily and per-agent usage rollups. |
+| `GET /deployment` | Return bundle/deployment metadata for the UI. |
+| `GET /diagnostics` | Return health checks for primitives and agents. |
+| `GET /blueprint` | Return deployment Blueprint details. |
+| `GET /healthz` | Liveness check. |
+
+The config/model routes support in-product edits where the deployment has enough metadata and wizard integration configured.
+
+## Streaming model
+
+SSE streams are backed by Postgres notifications. The notification contains a pointer to durable state, not the full message. The client receives events and loads the corresponding rows from Postgres.
+
+This keeps streams small and lets clients reconnect without losing durable history.
+
+## Auth model
+
+The default web auth is API-key bearer auth:
+
+```http
+Authorization: Bearer <WEB_API_KEY>
+```
+
+When the UI is enabled, the web package also accepts the signed UI session cookie created by `@render-harness/ui`.
+
+You can pass a custom auth resolver to `serveWeb()` for JWTs, session cookies, or tenant-specific keys.
+
+## Important files
+
+| File | Why it matters |
+| --- | --- |
+| `packages/web/src/index.ts` | Web service entrypoint and route registration. |
+| `packages/web/src/routes/runs.ts` | Run API and SSE stream. |
+| `packages/web/src/routes/conversations.ts` | Chat conversation API and SSE stream. |
+| `packages/web/src/routes/agents.ts` | Agent metadata API. |
+| `packages/web/src/routes/usage.ts` | Usage rollups. |
+| `packages/web/src/routes/diagnostics.ts` | Diagnostics API. |
+| `packages/web/src/ui-mount.ts` | Optional operator UI mount. |

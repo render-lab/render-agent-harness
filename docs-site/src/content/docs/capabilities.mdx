@@ -1,0 +1,53 @@
+---
+title: Capabilities
+description: Add optional tools, MCP servers, skills, and environment requirements to agents.
+---
+
+Capabilities are package-level extensions that the registry merges into agent definitions. They keep integrations outside the core loop while still giving agents typed tools and deployment requirements.
+
+## What a capability can contribute
+
+A capability pack can add:
+
+- Local tools
+- MCP server definitions
+- Skills
+- Environment variable requirements
+- Render service requirements
+
+Capability packs are declared at the bundle level, not per agent. This avoids duplicating module-level setup inside a single Node process.
+
+## Current packs
+
+| Package | Purpose |
+| --- | --- |
+| `@render-harness/cap-browser-browserbase` | Browser automation through Browserbase. |
+| `@render-harness/cap-filesystem` | Path-scoped filesystem access. |
+| `@render-harness/cap-memory-pg` | Shared memory backed by Postgres. |
+| `@render-harness/cap-scrape-firecrawl` | Web extraction through Firecrawl. |
+| `@render-harness/cap-search-exa` | Web search through Exa. |
+| `@render-harness/cap-search-tavily` | Web search through Tavily. |
+
+## Declaring a capability
+
+```yaml
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+  - pack: "@render-harness/cap-search-exa"
+    config:
+      maxResults: 5
+```
+
+The `config` object is pack-specific. Keep configuration small and move secret values into `envSchema`.
+
+## Tool names
+
+Capability tools should use stable names because manifests can reference them in `permissions`.
+
+```yaml
+permissions:
+  requireApproval:
+    - memory.write
+```
+
+Use `requireApproval` for tools that write durable state, trigger external work, or perform actions the user should review.

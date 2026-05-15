@@ -1,0 +1,291 @@
+---
+title: render-harness.yaml Spec
+description: Define agents, runtimes, models, capabilities, and deploy-time environment variables.
+---
+
+Every harness project includes a `render-harness.yaml` file at the project root. The file is the deploy-time contract for the registry, scaffolder, Blueprint emitter, and runtime entrypoints.
+
+The current schema version is `1`. A single manifest can define one agent or a bundle of agents that share one Render deployment.
+
+## Minimal chat agent
+
+```yaml
+schemaVersion: 1
+name: chat-agent
+description: A minimal single-turn HTTP chat agent.
+harnessVersion: "^0.1"
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+agents:
+  - id: chat-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a helpful assistant deployed on Render via the agent harness.
+        Each request is a single-turn conversation. Be concise.
+    runtimes:
+      - kind: web
+        plan: starter
+```
+
+## Top-level fields
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `schemaVersion` | Yes | Must be `1`. |
+| `name` | Yes | Deployment slug. Use lowercase letters, numbers, and hyphens. |
+| `description` | Yes | Short description shown in scaffolding and operator surfaces. |
+| `harnessVersion` | Yes | Compatible harness version range, such as `^0.1`. |
+| `license` | No | SPDX-style license label. |
+| `author` | No | Author or owning team. |
+| `categories` | No | Search/filter tags for gallery entries. |
+| `shared` | No | Defaults inherited by every agent. |
+| `capabilities` | No | Bundle-wide capability pack references. |
+| `envSchema` | No | Deploy-time environment variable requirements. |
+| `agents` | Yes | One to 16 agent definitions. |
+
+## `shared`
+
+Use `shared` for defaults that apply to every agent unless an agent overrides them.
+
+```yaml
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  sampling:
+    temperature: 0.2
+    maxOutputTokens: 4096
+  budget:
+    maxIterations: 20
+    maxWallSeconds: 600
+```
+
+| Field | Description |
+| --- | --- |
+| `model` | Default model provider and model name. |
+| `ui` | Mount the operator UI at `/ui` on the web service. |
+| `budget` | Default run limits. |
+| `sampling` | Default model sampling parameters. |
+| `permissions` | Default tool permission policy. |
+
+## `model`
+
+```yaml
+model:
+  provider: anthropic
+  model: claude-sonnet-4-6
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `provider` | Yes | `anthropic` or `openai-compat`. |
+| `model` | Yes | Provider model identifier. |
+| `baseURL` | No | Required for some OpenAI-compatible providers. |
+| `apiKeyEnv` | No | Environment variable that contains the provider API key. |
+| `thinking` | No | Anthropic extended thinking settings. |
+
+## `agents`
+
+Each agent has an `id`, an `agent` block, and at least one runtime.
+
+```yaml
+agents:
+  - id: weekly-recap
+    description: Summarizes the week from memory and calendar context.
+    workflowTask: true
+    agent:
+      kind: custom
+      entrypoint: ./src/weekly-recap.ts
+    runtimes:
+      - kind: cron
+        schedule: "0 17 * * 5"
+        via: workflow
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `id` | Yes | Agent slug. Must be unique in the manifest. |
+| `description` | No | Short description for UIs and generated docs. |
+| `agent` | Yes | Built-in or custom agent definition. |
+| `runtimes` | Yes | One or more runtime declarations. Each agent can use each runtime kind once. |
+| `model` | No | Per-agent model override. |
+| `permissions` | No | Per-agent tool permission override. |
+| `budget` | No | Per-agent run limits. |
+| `sampling` | No | Per-agent sampling settings. |
+| `mcpServers` | No | Per-agent MCP server definitions. |
+| `workflowTask` | No | Register this agent as a callable Workflow task. |
+
+## Agent definitions
+
+Use `kind: builtin` for the built-in chat agent:
+
+```yaml
+agent:
+  kind: builtin
+  ref: chat
+  systemPrompt: |
+    You are a concise support assistant.
+```
+
+Use `kind: custom` for a TypeScript or JavaScript module that exports an agent definition:
+
+```yaml
+agent:
+  kind: custom
+  entrypoint: ./src/agent.ts
+```
+
+## Runtime definitions
+
+| Runtime | Required fields | Description |
+| --- | --- | --- |
+| `web` | None | Exposes an HTTP entrypoint. Single-agent manifests use the sync web runtime unless a worker is also present. |
+| `worker` | None | Consumes queued jobs through pg-boss. |
+| `cron` | `schedule` | Runs on a UTC schedule. Use `via: workflow` to trigger a Workflow instead of running inline. |
+| `workflows` | None | Registers the agent as a Render Workflow task. |
+
+### Web runtime
+
+```yaml
+runtimes:
+  - kind: web
+    plan: starter
+    healthCheckPath: /healthz
+    region: oregon
+```
+
+### Worker runtime
+
+```yaml
+runtimes:
+  - kind: worker
+    plan: starter
+    queue: agent-runs
+```
+
+### Cron runtime
+
+```yaml
+runtimes:
+  - kind: cron
+    schedule: "*/15 * * * *"
+```
+
+Use `via: workflow` when a scheduled job should start a durable Workflow task:
+
+```yaml
+runtimes:
+  - kind: cron
+    schedule: "0 17 * * 5"
+    via: workflow
+```
+
+### Workflows runtime
+
+```yaml
+runtimes:
+  - kind: workflows
+```
+
+Workflows are registered as tasks by the bundle’s Workflow service. A workflow-only agent has no schedule and is usually invoked from chat, the web API, or another external trigger.
+
+## Capabilities
+
+Capability packs are bundle-wide because packs can hold module-level state.
+
+```yaml
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+  - pack: "@render-harness/cap-search-exa"
+    config:
+      maxResults: 5
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `pack` | Yes | npm package name for the capability pack. |
+| `version` | No | Optional semver range. |
+| `config` | No | Free-form pack-specific configuration. |
+
+## Environment schema
+
+Use `envSchema` to declare deploy-time configuration that the scaffolders and Blueprint emitter surface to users.
+
+```yaml
+envSchema:
+  - name: CALENDAR_ICS_URL
+    required: false
+    secret: true
+    description: Public ICS URL for the calendar to watch.
+  - name: TEAM_NAME
+    required: false
+    default: Platform
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `name` | Yes | SHOUT_CASE environment variable name. |
+| `required` | No | Whether the value must be provided. Defaults to `false`. |
+| `secret` | No | Whether the value should be treated as secret. Defaults to `false`. |
+| `description` | No | Short help text shown during setup. |
+| `default` | No | Default value for non-secret variables. |
+
+## MCP servers
+
+Agents can declare stdio or Streamable HTTP MCP servers.
+
+```yaml
+mcpServers:
+  - name: render
+    transport: http
+    url: https://mcp.render.com/mcp
+    headers:
+      Authorization: Bearer ${RENDER_API_KEY}
+    allowTools:
+      - list_services
+```
+
+For stdio servers, use `command`, `args`, and optional `env`:
+
+```yaml
+mcpServers:
+  - name: local-tools
+    transport: stdio
+    command: node
+    args: ["./dist/mcp-server.js"]
+```
+
+## Permissions
+
+Permissions control which tools are available and which tools require approval.
+
+```yaml
+permissions:
+  requireApproval:
+    - trigger_workflow
+  deniedTools:
+    - image_generate
+```
+
+| Field | Description |
+| --- | --- |
+| `requireApproval` | Tool names that pause for user approval before execution. |
+| `allowedTools` | Optional allowlist. |
+| `deniedTools` | Optional denylist. |
+
+## Workflow task rules
+
+An agent is registered as a Workflow task when any of these are true:
+
+- The agent sets `workflowTask: true`.
+- The agent has a `kind: workflows` runtime.
+- The agent has a `kind: cron` runtime with `via: workflow`.
+
+This lets the same task run from a manual web action, a model tool call, or a scheduled Cron trigger.

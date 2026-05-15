@@ -1,0 +1,40 @@
+---
+title: Runtime Paths
+description: Compare the paths that start and execute agent runs.
+---
+
+Each runtime path prepares a run, chooses the right execution boundary, and delegates agent behavior to `runAgent()` or `runAgentStep()`.
+
+## Manual web path
+
+Use this path when a user or API client explicitly starts work.
+
+1. `@render-harness/web` authenticates the request.
+2. The web service creates or resumes run state in Postgres.
+3. The web service either enqueues worker work or triggers a Workflow directly.
+4. Clients receive status and message updates through SSE.
+
+## Worker delegation path
+
+Use this path when the model decides to delegate work during a chat turn.
+
+1. The web service enqueues a pg-boss job.
+2. `runtime-worker` claims the job.
+3. The worker calls `runAgent()`.
+4. The agent can call `trigger_workflow` if permissions allow it.
+
+## Cron path
+
+Use this path when time starts the work.
+
+- Inline Cron runs an agent directly and exits.
+- Workflow-backed Cron triggers a Workflow task and exits.
+- Cron is a scheduler adapter, not a dependency for manual Workflow triggers.
+
+## Workflow path
+
+Use this path for durable, observable, approval-friendly work.
+
+- `runtime-workflows` registers each workflow-mode agent as a Render Workflow task.
+- Workflow tasks use the same core state model as web, worker, and cron runs.
+- Checkpoints split long work into durable steps.

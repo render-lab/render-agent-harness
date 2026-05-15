@@ -1,4 +1,5 @@
 packages:
+  - "docs-site"
   - "packages/*"
   - "packages/capabilities/*"
   - "examples/*"

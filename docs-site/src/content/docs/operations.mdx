@@ -1,0 +1,101 @@
+---
+title: Operations
+description: Operate deployed harnesses, inspect health, understand failures, and know when to redeploy.
+---
+
+Operational work happens through the web API, operator UI, logs, Postgres, and Key Value.
+
+## Health checks
+
+Use `GET /healthz` to check whether the web service is alive. The response includes the queue name, loaded agents, and boot time.
+
+Use the Diagnostics surface for deeper checks. It verifies primitives and reports deployment-level issues that the UI can display.
+
+## Logs
+
+Each runtime builds a service-specific logger:
+
+- `web`
+- `runtime-worker`
+- `runtime-cron`
+- `runtime-workflows`
+
+Use logs to correlate run IDs, job IDs, agent names, and errors.
+
+## Run inspection
+
+Use the Runs tab or run API to inspect:
+
+- Status transitions
+- Messages
+- Tool calls
+- Tool results
+- Serialized errors
+- Metadata
+
+Tool results are stored in full in Postgres, even when the model receives a truncated result.
+
+## Cancellation
+
+Cancel a run through the web API or by writing the Key Value flag directly:
+
+```sh
+pnpm db:valkey
+SET cancel:<run-id> user_requested EX 3600
+```
+
+The worker and core loop observe cancellation at turn and tool boundaries.
+
+## Human input
+
+`ask_user` pauses a run. Resume it with `POST /runs/:id/input` or through the UI where supported.
+
+Chat-shaped agents pause at turn boundaries so the next user message can resume the conversation.
+
+## Configuration changes
+
+Some deployed configuration can be changed through the operator UI Config tab. Structural changes still need source edits and redeploys.
+
+Redeploy for:
+
+- Adding or removing agents.
+- Changing runtime kinds.
+- Changing Cron schedules.
+- Adding Render services.
+- Adding capability packs that change infrastructure.
+
+UI/API edits are better for:
+
+- Supported model edits.
+- Supported live configuration overlays.
+- Operational inspection.
+
+## Common failure modes
+
+| Symptom | Check |
+| --- | --- |
+| Built-in tool missing | Check skipped built-ins on `GET /agents` or the Agents tab. |
+| Runs stay pending | Check worker process, pg-boss queue, and `DATABASE_URL`. |
+| Cancellation does nothing | Check Key Value configuration and whether the run is inside a provider request. |
+| Streams do not update | Check Postgres notifications and whether durable rows are being written. |
+| UI login fails | Check `WEB_API_KEY` and `UI_COOKIE_SECRET`. |
+| Workflow trigger fails | Check `RENDER_API_KEY`, `WORKFLOW_SLUG`, and Workflow task registration. |
+
+## Important environment variables
+
+| Variable | Used by |
+| --- | --- |
+| `DATABASE_URL` | Web, worker, cron, Workflows, core state. |
+| `KEY_VALUE_URL` or compatible Redis URL | Cancellation and locks. |
+| `WEB_API_KEY` | Default web API auth. |
+| `UI_COOKIE_SECRET` | Operator UI session cookies. |
+| `ANTHROPIC_API_KEY` | Anthropic adapter. |
+| `OPENAI_API_KEY` | OpenAI-compatible adapter and some built-ins. |
+| `RENDER_API_KEY` | Workflow triggers and Render integration paths. |
+| `WORKFLOW_SLUG` | Workflow task references. |
+
+## Shutdown
+
+Runtime packages install shutdown handlers so processes can stop accepting work, flush state, and close shared Postgres/Key Value connections.
+
+Workers should stop gracefully on `SIGTERM` and let in-flight jobs finish or checkpoint.

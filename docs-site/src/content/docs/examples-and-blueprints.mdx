@@ -1,0 +1,73 @@
+---
+title: Examples and Blueprints
+description: Map local examples and Blueprint files to the platform runtime shapes.
+---
+
+The repo includes examples and Blueprint files that exercise different deployment shapes. Use them to understand a runtime path before creating your own agent.
+
+## Root commands
+
+Run these from the repo root:
+
+```sh
+pnpm db:up
+pnpm dev:web
+pnpm dev:citations
+pnpm dev:operator-web
+pnpm dev:operator-worker
+```
+
+Docker Compose profiles provide app stacks for selected examples:
+
+```sh
+pnpm apps:web-chat
+pnpm apps:support
+pnpm apps:operator-demo
+pnpm apps:citations
+```
+
+## Examples
+
+| Example | Purpose | Runtime shape |
+| --- | --- | --- |
+| `examples/web-chat` | Minimal web chat example. | Sync web |
+| `examples/support-agent` | Web plus worker support flow. | Web + worker |
+| `examples/operator-demo` | Operator UI and worker demo. | Web + worker + UI |
+| `examples/citations-monitor` | Scheduled citation monitoring. | Cron |
+| `examples/deploy-agent` | Deployment/workflow-oriented agent. | Workflow-oriented |
+
+## Gallery agents as examples
+
+Gallery agents are also examples:
+
+| Template | What it demonstrates |
+| --- | --- |
+| `gallery/agents/chat` | Minimal built-in chat agent manifest. |
+| `gallery/agents/support-bot` | Queue-driven support starter. |
+| `gallery/agents/research-cron` | Scheduled research and search capability. |
+| `gallery/agents/chief-of-staff` | Multi-agent bundle with memory, Cron, Workflows, and chat. |
+
+Use the gallery when you want a starter. Use `examples/` when you want a runnable local app.
+
+## Blueprint files
+
+The `blueprints/` directory contains reference Render Blueprints for hand-authored deployment shapes.
+
+| File | Purpose |
+| --- | --- |
+| `blueprints/render.demo.yaml` | Simple demo web shape. |
+| `blueprints/render.demo-cron.yaml` | Cron-oriented demo shape. |
+| `blueprints/render.private.yaml` | Production-style web plus worker/private service shape. |
+
+Generated projects usually get a `render.yaml` from the registry emitter rather than copying these files directly.
+
+## Docker Compose
+
+`compose.yaml` provides local Postgres and Key Value primitives. It also includes profiles for example app stacks.
+
+Most tests and integration paths expect these primitives:
+
+- Postgres on `127.0.0.1:55432`
+- Key Value on `127.0.0.1:56379`
+
+Use `HARNESS_PG_PORT` and `HARNESS_KV_PORT` if those ports are taken.

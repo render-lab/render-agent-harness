@@ -1,0 +1,98 @@
+---
+title: Core Loop
+description: Understand the shared execution engine behind every runtime.
+---
+
+`@render-harness/core` is the runtime-agnostic agent engine. Every runtime eventually calls into the core loop instead of talking to a model directly.
+
+## Responsibilities
+
+The core package owns:
+
+- Agent definitions and validation through `defineAgent()`.
+- Model adapters for Anthropic and OpenAI-compatible providers.
+- Prompt assembly.
+- Built-in tool registration.
+- MCP server connection and exposed tool naming.
+- Tool call execution and result truncation.
+- Durable run, message, tool call, and tool result writes.
+- Budget checks for iterations, wall time, tokens, and cost.
+- Cooperative cancellation.
+- Skill loading.
+- Usage and cost accounting.
+
+The core does not decide when a run starts. That belongs to a runtime package.
+
+## Main entrypoint
+
+Runtime packages call `runAgent()`:
+
+```ts
+import { runAgent } from "@render-harness/core";
+
+await runAgent(
+  {
+    runId,
+    agentDef,
+    signal,
+    checkpoint,
+  },
+  { pool, logger },
+);
+```
+
+The first argument describes the run. The second argument supplies shared dependencies such as Postgres and logging.
+
+## Agent definitions
+
+Agents are TypeScript objects created with `defineAgent()` or loaded from `render-harness.yaml` through the registry.
+
+An agent definition includes:
+
+- Name and version
+- Model configuration
+- System prompt or custom behavior
+- Local tools
+- MCP servers
+- Skills
+- Permissions
+- Budget and sampling settings
+- Runtime shape such as `chat`
+
+Chat-shape agents pause at the end of a turn so the next user message can resume the same conversation.
+
+## Tool result storage
+
+Tool results are stored in full in Postgres. The model receives a truncated result so large responses do not overwhelm the context window.
+
+When the model needs the full result, it can call `fetch_full_result`.
+
+## Cancellation
+
+Cancellation is cooperative. The web API writes a Key Value flag at `cancel:<runId>`. The core and runtimes check that flag between turns and tool calls.
+
+This means cancellation is fast at control boundaries, but it does not forcibly interrupt a provider request that is already in flight.
+
+## Checkpoints
+
+Runtimes choose a checkpoint policy:
+
+| Policy | Used by | Behavior |
+| --- | --- | --- |
+| `run-to-completion` | Sync web and direct cron | Finish the whole run in one process. |
+| `soft` | Worker and Workflows | Yield after time or tool-call limits so long work can continue later. |
+
+Checkpoints keep long work from monopolizing one process and make Workflow runs durable.
+
+## Important files
+
+| File | Why it matters |
+| --- | --- |
+| `packages/core/src/loop.ts` | Main agent loop. |
+| `packages/core/src/types.ts` | Shared core types and defaults. |
+| `packages/core/src/builtins/` | Built-in tool implementations. |
+| `packages/core/src/state/repo.ts` | Durable state operations. |
+| `packages/core/src/mcp.ts` | MCP connection and tool exposure. |
+| `packages/core/src/prompt.ts` | System prompt assembly. |
+| `packages/core/src/cancel.ts` | Cancellation keys and signals. |
+| `packages/core/src/truncate.ts` | Tool result truncation. |

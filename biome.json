@@ -17,6 +17,7 @@
       "!**/dist",
       "!**/node_modules",
       "!**/coverage",
+      "!**/.astro",
       "!**/.turbo",
       "!**/pnpm-lock.yaml"
     ]

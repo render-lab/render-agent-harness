@@ -1,0 +1,62 @@
+---
+title: Local Development
+description: Run the harness locally and verify changes before deploying.
+---
+
+Use the repo root for workspace commands.
+
+## Install dependencies
+
+```sh
+pnpm install
+```
+
+The workspace uses Node 22 or later and pnpm 10.
+
+## Start local primitives
+
+Most runtime and integration paths use Postgres and Key Value.
+
+```sh
+pnpm db:up
+```
+
+This starts Postgres on `127.0.0.1:55432` and Key Value on `127.0.0.1:56379`.
+
+## Run examples
+
+```sh
+pnpm dev:web
+pnpm dev:citations
+pnpm dev:operator-web
+pnpm dev:operator-worker
+```
+
+Use the example that matches the runtime path you are changing.
+
+## Run docs locally
+
+```sh
+pnpm docs:dev
+```
+
+Build the docs before committing docs changes:
+
+```sh
+pnpm docs:build
+```
+
+## Validate code
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm check
+```
+
+For a narrower loop, filter to the package you changed:
+
+```sh
+pnpm --filter @render-harness/core test
+pnpm --filter @render-harness/registry typecheck
+```

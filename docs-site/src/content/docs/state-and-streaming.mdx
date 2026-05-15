@@ -1,0 +1,44 @@
+---
+title: State and Streaming
+description: Understand how runs persist, cancel, and stream across runtimes.
+---
+
+Render Harness keeps durable state in Postgres and low-latency signals in Key Value. Runtimes use these primitives instead of holding run state in process memory.
+
+## Postgres state
+
+Postgres stores:
+
+- Agent runs
+- Conversations
+- Messages
+- Tool calls
+- Full tool results
+- Usage records
+
+Tool results are stored in full. The model receives a truncated result, and it can call `fetch_full_result` when it needs the full payload.
+
+## Sequence numbers
+
+Per-run message sequence numbers are allocated by the database. Runtime code should not allocate message sequence numbers client-side.
+
+## Streaming
+
+Streaming uses Postgres `LISTEN/NOTIFY` as a pointer channel. The notification payload identifies the run, message, and event kind. Clients then load the durable rows from Postgres.
+
+This avoids the 8 KB notification payload limit because the notification does not contain the full message or result.
+
+## Cancellation
+
+Cancellation uses Key Value flags at `cancel:<runId>`. Runtimes check the flag between model turns and tool calls.
+
+The web API writes the cancel flag. The worker, cron runtime, and core loop observe it cooperatively.
+
+## Runtime behavior
+
+| Runtime | State behavior |
+| --- | --- |
+| `runtime-web` | Runs in the HTTP request and writes state through core. |
+| `runtime-worker` | Claims queued jobs, checkpoints long work, and streams updates through Postgres notifications. |
+| `runtime-cron` | Creates a run, executes once, and exits. |
+| `runtime-workflows` | Runs durable steps and chains checkpoints as Workflow tasks. |

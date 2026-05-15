@@ -1,0 +1,94 @@
+---
+title: Operator UI
+description: Use the deployed `/ui` surface to chat, inspect runs, view agents, manage config, and read guides.
+---
+
+The operator UI is an optional React SPA mounted by the web service at `/ui`. It is for operating a deployed harness, not for creating a new project.
+
+Enable it with:
+
+```yaml
+shared:
+  ui: true
+```
+
+The web service dynamically loads `@render-harness/ui` when `serveWeb({ ui: true })` is used.
+
+## Tabs
+
+| Tab | Purpose |
+| --- | --- |
+| Chat | Start or resume conversations with deployed agents. |
+| Runs | Inspect runs, messages, tool calls, tool results, and statuses. |
+| Agents | View loaded agent definitions, tools, MCP servers, budgets, and skipped built-ins. |
+| Config | Edit supported deployed config such as model settings. |
+| Usage | View token, cost, and run usage rollups. |
+| Guide | Read deployment-specific guide content inside the running app. |
+
+## Chat tab
+
+The Chat tab uses the conversation API rather than raw one-off runs. Each user turn creates or resumes a conversation and streams updates through SSE.
+
+Use it to:
+
+- Talk to chat-shaped agents.
+- Switch agents in multi-agent deployments.
+- Keep conversation URLs stable.
+- Resume a previous thread.
+
+## Runs tab
+
+The Runs tab is the main debugging surface. It shows the history behind a run, including tool calls and results.
+
+Use it when:
+
+- A run failed.
+- A tool returned unexpected data.
+- A run paused for input.
+- You need to see which agent/version handled work.
+
+## Agents tab
+
+The Agents tab explains what the running service loaded at boot.
+
+It surfaces:
+
+- Agent names and descriptions.
+- Models, budgets, and permissions.
+- Local tools and MCP servers.
+- Skipped built-ins and why they were skipped.
+
+This helps distinguish “the manifest declares it” from “the running service actually loaded it.”
+
+## Config tab
+
+The Config tab is for supported deployed configuration edits. It relies on deployment metadata and wizard integration for write paths.
+
+Use the Config tab for runtime-visible edits such as model changes. Structural changes, new runtimes, and Cron schedule changes still belong in source control and redeploys.
+
+## Guide tab
+
+The Guide tab renders in-product documentation for the current deployment. It uses the deployment metadata endpoint to tailor text to the running bundle.
+
+## Auth
+
+The UI uses a signed cookie session. The web package wraps the normal API auth resolver so requests can authenticate with either the API key or UI session cookie.
+
+Required environment variables commonly include:
+
+- `WEB_API_KEY`
+- `UI_COOKIE_SECRET`
+
+## Important files
+
+| File | Why it matters |
+| --- | --- |
+| `packages/ui/src/index.ts` | Server-side UI mount exports. |
+| `packages/ui/src/server.ts` | UI server/session helper. |
+| `packages/ui/web/src/App.tsx` | SPA root and tab routing. |
+| `packages/ui/web/src/tabs/ChatTab.tsx` | Chat UI. |
+| `packages/ui/web/src/tabs/RunsTab.tsx` | Run list and detail navigation. |
+| `packages/ui/web/src/tabs/AgentsTab.tsx` | Agent metadata UI. |
+| `packages/ui/web/src/tabs/ConfigTab.tsx` | Deployed config UI. |
+| `packages/ui/web/src/tabs/UsageTab.tsx` | Usage UI. |
+| `packages/ui/web/src/tabs/GuideTab.tsx` | In-product guide UI. |

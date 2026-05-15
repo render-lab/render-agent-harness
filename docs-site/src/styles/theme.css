@@ -1,0 +1,76 @@
+:root {
+  color-scheme: dark;
+  --sl-border-radius: 0;
+  --sl-border-radius-small: 0;
+  --sl-border-radius-medium: 0;
+  --sl-border-radius-large: 0;
+  --sl-color-bg: #000;
+  --sl-color-bg-nav: #000;
+  --sl-color-bg-sidebar: #000;
+  --sl-color-hairline: #1f1f1f;
+  --sl-color-gray-7: #050505;
+  --sl-color-gray-6: #0b0b0b;
+  --sl-color-gray-5: #242424;
+  --sl-color-gray-4: #4a4a4a;
+  --sl-color-gray-3: #8a8a8a;
+  --sl-color-gray-2: #d0d0d0;
+  --sl-color-white: #fff;
+}
+
+html,
+body,
+.page,
+.main-frame,
+.right-sidebar,
+.sidebar-pane,
+.header,
+.site-title {
+  background: #000;
+}
+
+.card,
+.sl-markdown-content .card {
+  border-radius: 0;
+  background: #050505;
+  border-color: #242424;
+}
+
+.sl-markdown-content :not(pre) > code,
+.sl-markdown-content li > code,
+.sl-markdown-content p > code,
+.sl-markdown-content td > code,
+.sl-markdown-content th > code {
+  padding: 0.08rem 0.28rem;
+  border: 1px solid #254b7a;
+  border-radius: 0;
+  background: #07111f;
+  color: #9cc3ff;
+}
+
+button,
+input,
+select,
+textarea,
+.search-input,
+.site-search,
+.pagination-links a,
+.sidebar-content a,
+.sl-link-card,
+.starlight-aside,
+.astro-code {
+  border-radius: 0 !important;
+}
+
+.expressive-code {
+  --ec-brdRad: 0;
+}
+
+.expressive-code figure,
+.expressive-code pre,
+.expressive-code .frame {
+  border-radius: 0 !important;
+}
+
+.expressive-code pre {
+  border: 1px solid #2a2a2a;
+}
