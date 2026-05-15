@@ -118,7 +118,7 @@ function harnessDepNote(answers: Answers): string {
 `;
   }
   return `
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 `;
 }
 

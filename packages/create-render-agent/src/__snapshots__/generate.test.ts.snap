@@ -51,7 +51,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -234,9 +234,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-cron": "github:render/render-harness#main&path:packages/runtime-cron",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -400,7 +400,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -583,9 +583,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1"
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-web": "github:render/render-harness#main&path:packages/runtime-web"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
@@ -726,7 +726,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -912,10 +912,10 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,cron npm:dev:web npm:dev:cron"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-web": "github:render/render-harness#main&path:packages/runtime-web",
+    "@render-harness/runtime-cron": "github:render/render-harness#main&path:packages/runtime-cron",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -1096,7 +1096,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -1282,10 +1282,10 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,worker npm:dev:web npm:dev:worker"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-web": "github:render/render-harness#main&path:packages/runtime-web",
+    "@render-harness/runtime-worker": "github:render/render-harness#main&path:packages/runtime-worker",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -1468,7 +1468,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -1656,11 +1656,11 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,worker,cron npm:dev:web npm:dev:worker npm:dev:cron"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-web": "github:render/render-harness#main&path:packages/runtime-web",
+    "@render-harness/runtime-worker": "github:render/render-harness#main&path:packages/runtime-worker",
+    "@render-harness/runtime-cron": "github:render/render-harness#main&path:packages/runtime-cron",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -1877,7 +1877,7 @@ This is a [Render agent harness](https://github.com/render-examples/render-harne
 
 Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, pnpm, yarn, bun — examples below use \`npm\`).
 
-> **Heads-up.** This project's \`@render-harness/*\` deps point at npm version ranges that aren't published yet. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout. Once the harness ships to npm this note goes away.
+> **Heads-up.** This project's \`@render-harness/*\` deps point at GitHub package subdirectories until the harness ships to npm. If you cloned the harness repo, re-scaffold with \`--harness-root <path>\` to wire \`link:\` deps to your checkout.
 
 \`\`\`sh
 npm install
@@ -2060,9 +2060,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
+    "@render-harness/core": "github:render/render-harness#main&path:packages/core",
+    "@render-harness/registry": "github:render/render-harness#main&path:packages/registry",
+    "@render-harness/runtime-worker": "github:render/render-harness#main&path:packages/runtime-worker",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {

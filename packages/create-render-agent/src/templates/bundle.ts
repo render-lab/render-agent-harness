@@ -25,6 +25,8 @@
 import { stringify as stringifyYaml } from "yaml";
 import type { Answers, BundlePick, PackageManager } from "../types.js";
 
+const HARNESS_GIT_REPO = "github:render/render-harness#main";
+
 export type BundleRuntimeKind = "web" | "worker" | "cron";
 
 interface ManifestAgentLite {
@@ -445,17 +447,14 @@ export function bundlePackageJson(opts: BundlePackageJsonOpts): string {
 
 function linkSpec(pkgShortName: string, harnessRoot: string | null): string {
   if (harnessRoot) return `link:${harnessRoot}/packages/${pkgShortName}`;
-  // Published-deps path. Pinned to the same version range the harness
-  // repo currently ships. The bundle plan ships the harness on npm
-  // ahead of bundle adoption; until then, use --harness-root locally.
-  return "^0.1.0";
+  return `${HARNESS_GIT_REPO}&path:packages/${pkgShortName}`;
 }
 
 function linkForCapability(pkgName: string, harnessRoot: string | null): string {
-  if (!harnessRoot) return "^0.1.0";
-  // Cap packs live under packages/capabilities/.
   const tail = pkgName.split("/").pop();
-  if (!tail) return "^0.1.0";
+  if (!tail) return `${HARNESS_GIT_REPO}&path:packages/${pkgName}`;
+  if (!harnessRoot) return `${HARNESS_GIT_REPO}&path:packages/capabilities/${tail}`;
+  // Cap packs live under packages/capabilities/.
   return `link:${harnessRoot}/packages/capabilities/${tail}`;
 }
 

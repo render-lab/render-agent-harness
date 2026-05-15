@@ -65,8 +65,8 @@ export interface Answers {
    *     `link:<root>/packages/<pkg>` so the project can be built and
    *     run today without publishing the harness to npm.
    * When null, the CLI uses its bundled gallery snapshot and the
-   * scaffolded `package.json` pins published version ranges (which
-   * will fail `install` until the harness is on npm).
+   * scaffolded `package.json` points at GitHub subdirectory deps until
+   * the harness is published to npm.
    */
   harnessRoot: string | null;
   gitInit: boolean;

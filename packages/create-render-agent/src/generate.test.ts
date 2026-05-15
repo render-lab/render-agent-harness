@@ -308,7 +308,7 @@ describe("buildFileMap", () => {
     expect(map.get("README.md")).toContain("/Users/me/render-harness");
   });
 
-  it("defaults to version-range deps when harnessRoot is null", () => {
+  it("defaults to GitHub subdirectory deps when harnessRoot is null", () => {
     const map = buildFileMap({
       ...BASE,
       directory: "/tmp/published",
@@ -317,9 +317,13 @@ describe("buildFileMap", () => {
     const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
       dependencies: Record<string, string>;
     };
-    expect(pkg.dependencies["@render-harness/core"]).toBe("^0.1");
-    expect(pkg.dependencies["@render-harness/registry"]).toBe("^0.1");
-    expect(map.get("README.md")).toContain("aren't published yet");
+    expect(pkg.dependencies["@render-harness/core"]).toBe(
+      "github:render/render-harness#main&path:packages/core",
+    );
+    expect(pkg.dependencies["@render-harness/registry"]).toBe(
+      "github:render/render-harness#main&path:packages/registry",
+    );
+    expect(map.get("README.md")).toContain("GitHub package subdirectories");
   });
 
   it("preserves template-declared fields the wizard doesn't collect", () => {
