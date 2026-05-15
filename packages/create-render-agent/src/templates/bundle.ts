@@ -25,8 +25,6 @@
 import { stringify as stringifyYaml } from "yaml";
 import type { Answers, BundlePick, PackageManager } from "../types.js";
 
-const HARNESS_GIT_REPO = "github:render/render-harness#main";
-
 export type BundleRuntimeKind = "web" | "worker" | "cron";
 
 interface ManifestAgentLite {
@@ -447,13 +445,13 @@ export function bundlePackageJson(opts: BundlePackageJsonOpts): string {
 
 function linkSpec(pkgShortName: string, harnessRoot: string | null): string {
   if (harnessRoot) return `link:${harnessRoot}/packages/${pkgShortName}`;
-  return `${HARNESS_GIT_REPO}&path:packages/${pkgShortName}`;
+  return "^0.1.0";
 }
 
 function linkForCapability(pkgName: string, harnessRoot: string | null): string {
   const tail = pkgName.split("/").pop();
-  if (!tail) return `${HARNESS_GIT_REPO}&path:packages/${pkgName}`;
-  if (!harnessRoot) return `${HARNESS_GIT_REPO}&path:packages/capabilities/${tail}`;
+  if (!harnessRoot) return "^0.1.0";
+  if (!tail) return "^0.1.0";
   // Cap packs live under packages/capabilities/.
   return `link:${harnessRoot}/packages/capabilities/${tail}`;
 }
