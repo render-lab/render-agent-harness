@@ -15,8 +15,10 @@ import { resolveGallery } from "create-render-agent";
 import { Hono } from "hono";
 import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerGalleryRoute } from "./routes/gallery.js";
 import { registerHealthRoute } from "./routes/health.js";
+import { registerInstallsRoute } from "./routes/installs.js";
 import { registerScaffoldRoute } from "./routes/scaffold.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +41,21 @@ async function main(): Promise<void> {
     gallery,
     rateLimiter: createRateLimiter({ capacity: 20, windowMs: 60 * 60 * 1_000 }),
     mockScaffold: env.mockScaffold,
+  });
+
+  // Phase 2: in-UI model edits. The deployed worker's proxy route
+  // calls this with WIZARD_SHARED_SECRET in the Authorization header.
+  registerAgentModelRoute(app, {
+    sharedSecret: env.wizardSharedSecret,
+    github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+  });
+
+  // GitHub App install flow for CLI-scaffolded agents.
+  registerInstallsRoute(app, {
+    appName: env.githubAppName,
+    github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+    stateSecret: env.stateSecret,
+    publicUrl: env.publicUrl,
   });
 
   // Serve the SPA as static content. Any path not claimed by /api or

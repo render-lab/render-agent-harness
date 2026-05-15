@@ -16,6 +16,14 @@ export interface ScaffoldRequest {
   ui: boolean;
   /** Slug of a gallery agent the user picked, or null for blank. */
   templateSlug: string | null;
+  /**
+   * When set, the server treats the request as a sealed-bundle scaffold:
+   * it pulls the bundle's manifest + sourceFiles from its in-memory
+   * gallery by slug and bypasses the per-agent fields above. The
+   * `templateSlug` field carries the same slug for backwards-compatible
+   * analytics. Single-agent picks leave this null.
+   */
+  bundleSlug: string | null;
   /** Cloudflare Turnstile token from the client widget. Verified server-side. */
   turnstileToken: string;
 }

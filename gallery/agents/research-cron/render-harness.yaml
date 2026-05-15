@@ -4,25 +4,27 @@ description: Scheduled research agent that runs nightly and reports findings.
 harnessVersion: "^0.1"
 license: MIT
 
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: |
-    You are a research agent that runs on a schedule. On each invocation,
-    use the available web-search tools to find recent developments in the
-    topic area defined by your operator, summarize the most important
-    findings, and store the summary so the next run can build on it.
-
-    Be terse. Cite sources. Skip anything you can't verify.
-
-runtimes:
-  - kind: cron
-    plan: starter
-    schedule: "0 13 * * *"
-
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
 
 capabilities:
   - pack: "@render-harness/cap-search-exa"
+
+agents:
+  - id: research-cron
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a research agent that runs on a schedule. On each invocation,
+        use the available web-search tools to find recent developments in the
+        topic area defined by your operator, summarize the most important
+        findings, and store the summary so the next run can build on it.
+
+        Be terse. Cite sources. Skip anything you can't verify.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 13 * * *"

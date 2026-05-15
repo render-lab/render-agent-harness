@@ -13,6 +13,7 @@
  *   - `web_search`        (EXA_API_KEY → TAVILY_API_KEY → BRAVE_API_KEY)
  *   - `web_extract`       (FIRECRAWL_API_KEY → EXA_API_KEY)
  *   - `image_generate`    (OPENAI_API_KEY → FAL_KEY)
+ *   - `trigger_workflow`  (RENDER_API_KEY + WORKFLOW_SLUG)
  *
  * Tier C — auto-on when harness primitives are present:
  *   - `list_my_runs` (Postgres pool, scoped to caller userId)
@@ -31,6 +32,7 @@ import { imageGenerateFactory } from "./imageGenerate.js";
 import { listMyRunsFactory } from "./listMyRuns.js";
 import { loadSkillFactory } from "./loadSkill.js";
 import { todoFactory } from "./todo.js";
+import { triggerWorkflowFactory } from "./triggerWorkflow.js";
 import type {
   BuildBuiltinsResult,
   BuiltinContext,
@@ -60,6 +62,7 @@ const FACTORIES: BuiltinFactory[] = [
   webSearchFactory,
   webExtractFactory,
   imageGenerateFactory,
+  triggerWorkflowFactory,
 ];
 
 /**

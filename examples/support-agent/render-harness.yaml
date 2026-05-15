@@ -5,40 +5,16 @@ harnessVersion: "^0.1"
 license: MIT
 categories: [slack, support, production-shape]
 
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: |
-    You are a support agent that lives in a Slack thread. Each run is a single
-    user message in a thread; you produce a single reply that gets posted back
-    to that same thread.
-
-runtimes:
-  - kind: web
-    plan: starter
-  - kind: worker
-    plan: starter
-    queue: support-runs
-
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
-
-mcpServers:
-  - name: slack
-    transport: stdio
-    command: npx
-    args: ["-y", "slack-mcp-server@latest"]
-    env:
-      SLACK_MCP_XOXP_TOKEN: "${SLACK_BOT_TOKEN}"
-
-permissions:
-  deniedTools:
-    - slack__conversations_add_message
-
-sampling:
-  temperature: 0.3
-  maxOutputTokens: 1024
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    deniedTools:
+      - slack__conversations_add_message
+  sampling:
+    temperature: 0.3
+    maxOutputTokens: 1024
 
 envSchema:
   - name: SLACK_BOT_TOKEN
@@ -49,3 +25,26 @@ envSchema:
     required: true
     secret: true
     description: "Used by the public web service to verify Slack Events callbacks."
+
+agents:
+  - id: support-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a support agent that lives in a Slack thread. Each run is a single
+        user message in a thread; you produce a single reply that gets posted back
+        to that same thread.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: support-runs
+    mcpServers:
+      - name: slack
+        transport: stdio
+        command: npx
+        args: ["-y", "slack-mcp-server@latest"]
+        env:
+          SLACK_MCP_XOXP_TOKEN: "${SLACK_BOT_TOKEN}"

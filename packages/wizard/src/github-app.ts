@@ -52,6 +52,15 @@ export interface CreateScaffoldedRepoOpts {
   desiredName: string;
   description: string;
   files: Map<string, string>;
+  /**
+   * Called after the repo name is finalised but before the initial
+   * commit. The returned map is merged on top of `files`, letting the
+   * caller inject files that depend on the resolved name — e.g.
+   * `.render-harness/agent.json` with `{ org, repo, installationId }`
+   * baked in so the operator UI's edit-model flow knows where to
+   * commit back to.
+   */
+  beforeCommit?: (info: { org: string; repoName: string }) => Map<string, string>;
 }
 
 export interface CreateScaffoldedRepoResult {
@@ -80,10 +89,16 @@ export async function createScaffoldedRepo(
   // point refs/heads/main at it. Doing it in one tree+commit (rather
   // than one commit per file) keeps the history clean and the API call
   // count low.
+  const files = new Map(opts.files);
+  if (opts.beforeCommit) {
+    for (const [path, content] of opts.beforeCommit({ org: opts.org, repoName })) {
+      files.set(path, content);
+    }
+  }
   const { data: tree } = await opts.octokit.git.createTree({
     owner: opts.org,
     repo: repoName,
-    tree: [...opts.files.entries()].map(([path, content]) => ({
+    tree: [...files.entries()].map(([path, content]) => ({
       path,
       mode: "100644",
       type: "blob",

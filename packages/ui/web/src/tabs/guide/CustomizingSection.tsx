@@ -8,13 +8,14 @@ import {
   listAgents,
 } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
+import { useDeploymentName } from "../../deployment-context.js";
 import { CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 const PROSE_INTRO = `
-Three changes you'll likely make first. Each is one or two lines in \`examples/operator-demo/src/agent.ts\`. After editing, run the reload command — the harness rebuilds dist/ and restarts the two app containers in about five seconds. No image rebuild, no \`pnpm install\`, no Docker layer cache fights.
+Three changes you'll likely make first. Each is a one or two-line edit in \`render-harness.yaml\` (or the agent's TS source). Restart the dev process — \`tsx\` watches for changes and reboots the runtimes in a couple of seconds. No image rebuild, no reinstall, no Docker layer cache fights.
 `;
 
-const RELOAD_CMD = "pnpm apps:operator-demo:reload";
+const RELOAD_CMD = "pnpm dev";
 
 const PROSE_PROMPT = `
 ### 1. Change the system prompt
@@ -41,6 +42,7 @@ Each of these is a small edit. The reload loop is fast enough that you can itera
 `;
 
 export function CustomizingSection() {
+  const name = useDeploymentName();
   return (
     <GuideSectionShell
       title="customizing — make it yours"
@@ -52,66 +54,58 @@ export function CustomizingSection() {
             <div className="label mb-2">// the reload loop</div>
             <div className="space-y-1">
               <div>
-                1. edit <code className="bg-code-bg px-1">examples/operator-demo/src/agent.ts</code>
+                1. edit <code className="bg-code-bg px-1">render-harness.yaml</code> (or the agent's <code className="bg-code-bg px-1">src/*.ts</code>)
               </div>
               <div>
-                2. run <CmdBadge cmd={RELOAD_CMD} />
+                2. restart <CmdBadge cmd={RELOAD_CMD} /> (or let <code className="bg-code-bg px-1">tsx</code> reload it for you)
               </div>
               <div>3. refresh the chat tab; the new behavior is live</div>
             </div>
           </div>
 
           <Markdown text={PROSE_PROMPT} />
-          <CodeBlock language="excerpt — agent.ts">
-{`const SYSTEM_PROMPT = \`\\
-You are a customer-support agent for Acme Co. Be empathetic and
-concrete. Always end with: "Anything else I can help with?"\`;
-
-return defineAgent({
-  name: "operator-demo",
-  version: "0.3.0", // bump when behavior changes meaningfully
-  systemPrompt: SYSTEM_PROMPT,
-  // ... rest unchanged
-});`}
+          <CodeBlock language="excerpt — render-harness.yaml">
+{`agents:
+  - id: ${name}
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a customer-support agent for Acme Co. Be empathetic and
+        concrete. Always end with: "Anything else I can help with?"
+    runtimes:
+      - kind: web`}
           </CodeBlock>
 
           <Markdown text={PROSE_MODEL} />
-          <CodeBlock language="excerpt — agent.ts">
-{`return defineAgent({
-  // ...
-  model: {
-    provider: "openai-compat",
-    model: "anthropic/claude-sonnet-4",
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKeyEnv: "OPENROUTER_API_KEY", // env var name to read at runtime
-  },
-});`}
+          <CodeBlock language="excerpt — render-harness.yaml">
+{`shared:
+  model:
+    provider: openai-compat
+    model: anthropic/claude-sonnet-4
+    baseURL: https://openrouter.ai/api/v1
+    apiKeyEnv: OPENROUTER_API_KEY`}
           </CodeBlock>
           <p className="text-xs text-muted">
             Then add <code className="bg-code-bg px-1">OPENROUTER_API_KEY=sk-...</code> to your
-            root <code className="bg-code-bg px-1">.env</code> and reload.
+            <code className="bg-code-bg px-1">.env</code> and restart.
           </p>
 
           <Markdown text={PROSE_MCP} />
-          <CodeBlock language="excerpt — agent.ts">
-{`return defineAgent({
-  // ...
-  mcpServers: [
-    {
-      name: "render",
-      transport: "http",
-      url: "https://mcp.render.com/mcp",
-      headers: { Authorization: \`Bearer \${process.env.RENDER_API_KEY}\` },
-    },
-  ],
-  permissions: {
-    deniedTools: [
-      "render__delete_service",
-      "render__delete_postgres",
-      "render__delete_keyvalue",
-    ],
-  },
-});`}
+          <CodeBlock language="excerpt — render-harness.yaml">
+{`agents:
+  - id: ${name}
+    mcpServers:
+      - name: render
+        transport: http
+        url: https://mcp.render.com/mcp
+        headers:
+          Authorization: "Bearer \${RENDER_API_KEY}"
+    permissions:
+      deniedTools:
+        - render__delete_service
+        - render__delete_postgres
+        - render__delete_keyvalue`}
           </CodeBlock>
           <p className="text-xs text-muted">
             Set <code className="bg-code-bg px-1">RENDER_API_KEY</code> in <code className="bg-code-bg px-1">.env</code>{" "}

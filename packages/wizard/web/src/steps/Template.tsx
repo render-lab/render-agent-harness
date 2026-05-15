@@ -44,10 +44,20 @@ export function Template({
           >
             <div className="flex items-center justify-between">
               <span className="label">{`// ${t.slug.toUpperCase()}`}</span>
-              <span className="badge">{t.runtimeKinds.join(" + ")}</span>
+              <div className="flex items-center gap-2">
+                {t.kind === "bundle" && (
+                  <span className="badge border-accent text-accent">BUNDLE</span>
+                )}
+                <span className="badge">{t.runtimeKinds.join(" + ")}</span>
+              </div>
             </div>
             <div className="mt-1 text-sm">{t.name}</div>
             <div className="mt-1 text-xs text-muted">{t.description}</div>
+            {t.kind === "bundle" && (
+              <div className="mt-2 text-[11px] text-muted">
+                Sealed multi-agent template — {t.manifest.agents.length} agents in one deployment.
+              </div>
+            )}
           </button>
         ))}
       </div>

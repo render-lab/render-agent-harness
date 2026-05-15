@@ -205,16 +205,30 @@ export function assertCapabilityPack(value: unknown, packageName: string): Capab
 // ----------------------------------------------------------------------
 
 /**
- * Namespace a short tool name with the pack's name. `cap-search-exa` +
- * `web_search` → `cap-search-exa.web_search`.
+ * Anthropic's tool-name pattern allows only `[a-zA-Z0-9_-]{1,128}`.
+ * Slashes (from npm scopes) and dots (common in short tool names like
+ * `memory.write`) both get rejected with HTTP 400. We strip the
+ * `@scope/` prefix and replace dots in the short tool name with
+ * underscores so namespaced names round-trip cleanly to the Anthropic
+ * API:
+ *
+ *   `("@render-harness/cap-memory-pg", "memory.write")`
+ *     → `"cap-memory-pg__memory_write"`
+ *   `("@render-harness/cap-search-exa", "web_search")`
+ *     → `"cap-search-exa__web_search"`
  */
 export function namespacedToolName(packName: string, toolName: string): string {
-  return `${packName}.${toolName}`;
+  return `${stripPackScope(packName)}__${toolName.replace(/\./g, "_")}`;
 }
 
 /**
- * Namespace a short MCP server name with the pack's name.
+ * Namespace a short MCP server name with the pack's name. MCP server
+ * names face the same constraints; same sanitization applies.
  */
 export function namespacedMcpServerName(packName: string, serverName: string): string {
-  return `${packName}.${serverName}`;
+  return `${stripPackScope(packName)}__${serverName.replace(/\./g, "_")}`;
+}
+
+function stripPackScope(packName: string): string {
+  return packName.replace(/^@[^/]+\//, "");
 }

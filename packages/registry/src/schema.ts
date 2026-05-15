@@ -247,6 +247,20 @@ const RuntimeCronSchema = z
     region: z.string().min(1).max(32).optional(),
     /** UTC cron expression. Quoted in YAML. */
     schedule: z.string().min(1).max(100),
+    /**
+     * What the cron service does:
+     *   - "cron" (default) — runs the agent inline. The cron service
+     *     executes the full agent loop and exits. Right for short,
+     *     fail-stop, no-HITL work.
+     *   - "workflow" — emits a thin Cron service whose only job is to
+     *     call `render.workflows.runTask` (via `@renderinc/sdk`) and
+     *     exit. The actual agent run executes in the bundle's Workflow
+     *     service. Implies `workflowTask: true` on the owning agent.
+     *
+     * Workflow-mode crons need `RENDER_API_KEY` and `WORKFLOW_SLUG` env
+     * vars at deploy time (the emitter wires them).
+     */
+    via: z.enum(["cron", "workflow"]).optional(),
   })
   .strict();
 
@@ -299,7 +313,82 @@ export type CapabilityRef = z.infer<typeof CapabilityRefSchema>;
 
 // ----------------------------------------------------------------------
 // Top-level render-harness.yaml schema
+//
+// One manifest declares N agents that share one Render deployment
+// (Postgres + KV + coalesced web + coalesced worker + N cron services +
+// optionally one Workflow service). A "single-agent" entry is just a
+// manifest with one item in `agents[]`.
 // ----------------------------------------------------------------------
+
+/**
+ * Per-agent block. Each entry carries its own agent definition + runtime
+ * set + optional model / permissions / budget / sampling / mcpServers
+ * overrides that fall back to {@link SharedBlock} when omitted.
+ *
+ * Per-agent `capabilities` are intentionally **not** modeled — capability
+ * packs are module-level singletons (e.g. the `bootstrapped` flag in
+ * `cap-memory-pg`), so they live at the bundle level.
+ */
+export const AgentEntrySchema = z
+  .object({
+    id: slugSchema,
+    description: z.string().min(1).max(280).optional(),
+    agent: AgentBlockSchema,
+    runtimes: z.array(RuntimeBlockSchema).min(1).max(8),
+    model: ModelSpecSchema.optional(),
+    permissions: PermissionsSchema.optional(),
+    budget: BudgetSchema.optional(),
+    sampling: SamplingParamsSchema.optional(),
+    mcpServers: z.array(McpServerConfigSchema).optional(),
+    /**
+     * Register this agent as a task on the bundle's single Workflow
+     * service. The task is callable from other agents (via the
+     * `trigger_workflow` builtin), from cron services declared with
+     * `via: workflow`, or from any external system using the Render
+     * Workflows SDK.
+     *
+     * Implicitly true when the agent has `kind: workflows` runtime or
+     * any `kind: cron, via: workflow` runtime. Set explicitly when you
+     * want an agent to be workflow-callable without any in-bundle
+     * trigger (the chat agent invokes it on demand).
+     */
+    workflowTask: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((agent, ctx) => {
+    // Within one agent, no two runtimes may share a kind. Cross-agent
+    // duplication is fine — the emitter coalesces web/worker into one
+    // service each and fans cron out to N services.
+    const seen = new Set<string>();
+    for (const r of agent.runtimes) {
+      if (seen.has(r.kind)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["runtimes"],
+          message: `agent "${agent.id}" declares duplicate runtime kind "${r.kind}"; each kind may appear at most once per agent`,
+        });
+      }
+      seen.add(r.kind);
+    }
+  });
+
+export type AgentEntryInput = z.infer<typeof AgentEntrySchema>;
+
+/**
+ * Bundle-wide defaults applied to every agent unless the agent overrides.
+ * `ui: true` mounts `@render-harness/ui` on the coalesced web service.
+ */
+export const SharedBlockSchema = z
+  .object({
+    model: ModelSpecSchema.optional(),
+    ui: z.boolean().optional(),
+    budget: BudgetSchema.optional(),
+    sampling: SamplingParamsSchema.optional(),
+    permissions: PermissionsSchema.optional(),
+  })
+  .strict();
+
+export type SharedBlockInput = z.infer<typeof SharedBlockSchema>;
 
 export const HarnessConfigSchema = z
   .object({
@@ -311,46 +400,81 @@ export const HarnessConfigSchema = z
     license: z.string().min(1).max(64).optional(),
     author: z.string().min(1).max(128).optional(),
     categories: z.array(slugSchema).max(20).optional(),
-    agent: AgentBlockSchema,
-    runtimes: z.array(RuntimeBlockSchema).min(1).max(8),
-    model: ModelSpecSchema,
-    mcpServers: z.array(McpServerConfigSchema).optional(),
+    shared: SharedBlockSchema.optional(),
     capabilities: z.array(CapabilityRefSchema).optional(),
-    permissions: PermissionsSchema.optional(),
-    budget: BudgetSchema.optional(),
-    sampling: SamplingParamsSchema.optional(),
     envSchema: z.array(EnvVarSpecSchema).optional(),
+    agents: z.array(AgentEntrySchema).min(1).max(16),
   })
   .strict()
   .superRefine((cfg, ctx) => {
-    // No two runtimes may share the same kind. Multiple webs / multiple crons
-    // would silently drop one in the emitter; reject loudly instead.
-    const seen = new Set<string>();
-    for (const r of cfg.runtimes) {
-      if (seen.has(r.kind)) {
+    const seen = new Map<string, number>();
+    cfg.agents.forEach((agent, idx) => {
+      const first = seen.get(agent.id);
+      if (first !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["runtimes"],
-          message: `duplicate runtime kind "${r.kind}"; declare each kind at most once`,
+          path: ["agents", idx, "id"],
+          message: `duplicate agent id "${agent.id}"; first defined at index ${first}`,
+        });
+      } else {
+        seen.set(agent.id, idx);
+      }
+      if (!agent.model && !cfg.shared?.model) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["agents", idx, "model"],
+          message: `agent "${agent.id}" has no model and shared.model is not set`,
         });
       }
-      seen.add(r.kind);
-    }
-    // Cron runtimes need a schedule (already required at the field level)
-    // but multi-tenant web also needs a worker — flag missing companions.
-    const kinds = new Set(cfg.runtimes.map((r) => r.kind));
-    if (
-      kinds.has("web") &&
-      !kinds.has("worker") &&
-      !kinds.has("cron") &&
-      !kinds.has("workflows") &&
-      cfg.agent.kind === "custom"
-    ) {
-      // Single-process web with custom agent is fine; just informational
-    }
+    });
   });
 
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
+
+/**
+ * Union of every runtime kind declared across all agents in the bundle.
+ * Used by the gallery cross-check to validate that an entry's declared
+ * `runtimeKinds` matches the manifest.
+ */
+export function flattenRuntimeKinds(
+  cfg: HarnessConfig,
+): Array<RuntimeBlockInput["kind"]> {
+  const kinds = new Set<RuntimeBlockInput["kind"]>();
+  for (const a of cfg.agents) {
+    for (const r of a.runtimes) kinds.add(r.kind);
+  }
+  return [...kinds];
+}
+
+/**
+ * True if the agent should be registered as a task on the bundle's
+ * Workflow service. An agent is a workflow task when:
+ *
+ *   - it has `workflowTask: true` declared explicitly, OR
+ *   - any of its runtimes is `kind: workflows`, OR
+ *   - any of its cron runtimes is `via: workflow`.
+ *
+ * The emitter uses this to compute the bundle-wide set of tasks that
+ * the (single) Workflow service registers. The scaffolder uses it to
+ * decide whether to emit `src/workflows.ts` and the per-cron-trigger
+ * entries.
+ */
+export function isWorkflowTaskAgent(agent: AgentEntryInput): boolean {
+  if (agent.workflowTask === true) return true;
+  for (const rt of agent.runtimes) {
+    if (rt.kind === "workflows") return true;
+    if (rt.kind === "cron" && rt.via === "workflow") return true;
+  }
+  return false;
+}
+
+/**
+ * Returns every workflow-task agent in the bundle, in declaration order.
+ * Convenience wrapper over {@link isWorkflowTaskAgent}.
+ */
+export function workflowTaskAgents(cfg: HarnessConfig): AgentEntryInput[] {
+  return cfg.agents.filter(isWorkflowTaskAgent);
+}
 
 // ----------------------------------------------------------------------
 // index.json schema (for the central registry index repo)
@@ -401,8 +525,8 @@ export type IndexFile = z.infer<typeof IndexSchema>;
 // ----------------------------------------------------------------------
 
 /**
- * Parse a YAML or JSON string into a validated {@link HarnessConfig}. Throws
- * `ZodError` with a flat list of issues on failure.
+ * Parse a YAML or JSON string into a validated {@link HarnessConfig}.
+ * Throws `ZodError` with a flat list of issues on failure.
  */
 export function parseHarnessConfigYaml(yamlText: string): HarnessConfig {
   const raw = parseYaml(yamlText);

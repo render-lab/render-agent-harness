@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { fetchGallery, postScaffold } from "./lib/api.js";
+import { fetchGallery, postBundleScaffold, postScaffold } from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
-import type { Gallery, ScaffoldResponse, WizardState } from "./lib/types.js";
+import type { Gallery, GalleryAgent, ScaffoldResponse, WizardState } from "./lib/types.js";
 import { Basics } from "./steps/Basics.js";
+import { BundleReview } from "./steps/BundleReview.js";
 import { Capabilities } from "./steps/Capabilities.js";
 import { ModelStep } from "./steps/ModelStep.js";
 import { Review } from "./steps/Review.js";
@@ -15,6 +16,7 @@ import { UiToggle } from "./steps/UiToggle.js";
 type Phase =
   | { kind: "loading" }
   | { kind: "ready"; step: number; state: WizardState }
+  | { kind: "bundle-review"; bundle: GalleryAgent }
   | { kind: "submitting"; state: WizardState }
   | { kind: "success"; state: WizardState; result: ScaffoldResponse }
   | { kind: "error"; state: WizardState; message: string };
@@ -65,6 +67,41 @@ export function App() {
   if (phase.kind === "success") {
     return <Success state={phase.state} result={phase.result} />;
   }
+  if (phase.kind === "bundle-review") {
+    const submitBundle = async (args: { agentName: string; description: string }) => {
+      const fakeState: WizardState = {
+        ...DEFAULT_STATE,
+        templateSlug: phase.bundle.slug,
+        agentName: args.agentName,
+        description: args.description,
+      };
+      setPhase({ kind: "submitting", state: fakeState });
+      try {
+        const result = await postBundleScaffold({
+          bundleSlug: phase.bundle.slug,
+          agentName: args.agentName,
+          description: args.description,
+          turnstileToken: "",
+        });
+        setPhase({ kind: "success", state: fakeState, result });
+      } catch (err) {
+        setPhase({
+          kind: "error",
+          state: fakeState,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    };
+    return (
+      <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review">
+        <BundleReview
+          bundle={phase.bundle}
+          onSubmit={submitBundle}
+          onPrev={() => setPhase({ kind: "ready", step: 0, state: DEFAULT_STATE })}
+        />
+      </Shell>
+    );
+  }
 
   const { step, state } = phase;
   const setState = (next: WizardState) => setPhase({ kind: "ready", step, state: next });
@@ -93,6 +130,12 @@ export function App() {
           gallery={gallery}
           state={state}
           onPick={(t) => {
+            // Sealed bundles short-circuit the per-agent steps — they
+            // route to a dedicated review screen.
+            if (t?.kind === "bundle") {
+              setPhase({ kind: "bundle-review", bundle: t });
+              return;
+            }
             const seeded = t ? seedFromTemplate(t) : DEFAULT_STATE;
             setPhase({ kind: "ready", step: 1, state: seeded });
           }}
@@ -121,7 +164,19 @@ export function App() {
   );
 }
 
-function Shell({ currentStep, children }: { currentStep: number; children: React.ReactNode }) {
+function Shell({
+  currentStep,
+  totalSteps,
+  stepTitle,
+  children,
+}: {
+  currentStep: number;
+  totalSteps?: number;
+  stepTitle?: string;
+  children: React.ReactNode;
+}) {
+  const total = totalSteps ?? STEP_TITLES.length;
+  const title = stepTitle ?? STEP_TITLES[currentStep];
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       <header className="mb-6">
@@ -130,23 +185,23 @@ function Shell({ currentStep, children }: { currentStep: number; children: React
         </div>
         <div className="mt-3 flex items-center justify-between">
           <span className="label">
-            Step {currentStep + 1}/{STEP_TITLES.length} · {STEP_TITLES[currentStep]}
+            Step {currentStep + 1}/{total} · {title}
           </span>
           <span className="text-muted text-[11px]">render-harness wizard</span>
         </div>
       </header>
-      <Progress current={currentStep} />
+      <Progress current={currentStep} total={total} />
       <main className="panel mt-6 p-6">{children}</main>
     </div>
   );
 }
 
-function Progress({ current }: { current: number }) {
+function Progress({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex gap-1">
-      {STEP_TITLES.map((title, i) => (
+      {Array.from({ length: total }, (_, i) => (
         <div
-          key={title}
+          key={`step-${i}`}
           className={`h-1 flex-1 ${i <= current ? "bg-accent" : "border border-line"}`}
         />
       ))}

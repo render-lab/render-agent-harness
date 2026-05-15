@@ -5,51 +5,92 @@ import type { Answers, RuntimeSelection } from "../types.js";
  * Build the `render-harness.yaml` content for a scaffolded project. The
  * returned object is validated against `HarnessConfigSchema` by
  * `validate.ts` before it's written to disk.
+ *
+ * Emits the canonical (multi-agent) shape with a single agent for
+ * wizard-driven scaffolds. Template-declared fields the wizard doesn't
+ * collect (mcpServers, permissions, budget, envSchema, capability
+ * `config` blocks) are preserved from `templateManifest` when present.
  */
 export function buildHarnessConfig(answers: Answers): Record<string, unknown> {
-  // Start from the template manifest when one was picked. This preserves
-  // template-declared fields the wizard does not collect (mcpServers,
-  // permissions, budget, envSchema, capability `config` blocks).
+  // Pull anything the template provided that we want to thread through:
+  // bundle-wide envSchema, shared.permissions / budget / sampling,
+  // per-agent mcpServers. Don't carry forward template `agents[]` — the
+  // wizard owns the single-agent shape for the wizard flow.
   const base: Record<string, unknown> = answers.templateManifest
-    ? structuredClone(answers.templateManifest)
+    ? extractCarryForward(answers.templateManifest)
     : {};
 
+  // shared.* — start from template defaults (so permissions / budget /
+  // sampling from a gallery entry land in the scaffolded manifest), then
+  // override model with the user's wizard pick. UI toggle is wizard-side.
+  const templateShared =
+    base.shared && typeof base.shared === "object" ? (base.shared as Record<string, unknown>) : {};
+  const shared: Record<string, unknown> = {
+    ...templateShared,
+    model: { ...answers.model },
+    ...(answers.ui ? { ui: true } : {}),
+  };
+
+  const agent: Record<string, unknown> = {
+    id: answers.agentName,
+    agent: {
+      kind: "builtin",
+      ref: "chat",
+      systemPrompt: answers.systemPrompt,
+    },
+    runtimes: answers.runtimes.map(runtimeToYaml),
+  };
+
+  const templateAgentMcp = extractTemplateAgentMcpServers(answers.templateManifest);
+  if (templateAgentMcp) agent.mcpServers = templateAgentMcp;
+
   const cfg: Record<string, unknown> = {
-    ...base,
     schemaVersion: 1,
     name: answers.agentName,
     description: answers.description,
     harnessVersion: "^0.1",
     license: "MIT",
-  };
-
-  cfg.agent = {
-    kind: "builtin",
-    ref: "chat",
-    systemPrompt: answers.systemPrompt,
-  };
-
-  cfg.runtimes = answers.runtimes.map(runtimeToYaml);
-
-  cfg.model = {
-    provider: "anthropic",
-    model: answers.model,
+    shared,
   };
 
   if (answers.capabilities.length > 0) {
-    // Preserve any per-capability `config` declared by the template;
-    // if a wizard pick wasn't in the template, emit it without config.
     const templateCaps = readTemplateCapabilities(answers.templateManifest);
     cfg.capabilities = answers.capabilities.map((c) => {
       const fromTemplate = templateCaps.get(c.pack);
       return fromTemplate ?? { pack: c.pack };
     });
-  } else {
-    // User unchecked everything — drop any inherited capabilities.
-    delete cfg.capabilities;
   }
 
+  if (base.envSchema) cfg.envSchema = base.envSchema;
+  if (base.categories) cfg.categories = base.categories;
+
+  cfg.agents = [agent];
   return cfg;
+}
+
+/**
+ * Pulls forward fields from a template manifest that should land
+ * unchanged in the scaffolded manifest — top-level bundle metadata +
+ * per-agent extras we'd otherwise lose.
+ */
+function extractCarryForward(manifest: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ["shared", "envSchema", "categories"]) {
+    if (manifest[key] !== undefined) out[key] = manifest[key];
+  }
+  return out;
+}
+
+function extractTemplateAgentMcpServers(
+  manifest: Record<string, unknown> | null,
+): unknown[] | undefined {
+  if (!manifest) return undefined;
+  const agents = manifest.agents;
+  if (!Array.isArray(agents) || agents.length === 0) return undefined;
+  const first = agents[0];
+  if (!first || typeof first !== "object") return undefined;
+  const mcp = (first as Record<string, unknown>).mcpServers;
+  return Array.isArray(mcp) ? mcp : undefined;
 }
 
 function readTemplateCapabilities(

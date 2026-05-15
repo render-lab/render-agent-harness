@@ -164,6 +164,67 @@ export async function runCronAndExit(opts: RunCronOpts): Promise<never> {
   }
 }
 
+/**
+ * Multi-agent registry mode: pick an {@link AgentDefinition} from a map
+ * by id and run it through {@link runCron}.
+ *
+ * This is the entrypoint shape used by V2 bundle deployments. The
+ * emitted Render Cron service runs a single `dist/cron.js` that
+ * resolves every agent in the bundle once (via
+ * `defineFromConfig` → `agentsById`), then calls this function with
+ * `agentId = process.env.HARNESS_AGENT_ID`. The emitter sets that env
+ * var per cron service so each scheduled service picks the right agent.
+ *
+ * Throws if `agentId` is empty or not in `agents`.
+ */
+export interface RunCronFromRegistryOpts extends Omit<RunCronOpts, "agent"> {
+  agents: Record<string, AgentDefinition>;
+  agentId: string;
+}
+
+export async function runCronFromRegistry(
+  opts: RunCronFromRegistryOpts,
+): Promise<RunCronResult> {
+  const agent = lookupAgent(opts.agents, opts.agentId);
+  const { agents, agentId, ...rest } = opts;
+  void agents;
+  void agentId;
+  return runCron({ ...rest, agent });
+}
+
+export async function runCronFromRegistryAndExit(
+  opts: RunCronFromRegistryOpts,
+): Promise<never> {
+  try {
+    const { exitCode } = await runCronFromRegistry(opts);
+    process.exit(exitCode);
+  } catch (err) {
+    const logger = opts.logger ?? buildLogger({ service: "runtime-cron" });
+    logger.fatal({ err: serializeError(err) }, "cron run crashed");
+    process.exit(2);
+  }
+}
+
+function lookupAgent(
+  agents: Record<string, AgentDefinition>,
+  agentId: string,
+): AgentDefinition {
+  if (!agentId) {
+    const known = Object.keys(agents).sort().join(", ") || "(none)";
+    throw new Error(
+      `runCronFromRegistry: agentId is empty. Set HARNESS_AGENT_ID to one of: ${known}.`,
+    );
+  }
+  const agent = agents[agentId];
+  if (!agent) {
+    const known = Object.keys(agents).sort().join(", ") || "(none)";
+    throw new Error(
+      `runCronFromRegistry: agent "${agentId}" not found in registry. Known: ${known}.`,
+    );
+  }
+  return agent;
+}
+
 function exitCodeFor(result: RunStepResult): number {
   switch (result.status) {
     case "completed":

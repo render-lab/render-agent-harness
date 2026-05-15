@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiagnosticsBanner } from "./components/DiagnosticsBanner.js";
+import { DeploymentProvider, useDeploymentName } from "./deployment-context.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
+import { ConfigTab } from "./tabs/ConfigTab.js";
 import { GuideTab, type GuideSectionId, isGuideSectionId } from "./tabs/GuideTab.js";
 import { RunsTab } from "./tabs/RunsTab.js";
 import { UsageTab } from "./tabs/UsageTab.js";
 
-type TabId = "chat" | "runs" | "agents" | "usage" | "guide";
+type TabId = "chat" | "runs" | "agents" | "config" | "usage" | "guide";
 
 interface Route {
   tab: TabId;
@@ -26,11 +28,12 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "chat", label: "CHAT" },
   { id: "runs", label: "RUNS" },
   { id: "agents", label: "AGENTS" },
+  { id: "config", label: "CONFIG" },
   { id: "usage", label: "USAGE" },
   { id: "guide", label: "GUIDE" },
 ];
 
-const TAB_IDS = new Set<TabId>(["chat", "runs", "agents", "usage", "guide"]);
+const TAB_IDS = new Set<TabId>(["chat", "runs", "agents", "config", "usage", "guide"]);
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
@@ -44,7 +47,16 @@ function parseHash(): Route {
 }
 
 export function App() {
+  return (
+    <DeploymentProvider>
+      <AppInner />
+    </DeploymentProvider>
+  );
+}
+
+function AppInner() {
   const [route, setRoute] = useState<Route>(() => parseHash());
+  const deploymentName = useDeploymentName();
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -106,7 +118,7 @@ export function App() {
             <div className="text-xs uppercase tracking-widest">
               <span className="text-muted">render-harness</span>
               <span className="mx-2 text-muted">/</span>
-              <span>operator</span>
+              <span>{deploymentName}</span>
             </div>
             <nav className="flex items-center gap-2">
               {TABS.map((t) => (
@@ -145,6 +157,7 @@ export function App() {
           />
         )}
         {route.tab === "agents" && <AgentsTab />}
+        {route.tab === "config" && <ConfigTab />}
         {route.tab === "usage" && <UsageTab />}
         {route.tab === "guide" && (
           <GuideTab section={route.guideSection} onSectionChange={onGuideSectionChange} />

@@ -44,11 +44,12 @@ const VALID_BODY = {
   agentName: "my-agent",
   description: "A test agent.",
   systemPrompt: "You are helpful.",
-  model: "claude-sonnet-4-6",
+  model: { provider: "anthropic", model: "claude-sonnet-4-6" },
   runtimes: [{ kind: "web" }],
   capabilities: [],
   ui: false,
   templateSlug: null,
+  bundleSlug: null,
   turnstileToken: "",
 };
 
@@ -110,6 +111,30 @@ describe("POST /api/scaffold", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("invalid_answers");
+  });
+
+  it("emits a complete openai-compat model block when the body carries a custom spec", async () => {
+    const { app, createScaffoldedRepo } = makeApp();
+    const res = await app.request("/api/scaffold", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...VALID_BODY,
+        model: {
+          provider: "openai-compat",
+          model: "openai/gpt-4o",
+          baseURL: "https://openrouter.ai/api/v1",
+          apiKeyEnv: "OPENROUTER_API_KEY",
+        },
+      }),
+    });
+    expect(res.status).toBe(201);
+    const call = createScaffoldedRepo.mock.calls[0]?.[0] as { files: Map<string, string> };
+    const yaml = call.files.get("render-harness.yaml") ?? "";
+    expect(yaml).toContain("provider: openai-compat");
+    expect(yaml).toContain("model: openai/gpt-4o");
+    expect(yaml).toContain("baseURL: https://openrouter.ai/api/v1");
+    expect(yaml).toContain("apiKeyEnv: OPENROUTER_API_KEY");
   });
 
   it("rate-limits per IP", async () => {

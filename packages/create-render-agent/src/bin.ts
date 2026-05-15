@@ -42,7 +42,16 @@ async function main(): Promise<void> {
   const harnessRootIdx = args.indexOf("--harness-root");
   const harnessRootRaw = harnessRootIdx >= 0 ? args[harnessRootIdx + 1] : undefined;
   const harnessRoot = harnessRootRaw ? resolve(harnessRootRaw) : null;
-  const packageManager = detectPackageManager();
+  // --harness-root uses `link:<absolute-path>` deps in package.json. Only
+  // pnpm honors that protocol correctly; npm interprets it differently
+  // and `npm install` fails on the workspace links. Force pnpm in this
+  // mode regardless of what `npm_config_user_agent` detected.
+  const packageManager: PackageManager = harnessRoot ? "pnpm" : detectPackageManager();
+  if (harnessRoot && detectPackageManager() !== "pnpm") {
+    log.warn(
+      "Local-link mode (--harness-root) requires pnpm; the scaffolded project uses link:/path deps that npm/yarn/bun don't fully honor. Falling back to pnpm for install — make sure it's on your PATH.",
+    );
+  }
 
   const gallery = await resolveGallery(
     harnessRoot ? { liveSourceRoot: harnessRoot } : {},

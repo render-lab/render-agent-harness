@@ -1,21 +1,17 @@
 /**
  * The runtime entry point for YAML-driven harness entries.
  *
- * Reads `render-harness.yaml`, resolves the agent (built-in or custom
- * entrypoint), loads any capability packs from the entry's
- * `node_modules`, and assembles a runnable {@link AgentDefinition}.
- *
- * Entries import this and call it from their `agent/index.ts`:
+ * Reads `render-harness.yaml`, resolves every agent (built-in or
+ * custom entrypoint), loads any capability packs from the entry's
+ * `node_modules`, and assembles a list of runnable
+ * {@link AgentDefinition}s plus a lookup map keyed by agent id.
  *
  *   import { defineFromConfig } from "@render-harness/registry";
- *   export const agent = await defineFromConfig({
+ *   const { agents, agentsById } = await defineFromConfig({
  *     configPath: "./render-harness.yaml",
  *     env: process.env,
  *   });
- *
- * Then their runtime entrypoint (main.ts) passes that AgentDefinition
- * to the matching `runCron` / `serveAgent` / `startWorker` /
- * Workflows handler.
+ *   // pass agentsById to serveWeb / startWorker / runCronFromRegistry.
  */
 
 import { readFile } from "node:fs/promises";
@@ -41,8 +37,13 @@ import {
 } from "./capability.js";
 import { interpolateTree } from "./interpolate.js";
 import {
+  type AgentEntryInput,
+  type BudgetInput,
   type CapabilityRef,
   type HarnessConfig,
+  type ModelSpecInput,
+  type PermissionsInput,
+  type SamplingParamsInput,
   parseHarnessConfigYaml,
 } from "./schema.js";
 import { type LoadedPack, loadPacks, makePackContext } from "./load-pack.js";
@@ -66,19 +67,21 @@ export interface DefineFromConfigOpts {
 }
 
 export interface DefineFromConfigResult {
-  agent: AgentDefinition;
+  /** One {@link AgentDefinition} per `agents[]` entry, in declaration order. */
+  agents: AgentDefinition[];
+  /**
+   * Lookup map keyed by `agent.id`. Convenient for runtime registries
+   * (`runtime-worker` resolver, `runtime-cron` registry mode, etc.).
+   */
+  agentsById: Record<string, AgentDefinition>;
   config: HarnessConfig;
   packs: LoadedPack[];
 }
 
 /**
- * Resolve a render-harness.yaml into a complete {@link AgentDefinition}.
- *
- * The returned `agent` is ready to pass straight to a runtime
- * (`runCron`, `serveAgent`, `startWorker`, or the Workflows step
- * handler). The `config` and `packs` fields are exposed for advanced
- * callers that want to inspect what was loaded — e.g. emitting a
- * Render service spec at build time.
+ * Resolve a render-harness.yaml into a set of agent definitions plus a
+ * lookup map. A "single-agent" entry is just a manifest with one item
+ * in `agents[]` — same code path, no special case.
  */
 export async function defineFromConfig(
   opts: DefineFromConfigOpts,
@@ -91,63 +94,58 @@ export async function defineFromConfig(
 
   const yamlText = await readFile(configAbs, "utf8");
   const rawConfig = parseHarnessConfigYaml(yamlText);
-  // Resolve ${VAR} placeholders in MCP headers, env values, etc. We
-  // don't interpolate over the system prompt so authors can keep
-  // literal `${}` in their prose without escaping.
-  const config = interpolateConfigEnvSlots(rawConfig, env);
+  const config = interpolateEnvSlots(rawConfig, env);
 
   const packs = await loadPacks(
     config.capabilities ? { entryRoot, refs: config.capabilities } : { entryRoot },
   );
 
-  const baseAgent = await resolveAgentBlock(config, entryRoot);
+  const agents: AgentDefinition[] = [];
+  const agentsById: Record<string, AgentDefinition> = {};
+  for (const entry of config.agents) {
+    const base = await resolveAgentEntry(config, entry, entryRoot);
+    const merged = await mergePackContributions(base, config, entry, packs, env);
+    const finalAgent = defineAgent(merged);
+    agents.push(finalAgent);
+    agentsById[entry.id] = finalAgent;
+  }
 
-  // Merge pack contributions on top of whatever the agent block
-  // produced. Pack-contributed tools / MCP servers / skills come in
-  // namespaced; deniedTools / requireApproval references must use the
-  // namespaced names if they target pack tools.
-  const merged = await mergePackContributions(baseAgent, config, packs, env);
-
-  // Re-validate via defineAgent so we get the same checks the regular
-  // TS path runs (e.g. requireApproval ∩ deniedTools = ∅).
-  const agent = defineAgent(merged);
-
-  return { agent, config, packs };
+  return { agents, agentsById, config, packs };
 }
 
 // ----------------------------------------------------------------------
-// Agent block resolver
+// Per-agent resolver
 // ----------------------------------------------------------------------
 
-async function resolveAgentBlock(
-  config: HarnessConfig,
+async function resolveAgentEntry(
+  cfg: HarnessConfig,
+  entry: AgentEntryInput,
   entryRoot: string,
 ): Promise<AgentDefinition> {
-  if (config.agent.kind === "builtin") {
-    return buildChatBuiltin(config);
+  const effective = effectiveAgentDefaults(cfg, entry);
+
+  if (entry.agent.kind === "builtin") {
+    return buildChatBuiltin(cfg, entry, effective);
   }
+
   // kind: custom — dynamic-import the entrypoint and trust the export.
-  const entrypointAbs = resolve(entryRoot, config.agent.entrypoint);
+  const entrypointAbs = resolve(entryRoot, entry.agent.entrypoint);
   const entryUrl = pathToFileURL(entrypointAbs).href;
   const mod = (await import(entryUrl)) as Record<string, unknown>;
   const exported = mod.default ?? mod.agent;
   if (!exported) {
     throw new Error(
-      `agent.entrypoint "${config.agent.entrypoint}" does not export a default or named "agent" value`,
+      `agent "${entry.id}" entrypoint "${entry.agent.entrypoint}" does not export a default or named "agent" value`,
     );
   }
-  // Either an AgentDefinition or a factory. Call factories.
-  const candidate = typeof exported === "function" ? await (exported as () => unknown)() : exported;
+  const candidate =
+    typeof exported === "function" ? await (exported as () => unknown)() : exported;
   if (!isAgentDefinitionShape(candidate)) {
     throw new Error(
-      `agent.entrypoint "${config.agent.entrypoint}": export is not an AgentDefinition`,
+      `agent "${entry.id}" entrypoint "${entry.agent.entrypoint}": export is not an AgentDefinition`,
     );
   }
-  // Override the top-level fields the YAML wants to control even when
-  // the agent is custom. Authors who want full control should put
-  // these in their TS code instead of YAML, but it'd be very surprising
-  // if `model:` in YAML were silently ignored.
-  return overlayYamlFields(candidate, config);
+  return overlayYamlFields(candidate, effective, entry.id);
 }
 
 function isAgentDefinitionShape(v: unknown): v is AgentDefinition {
@@ -156,29 +154,62 @@ function isAgentDefinitionShape(v: unknown): v is AgentDefinition {
   return typeof o.name === "string" && typeof o.systemPrompt === "string";
 }
 
-function overlayYamlFields(base: AgentDefinition, config: HarnessConfig): AgentDefinition {
-  // Only overlay fields the YAML actually declared. The `agent` block
-  // for custom agents has no system prompt, so we never overwrite it.
-  // dropUndefined() is needed because Zod's inferred optional fields
-  // are `T | undefined`, but core's types are strict-optional.
-  const out: AgentDefinition = { ...base };
-  out.model = { ...base.model, ...dropUndefined(config.model) } as ModelSpec;
-  if (config.permissions) {
+/**
+ * Per-agent effective defaults: agent-level override falls back to
+ * `shared.*` for model / permissions / budget / sampling.
+ */
+interface AgentDefaults {
+  model: ModelSpecInput;
+  permissions: PermissionsInput | undefined;
+  budget: BudgetInput | undefined;
+  sampling: SamplingParamsInput | undefined;
+}
+
+function effectiveAgentDefaults(
+  cfg: HarnessConfig,
+  entry: AgentEntryInput,
+): AgentDefaults {
+  const model = entry.model ?? cfg.shared?.model;
+  if (!model) {
+    throw new Error(
+      `agent "${entry.id}" has no model and shared.model is unset (schema should have rejected this)`,
+    );
+  }
+  return {
+    model,
+    permissions: entry.permissions ?? cfg.shared?.permissions,
+    budget: entry.budget ?? cfg.shared?.budget,
+    sampling: entry.sampling ?? cfg.shared?.sampling,
+  };
+}
+
+function overlayYamlFields(
+  base: AgentDefinition,
+  defaults: AgentDefaults,
+  agentId: string,
+): AgentDefinition {
+  // Override the agent's `name` to match the bundle entry's id so the
+  // runtime registry can look agents up by id. The TS-defined agent
+  // may have used any name internally; what matters is what the runtime
+  // sees.
+  const out: AgentDefinition = { ...base, name: agentId };
+  out.model = { ...base.model, ...dropUndefined(defaults.model) } as ModelSpec;
+  if (defaults.permissions) {
     out.permissions = {
       ...(base.permissions ?? {}),
-      ...dropUndefined(config.permissions),
+      ...dropUndefined(defaults.permissions),
     } as Permissions;
   }
-  if (config.budget) {
+  if (defaults.budget) {
     out.budget = {
       ...(base.budget ?? {}),
-      ...dropUndefined(config.budget),
+      ...dropUndefined(defaults.budget),
     } as Partial<Budget>;
   }
-  if (config.sampling) {
+  if (defaults.sampling) {
     out.sampling = {
       ...(base.sampling ?? {}),
-      ...dropUndefined(config.sampling),
+      ...dropUndefined(defaults.sampling),
     } as SamplingParams;
   }
   return out;
@@ -186,63 +217,61 @@ function overlayYamlFields(base: AgentDefinition, config: HarnessConfig): AgentD
 
 // ----------------------------------------------------------------------
 // Built-in: chat
-//
-// The simplest viable agent: system prompt + model + (optional) MCP
-// servers. No local tools, no skills directory. Lives here rather than
-// in @render-harness/core because it's a YAML-side convenience, not a
-// core primitive.
 // ----------------------------------------------------------------------
 
-function buildChatBuiltin(config: HarnessConfig): AgentDefinition {
-  if (config.agent.kind !== "builtin") {
+function buildChatBuiltin(
+  _cfg: HarnessConfig,
+  entry: AgentEntryInput,
+  defaults: AgentDefaults,
+): AgentDefinition {
+  if (entry.agent.kind !== "builtin") {
     throw new Error("buildChatBuiltin called with non-builtin agent block");
   }
   const opts: Parameters<typeof defineChatAgent>[0] = {
-    name: config.name,
-    model: dropUndefined(config.model) as ModelSpec,
-    systemPrompt: config.agent.systemPrompt,
+    name: entry.id,
+    model: dropUndefined(defaults.model) as ModelSpec,
+    systemPrompt: entry.agent.systemPrompt,
   };
-  if (config.mcpServers) opts.mcpServers = config.mcpServers as McpServerConfig[];
-  if (config.permissions) opts.permissions = dropUndefined(config.permissions) as Permissions;
-  if (config.budget) opts.budget = dropUndefined(config.budget) as Partial<Budget>;
-  if (config.sampling) opts.sampling = dropUndefined(config.sampling) as SamplingParams;
+  if (entry.mcpServers) opts.mcpServers = entry.mcpServers as McpServerConfig[];
+  if (defaults.permissions)
+    opts.permissions = dropUndefined(defaults.permissions) as Permissions;
+  if (defaults.budget) opts.budget = dropUndefined(defaults.budget) as Partial<Budget>;
+  if (defaults.sampling) opts.sampling = dropUndefined(defaults.sampling) as SamplingParams;
   return defineChatAgent(opts);
 }
 
 // ----------------------------------------------------------------------
-// Pack contribution merger
+// Pack contribution merger (per-agent)
 // ----------------------------------------------------------------------
 
 async function mergePackContributions(
   base: AgentDefinition,
-  config: HarnessConfig,
+  cfg: HarnessConfig,
+  entry: AgentEntryInput,
   packs: LoadedPack[],
   env: NodeJS.ProcessEnv,
 ): Promise<AgentDefinition> {
-  if (packs.length === 0 && !config.mcpServers?.length) return base;
+  if (packs.length === 0 && !entry.mcpServers?.length) return base;
 
   const localTools: LocalToolHandler[] = [...(base.localTools ?? [])];
   const mcpServers: McpServerConfig[] = [...(base.mcpServers ?? [])];
   const skills: SkillMetadata[] = [];
 
-  // Top-level mcpServers from YAML (already merged into base when the
-  // agent is builtin; for custom we add them here).
-  if (config.agent.kind === "custom" && config.mcpServers?.length) {
-    for (const m of config.mcpServers as McpServerConfig[]) {
+  // Per-agent mcpServers from YAML — already merged into base by
+  // `buildChatBuiltin` for builtin agents; merge here for custom agents.
+  if (entry.agent.kind === "custom" && entry.mcpServers?.length) {
+    for (const m of entry.mcpServers as McpServerConfig[]) {
       mcpServers.push(m);
     }
   }
 
-  // Explicit pack-declared skills go into a one-shot `explicit` skills
-  // block. If the base agent already had a skills directory, we keep
-  // it and append: that requires switching to `explicit` + materialized
-  // metadata, which is fine because pack-contributed skills already
-  // come as SkillMetadata.
   let baseSkills: SkillMetadata[] | undefined;
   if (base.skills?.kind === "explicit") baseSkills = base.skills.skills;
 
+  // Pack ctx.entryName is bundle-wide — all agents share the same pack
+  // namespace (e.g. cap-memory-pg's Postgres namespace = bundle name).
   for (const loaded of packs) {
-    const ctx = makePackContext(loaded, config.name, env);
+    const ctx = makePackContext(loaded, cfg.name, env);
     await contributeFromPack(loaded.pack, ctx, { localTools, mcpServers, skills });
   }
 
@@ -275,7 +304,6 @@ async function contributeFromPack(
   if (pack.localTools) {
     const tools = await pack.localTools(ctx);
     for (const t of tools) {
-      // Namespace the tool name so multiple packs can coexist.
       const namespaced: LocalToolHandler = {
         ...t,
         definition: {
@@ -304,22 +332,16 @@ async function contributeFromPack(
 
 // ----------------------------------------------------------------------
 // Selective env interpolation
-//
-// We only interpolate ${VAR} into fields where it semantically makes
-// sense (MCP server headers/env/url, capability pack config). The
-// system prompt and skills bodies are left alone.
 // ----------------------------------------------------------------------
 
-function interpolateConfigEnvSlots(config: HarnessConfig, env: NodeJS.ProcessEnv): HarnessConfig {
+function interpolateEnvSlots(
+  cfg: HarnessConfig,
+  env: NodeJS.ProcessEnv,
+): HarnessConfig {
   const lookup = (name: string): string | undefined => env[name];
-  const interpolated: HarnessConfig = { ...config };
-  if (config.mcpServers) {
-    interpolated.mcpServers = interpolateTree(config.mcpServers, lookup, {
-      errorPrefix: "render-harness.yaml mcpServers",
-    });
-  }
-  if (config.capabilities) {
-    interpolated.capabilities = config.capabilities.map(
+  const out: HarnessConfig = { ...cfg };
+  if (cfg.capabilities) {
+    out.capabilities = cfg.capabilities.map(
       (ref): CapabilityRef =>
         ref.config
           ? {
@@ -331,5 +353,15 @@ function interpolateConfigEnvSlots(config: HarnessConfig, env: NodeJS.ProcessEnv
           : ref,
     );
   }
-  return interpolated;
+  out.agents = cfg.agents.map((a) =>
+    a.mcpServers
+      ? {
+          ...a,
+          mcpServers: interpolateTree(a.mcpServers, lookup, {
+            errorPrefix: `render-harness.yaml agents[${a.id}].mcpServers`,
+          }),
+        }
+      : a,
+  );
+  return out;
 }

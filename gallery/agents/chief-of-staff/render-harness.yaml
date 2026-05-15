@@ -1,0 +1,107 @@
+schemaVersion: 1
+name: chief-of-staff
+description: Personal chief of staff — proactive meeting prep + weekly recap + chat with memory.
+harnessVersion: "^0.1"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: CALENDAR_ICS_URL
+    required: false
+    secret: true
+    description: |
+      Public ICS URL for the calendar the chief of staff watches.
+      Google Calendar "secret address in iCal format" works. When set,
+      `meeting-prep` reads upcoming events and writes prep notes to
+      memory; `weekly-recap` includes the week's events in its summary.
+
+agents:
+  - id: chat
+    description: Conversational front-end — ask your chief of staff what's on, get briefings, recall context.
+    agent:
+      kind: custom
+      entrypoint: ./src/chat.ts
+    runtimes:
+      - kind: web
+      - kind: worker
+    # Chat can delegate to workflow-mode siblings via the `trigger_workflow`
+    # builtin (e.g. "give me a deep recap of last quarter" → invokes the
+    # weekly-recap task on demand). Each invocation pauses the chat turn
+    # so the user explicitly approves before a workflow runs.
+    permissions:
+      requireApproval: ["trigger_workflow"]
+
+  - id: meeting-prep
+    description: Every 15 minutes — drops a prep brief for any meeting starting within the next hour.
+    # Inline cron — short fail-stop work, no HITL needed. The right shape
+    # for 30s of calendar reading + memory writes.
+    agent:
+      kind: custom
+      entrypoint: ./src/meeting-prep.ts
+    runtimes:
+      - kind: cron
+        schedule: "*/15 * * * *"
+
+  - id: weekly-recap
+    description: Friday 17:00 UTC — summarizes the week from memory + calendar and posts a recap note. Runs in the bundle's Workflow service for durability + observability.
+    # Cron-triggered workflow:
+    #   - The Cron service is a thin trigger (calls render.workflows.runTask + exits).
+    #   - The actual recap runs in `<bundle-name>-workflows`, the bundle's
+    #     single Workflow service. Durable across restarts, gets the
+    #     Workflows UI graph, and can pause for HITL approval before
+    #     committing the final recap to memory.
+    # workflowTask: true is implied by via:workflow but stated explicitly
+    # so the chat agent's on-demand trigger keeps working even if the cron
+    # schedule is removed later.
+    workflowTask: true
+    agent:
+      kind: custom
+      entrypoint: ./src/weekly-recap.ts
+    runtimes:
+      - kind: cron
+        schedule: "0 17 * * 5"
+        via: workflow
+
+  - id: interview-prep
+    description: Weekdays 12:00 UTC — preps any candidate meetings on today's calendar. Also callable on demand from chat.
+    # Cron-triggered workflow with on-demand reuse:
+    #   - The weekday-morning cron is a thin trigger that surveys the
+    #     calendar and preps every candidate meeting today.
+    #   - workflowTask: true also exposes the agent to chat — the user
+    #     can say "prep me for the Sarah interview in 2 hours" and the
+    #     chat agent invokes this workflow with that specific candidate.
+    workflowTask: true
+    agent:
+      kind: custom
+      entrypoint: ./src/interview-prep.ts
+    runtimes:
+      - kind: cron
+        schedule: "0 12 * * 1-5"
+        via: workflow
+
+  - id: interview-feedback
+    description: After an interview — capture structured feedback. Triggered from chat with the user's free-form notes; produces a durable feedback memory note (HITL on the final write).
+    # Workflow-only, on-demand:
+    #   - No schedule. The chat agent triggers this when the user dumps
+    #     post-interview thoughts.
+    #   - The `kind: workflows` runtime contributes no Render service;
+    #     it's the no-schedule shape that registers the agent as a task
+    #     on the bundle's Workflow service. `workflowTask: true` is
+    #     stated explicitly for clarity.
+    #   - The agent's own `permissions.requireApproval` gates the
+    #     `memory.write` call — the user reviews the structured note
+    #     before it lands in long-term memory.
+    workflowTask: true
+    agent:
+      kind: custom
+      entrypoint: ./src/interview-feedback.ts
+    runtimes:
+      - kind: workflows

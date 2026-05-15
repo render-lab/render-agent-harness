@@ -1,4 +1,5 @@
 import { type ServerType, serve } from "@hono/node-server";
+import type { DeploymentInfo } from "@render-harness/contracts";
 import {
   type AgentDefinition,
   applyMigrations,
@@ -13,9 +14,12 @@ import {
 import { type Context, Hono } from "hono";
 import { PgBoss } from "pg-boss";
 import { defaultApiKeyAuth } from "./auth.js";
+import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
+import { registerConfigRoutes } from "./routes/config.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
+import { registerDeploymentRoutes } from "./routes/deployment.js";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.js";
 import { registerRunRoutes } from "./routes/runs.js";
 import { registerUsageRoutes } from "./routes/usage.js";
@@ -107,6 +111,15 @@ export interface ServeWebOpts {
    * optional — services that don't want it don't pay the bundle cost.
    */
   ui?: boolean | UiMountConfig;
+  /**
+   * Bundle metadata returned by `GET /deployment`. The operator UI uses
+   * this to label the header and template the in-product Guide against
+   * the actual running stack. If omitted, an `{ name: "agent" }` fallback
+   * is synthesized from the loaded agents so the endpoint always
+   * responds — but callers should pass this when they have richer info
+   * (the scaffolded bundle entrypoints feed it from `config.name` etc.).
+   */
+  deployment?: DeploymentInfo;
 }
 
 export interface WebHandle {
@@ -177,6 +190,25 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     pathPrefix,
   });
   registerAgentsRoutes(app, { auth, agents, pathPrefix });
+  registerDeploymentRoutes(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
+  registerAgentModelRoute(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
+    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
+  });
+  registerConfigRoutes(app, {
+    auth,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
   registerUsageRoutes(app, { pool, auth, pathPrefix });
   registerDiagnosticsRoutes(app, { pool, auth, agents, queue, pathPrefix });
   registerBlueprintRoutes(app, { auth, agents, queue, pathPrefix });

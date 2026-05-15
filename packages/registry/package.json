@@ -26,10 +26,15 @@
     "./gallery": {
       "types": "./dist/gallery.d.ts",
       "import": "./dist/gallery.js"
+    },
+    "./deploy": {
+      "types": "./dist/deploy/index.d.ts",
+      "import": "./dist/deploy/index.js"
     }
   },
   "bin": {
-    "render-harness-build": "./dist/bin/build.js"
+    "render-harness-build": "./dist/bin/build.js",
+    "render-harness-deploy": "./dist/bin/deploy.js"
   },
   "files": [
     "dist"
@@ -42,6 +47,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@render-harness/contracts": "workspace:*",
     "@render-harness/core": "workspace:*",
     "yaml": "^2.7.0",
     "zod": "^4.4.3"

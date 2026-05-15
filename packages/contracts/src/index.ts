@@ -191,7 +191,9 @@ export interface ToolResultRecord {
 export interface AgentSummary {
   name: string;
   version: string;
-  model: { provider: string; model: string };
+  /** Agent id from `render-harness.yaml` (also lands in agent_runs rows). */
+  agentId: string;
+  model: AgentModelSummary;
   systemPromptPreview: string;
   systemPromptLength: number;
   mcpServers: { name: string; transport: "stdio" | "http" }[];
@@ -215,6 +217,19 @@ export interface AgentSummary {
 export interface SkippedBuiltinSummary {
   name: string;
   reason: string;
+}
+
+/**
+ * Model spec surfaced by `GET /agents`. Mirrors `ModelSpecInput` from
+ * `@render-harness/registry/schema` but lives in `contracts` so the SPA
+ * doesn't pull in zod.
+ */
+export interface AgentModelSummary {
+  provider: "anthropic" | "openai-compat";
+  model: string;
+  baseURL?: string;
+  apiKeyEnv?: string;
+  thinking?: { enabled: true; budgetTokens: number };
 }
 
 /**
@@ -293,6 +308,94 @@ export interface ToolCallsResp {
 export interface AgentsResp {
   agents: AgentSummary[];
 }
+
+/**
+ * Deployment-wide metadata exposed at GET /deployment. Drives the operator
+ * UI's header label and the in-product Guide so prose, service names, and
+ * code excerpts reflect the actual running bundle instead of literal
+ * "operator-demo" placeholders.
+ *
+ * `agents[].runtimes` is the resolved trigger set (web / worker / cron /
+ * workflows) for that agent — same shape the YAML manifest declares.
+ * `agents[].workflowTask` is the effective bit (true if any cron is
+ * via:workflow, or `kind: workflows`, or explicitly flagged).
+ *
+ * `description`, `bundleSlug`, and `capabilityPacks` may be absent for
+ * single-agent / hand-rolled deployments that didn't supply them.
+ */
+export interface DeploymentInfo {
+  name: string;
+  description?: string;
+  bundleSlug?: string;
+  agents: DeploymentAgentInfo[];
+  capabilityPacks?: string[];
+  /**
+   * Origin of the wizard service that owns the GitHub App credentials
+   * for in-UI edits (e.g. model changes). When absent, the operator UI
+   * hides edit affordances. Populated from `RENDER_HARNESS_WIZARD_URL`
+   * at deploy time.
+   */
+  wizardServiceUrl?: string;
+  /**
+   * Where the deployed bundle was scaffolded from. Read from
+   * `.render-harness/agent.json` at boot. `installationId` is null for
+   * CLI-scaffolded repos until the user installs the render-harness
+   * GitHub App on their own repo via the wizard's install flow.
+   */
+  repoLocator?: {
+    org: string | null;
+    repo: string | null;
+    installationId: string | null;
+  };
+  /**
+   * Merged env-var requirements (from `config.envSchema` + each
+   * capability pack's `envSchema`), annotated with whether the
+   * variable is currently set in `process.env` of the running worker.
+   * Drives the Config tab.
+   */
+  envSchema?: DeploymentEnvVar[];
+  /**
+   * Render-side service identity needed to mutate env vars via the
+   * Render API. `serviceId` is auto-injected by Render at runtime;
+   * when absent (local dev), in-UI env-var writes are disabled.
+   */
+  renderService?: {
+    serviceId: string | null;
+    /** Whether `RENDER_API_KEY` is set on this service. */
+    apiKeyConfigured: boolean;
+  };
+}
+
+/**
+ * One env-var requirement surfaced by `GET /deployment`. Mirrors
+ * `EnvVarSpec` in the registry schema plus an `isSet` flag the SPA
+ * uses to render status pills.
+ */
+export interface DeploymentEnvVar {
+  name: string;
+  required: boolean;
+  secret: boolean;
+  description?: string;
+  default?: string;
+  isSet: boolean;
+  /** Where the spec came from (helps the UI explain why a var is required). */
+  source: "harness" | "capability";
+  /** When source = "capability", the pack name. */
+  packName?: string;
+}
+
+export interface DeploymentAgentInfo {
+  id: string;
+  name: string;
+  runtimes: DeploymentAgentRuntime[];
+  workflowTask: boolean;
+}
+
+export type DeploymentAgentRuntime =
+  | { kind: "web" }
+  | { kind: "worker"; queue?: string }
+  | { kind: "cron"; schedule: string; via: "cron" | "workflow" }
+  | { kind: "workflows" };
 
 export interface DiagnosticsResp {
   checks: DiagnosticCheck[];

@@ -21,7 +21,17 @@ export function Review({
       <dl className="space-y-2.5 text-sm">
         <Row label="name">{state.agentName}</Row>
         <Row label="description">{state.description}</Row>
-        <Row label="model">{state.model}</Row>
+        <Row label="model">
+          <span className="font-mono text-[12px]">
+            {state.model.provider}/{state.model.model}
+          </span>
+          {state.model.baseURL ? (
+            <div className="text-[11px] text-muted">via {state.model.baseURL}</div>
+          ) : null}
+          {state.model.apiKeyEnv ? (
+            <div className="text-[11px] text-muted">key: {state.model.apiKeyEnv}</div>
+          ) : null}
+        </Row>
         <Row label="runtimes">
           {state.runtimes.map((r) => r.kind).join(" + ")}
           {state.ui && <span className="ml-2 text-[11px] text-muted">(operator UI mounted)</span>}

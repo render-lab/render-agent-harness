@@ -2,6 +2,16 @@
 
 exports[`buildFileMap > emits a complete file map for cron 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -16,6 +26,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -37,7 +55,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -54,17 +73,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -98,25 +121,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -213,17 +252,20 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: cron
-    plan: starter
-    schedule: 0 13 * * *
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: 0 13 * * *
 ",
   "src/main.ts": "/**
  * Cron runtime entrypoint. Render schedules this process per the
@@ -309,6 +351,16 @@ export default defineConfig({
 
 exports[`buildFileMap > emits a complete file map for web 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -323,6 +375,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -344,7 +404,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -361,17 +422,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -405,25 +470,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -519,16 +600,19 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: web
-    plan: starter
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: web
+        plan: starter
 ",
   "src/main.ts": "/**
  * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
@@ -592,6 +676,16 @@ export default defineConfig({
 
 exports[`buildFileMap > emits a complete file map for web+cron 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -606,6 +700,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -628,7 +730,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -645,17 +748,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -689,25 +796,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -809,19 +932,22 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: web
-    plan: starter
-  - kind: cron
-    plan: starter
-    schedule: 0 13 * * *
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: cron
+        plan: starter
+        schedule: 0 13 * * *
 ",
   "src/cron.ts": "/**
  * Cron runtime entrypoint. Render schedules this process per the
@@ -920,6 +1046,16 @@ export default defineConfig({
 
 exports[`buildFileMap > emits a complete file map for web+worker 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -934,6 +1070,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -956,7 +1100,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -973,17 +1118,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -1017,25 +1166,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -1137,19 +1302,22 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: web
-    plan: starter
-  - kind: worker
-    plan: starter
-    queue: my-agent-runs
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: my-agent-runs
 ",
   "src/web.ts": "/**
  * Web runtime entrypoint. Hands the agent to runtime-web's serveAgent(),
@@ -1249,6 +1417,16 @@ export default defineConfig({
 
 exports[`buildFileMap > emits a complete file map for web+worker+cron 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -1263,6 +1441,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -1286,7 +1472,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -1303,17 +1490,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -1347,25 +1538,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -1470,22 +1677,25 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: web
-    plan: starter
-  - kind: worker
-    plan: starter
-    queue: my-agent-runs
-  - kind: cron
-    plan: starter
-    schedule: 0 13 * * *
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: my-agent-runs
+      - kind: cron
+        plan: starter
+        schedule: 0 13 * * *
 ",
   "src/cron.ts": "/**
  * Cron runtime entrypoint. Render schedules this process per the
@@ -1618,6 +1828,16 @@ export default defineConfig({
 
 exports[`buildFileMap > emits a complete file map for worker 1`] = `
 {
+  ".env": "# Required: model API key.
+ANTHROPIC_API_KEY=
+
+# Local datastore stack (\`npm run db:up\`). Override in production.
+DATABASE_URL=postgres://harness:harness@127.0.0.1:55432/harness
+KV_URL=redis://127.0.0.1:56379
+
+# Optional: Render API key, only if you wire the Render MCP.
+# RENDER_API_KEY=
+",
   ".env.example": "# Required: model API key.
 ANTHROPIC_API_KEY=
 
@@ -1632,6 +1852,14 @@ KV_URL=redis://127.0.0.1:56379
 dist
 .env
 *.log
+",
+  ".render-harness/agent.json": "{
+  "schemaVersion": 1,
+  "agentSlug": "my-agent",
+  "org": null,
+  "repo": null,
+  "installationId": null
+}
 ",
   "README.md": "## my-agent
 
@@ -1653,7 +1881,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 
 \`\`\`sh
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`npm run db:up\`.
 npm run db:up               # Postgres + Valkey via docker-compose
 npm run dev
 \`\`\`
@@ -1670,17 +1899,21 @@ npm run db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
 
-Edit the YAML, then restart the dev process to pick up changes. The agent is built at boot via \`defineFromConfig\`, so edits take effect on restart.
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
+
+Edit the YAML, then restart the dev process to pick up changes. Agents are built at boot via \`defineFromConfig\`, so edits take effect on restart.
 
 ## Regenerating render.yaml
 
@@ -1714,25 +1947,41 @@ Then re-run \`npm run build:bp\` so the pack's env requirements land in \`render
  * The agent definition for this entry.
  *
  * For YAML-driven entries (\`agent.kind: builtin\` in render-harness.yaml),
- * this file just calls \`defineFromConfig()\` and re-exports the result.
+ * this file calls \`defineFromConfig()\` and re-exports the first agent.
  *
  * For TS-driven entries (\`agent.kind: custom\`), replace this body with
  * a \`defineAgent({ ... })\` call and update the YAML to point at this
  * file:
  *
- *   agent:
- *     kind: custom
- *     entrypoint: ./agent/index.ts
+ *   agents:
+ *     - id: my-agent
+ *       agent:
+ *         kind: custom
+ *         entrypoint: ./agent/index.ts
  */
 
-import { defineFromConfig } from "@render-harness/registry";
+import { defineFromConfig, enrichDeploymentInfo, toDeploymentInfo } from "@render-harness/registry";
 
-const { agent } = await defineFromConfig({
-  configPath: new URL("../render-harness.yaml", import.meta.url).pathname,
+const configPath = new URL("../render-harness.yaml", import.meta.url).pathname;
+
+const { agents, config, packs } = await defineFromConfig({ configPath });
+
+const agent = agents[0];
+if (!agent) {
+  throw new Error("agent/index.ts: no agents defined in render-harness.yaml");
+}
+
+// enrichDeploymentInfo layers in wizardServiceUrl, repoLocator,
+// envSchema (with isSet annotations), and renderService — everything
+// the operator UI's Agents + Config tabs need. All fields are
+// best-effort; missing pieces just hide the corresponding affordances.
+const deployment = await enrichDeploymentInfo(toDeploymentInfo(config), configPath, {
+  config,
+  packs,
 });
 
 export default agent;
-export { agent };
+export { agent, deployment };
 ",
   "docker-compose.yml": "name: my-agent
 
@@ -1829,17 +2078,20 @@ name: my-agent
 description: A test agent.
 harnessVersion: ^0.1
 license: MIT
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: You are a helpful assistant.
-runtimes:
-  - kind: worker
-    plan: starter
-    queue: my-agent-runs
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: my-agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: You are a helpful assistant.
+    runtimes:
+      - kind: worker
+        plan: starter
+        queue: my-agent-runs
 ",
   "src/main.ts": "/**
  * Worker runtime entrypoint. Consumes run jobs off the pg-boss queue

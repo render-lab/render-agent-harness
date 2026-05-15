@@ -13,19 +13,37 @@ import type { ContentBlock, MessageRecord } from "../api.js";
  *   - tool_result → text part prefixed with `[tool result]` or `[tool error]`
  *
  * `tool` role messages are surfaced as `system` because assistant-ui doesn't
- * model a tool role at the thread level. Rendering them as compact system
- * notes is good enough for v1; the operator's Runs tab keeps the full
- * untranslated tool-call timeline for deeper debugging.
+ * model a tool role at the thread level. assistant-ui enforces that system
+ * messages contain exactly one text part, so multi-block tool messages are
+ * concatenated into a single text part. The operator's Runs tab keeps the
+ * full untranslated tool-call timeline for deeper debugging.
  */
 export function convertMessage(msg: MessageRecord): ThreadMessageLike {
   const role: ThreadMessageLike["role"] = msg.role === "tool" ? "system" : msg.role;
-  const content = msg.content.map(blockToPart);
+  const parts = msg.content.map(blockToPart);
+  // assistant-ui constraint: system messages MUST have exactly one text
+  // part. Collapse multi-part tool/system messages into a single text
+  // blob; fall back to a placeholder if there's nothing renderable.
+  const content =
+    role === "system" ? [collapseToSingleText(parts)] : parts;
   return {
     id: msg.id,
     role,
     content,
     createdAt: new Date(msg.createdAt),
   };
+}
+
+function collapseToSingleText(parts: ThreadPart[]): { type: "text"; text: string } {
+  if (parts.length === 0) return { type: "text", text: "" };
+  const chunks: string[] = [];
+  for (const p of parts) {
+    if (p.type === "text") chunks.push(p.text);
+    else if (p.type === "reasoning") chunks.push(p.text);
+    else if (p.type === "tool-call") chunks.push(`[tool-call ${p.toolName}] ${p.argsText ?? ""}`);
+    else chunks.push(JSON.stringify(p));
+  }
+  return { type: "text", text: chunks.join("\n\n") };
 }
 
 type ThreadPart = Exclude<ThreadMessageLike["content"], string>[number];

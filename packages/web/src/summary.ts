@@ -1,4 +1,4 @@
-import type { AgentSummary } from "@render-harness/contracts";
+import type { AgentModelSummary, AgentSummary } from "@render-harness/contracts";
 import { type AgentDefinition, previewBuiltins, type SkippedBuiltin } from "@render-harness/core";
 
 export type { AgentSummary };
@@ -29,10 +29,19 @@ export function summariseAgent(agent: AgentDefinition): AgentSummary {
     builtinsRegistered.push(name);
   }
 
+  const model: AgentModelSummary = {
+    provider: agent.model.provider,
+    model: agent.model.model,
+  };
+  if (agent.model.baseURL) model.baseURL = agent.model.baseURL;
+  if (agent.model.apiKeyEnv) model.apiKeyEnv = agent.model.apiKeyEnv;
+  if (agent.model.thinking) model.thinking = { ...agent.model.thinking };
+
   const summary: AgentSummary = {
     name: agent.name,
     version: agent.version,
-    model: { provider: agent.model.provider, model: agent.model.model },
+    agentId: agent.name,
+    model,
     systemPromptPreview: preview,
     systemPromptLength: fullPrompt.length,
     mcpServers: (agent.mcpServers ?? []).map((s) => ({

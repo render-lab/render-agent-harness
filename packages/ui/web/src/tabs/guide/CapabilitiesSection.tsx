@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type AgentSummary, ApiError, listAgents } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
+import { useDeployment } from "../../deployment-context.js";
 import { CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 const PROSE_INTRO = `
@@ -52,36 +53,28 @@ export function CapabilitiesSection() {
           <ol className="list-decimal space-y-3 pl-6 text-sm">
             <li>
               <p>Install the pack:</p>
-              <CmdBadge cmd="pnpm --filter @render-harness/example-operator-demo add @render-harness/cap-search-exa" />
+              <CmdBadge cmd="pnpm add @render-harness/cap-search-exa" />
             </li>
             <li>
               <p>
-                Wire it into <code className="bg-code-bg px-1">agent.ts</code>. Mark the pack name on the agent definition for discoverability — the live panel below reads this to show which packs are installed:
+                Reference it in <code className="bg-code-bg px-1">render-harness.yaml</code> under <code className="bg-code-bg px-1">capabilities</code>. The harness materializes the pack at boot, wires its MCP servers into each agent, and the live panel below reads the pack list to show what's installed:
               </p>
-              <CodeBlock language="excerpt — agent.ts">
-{`import { defineAgent } from "@render-harness/core";
-import exaPack from "@render-harness/cap-search-exa";
-
-const exa = exaPack.materialise({ config: { defaultMaxResults: 10 } });
-
-return defineAgent({
-  name: "operator-demo",
-  version: "0.4.0",
-  // ...
-  mcpServers: [...exa.mcpServers],
-  capabilityPacks: ["@render-harness/cap-search-exa"],
-});`}
+              <CodeBlock language="excerpt — render-harness.yaml">
+{`capabilities:
+  - pack: "@render-harness/cap-search-exa"
+    config:
+      defaultMaxResults: 10`}
               </CodeBlock>
             </li>
             <li>
               <p>
-                Add the API key to <code className="bg-code-bg px-1">.env</code> at the repo root (Compose interpolates it automatically):
+                Add the API key to <code className="bg-code-bg px-1">.env</code>:
               </p>
               <CmdBadge cmd='echo "EXA_API_KEY=..." >> .env' />
             </li>
             <li>
               <p>
-                Reload: <CmdBadge cmd="pnpm apps:operator-demo:reload" />. Now ask the chat agent to "search the web for…" and watch the new tool fire.
+                Restart <CmdBadge cmd="pnpm dev" />. Now ask the chat agent to "search the web for…" and watch the new tool fire.
               </p>
             </li>
           </ol>
@@ -95,6 +88,7 @@ return defineAgent({
 }
 
 function CapabilitiesLivePanel() {
+  const deployment = useDeployment();
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
@@ -115,25 +109,27 @@ function CapabilitiesLivePanel() {
     };
   }, []);
 
+  // Bundle-level capability packs are the source of truth (capabilities
+  // are bundle-wide singletons). Agent summaries' `capabilityPacks` is
+  // kept as a fallback for legacy single-agent shapes that don't surface
+  // the manifest list.
+  const packs =
+    deployment?.capabilityPacks && deployment.capabilityPacks.length > 0
+      ? deployment.capabilityPacks
+      : (agents?.[0]?.capabilityPacks ?? []);
+
   return (
     <LivePanel title="installed packs">
       {error ? (
         <div className="text-err">{error.message}</div>
       ) : !agents ? (
         <div className="text-muted">loading…</div>
-      ) : agents[0] ? (
+      ) : (
         <>
-          <KV
-            k="capabilityPacks"
-            v={
-              agents[0].capabilityPacks && agents[0].capabilityPacks.length > 0
-                ? agents[0].capabilityPacks.length
-                : "0"
-            }
-          />
-          {agents[0].capabilityPacks && agents[0].capabilityPacks.length > 0 ? (
+          <KV k="capabilityPacks" v={String(packs.length)} />
+          {packs.length > 0 ? (
             <ul className="space-y-1 text-[11px]">
-              {agents[0].capabilityPacks.map((p) => (
+              {packs.map((p) => (
                 <li key={p} className="border border-line px-2 py-1 font-mono">
                   {p}
                 </li>
@@ -141,18 +137,18 @@ function CapabilitiesLivePanel() {
             </ul>
           ) : (
             <div className="text-[11px] text-muted">
-              // none yet — the demo agent ships unadorned. Follow the recipe
-              on the left and the pack name will show up here after reload.
+              // none yet. Follow the recipe on the left and the pack name
+              will show up here after restart.
             </div>
           )}
-          <div className="hairline-top mt-3 border-t border-line pt-3 text-[11px] text-muted">
-            <div>mcp servers: {agents[0].mcpServers.length}</div>
-            <div>local tools: {agents[0].hasLocalTools ? "yes" : "no"}</div>
-            <div>skills: {agents[0].hasSkills ? "yes" : "no"}</div>
-          </div>
+          {agents[0] && (
+            <div className="hairline-top mt-3 border-t border-line pt-3 text-[11px] text-muted">
+              <div>mcp servers: {agents[0].mcpServers.length}</div>
+              <div>local tools: {agents[0].hasLocalTools ? "yes" : "no"}</div>
+              <div>skills: {agents[0].hasSkills ? "yes" : "no"}</div>
+            </div>
+          )}
         </>
-      ) : (
-        <div className="text-muted">no agents loaded</div>
       )}
     </LivePanel>
   );

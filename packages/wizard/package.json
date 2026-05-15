@@ -26,7 +26,8 @@
     "@render-harness/core": "workspace:*",
     "@render-harness/registry": "workspace:*",
     "create-render-agent": "workspace:*",
-    "hono": "^4.12.18"
+    "hono": "^4.12.18",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.7",

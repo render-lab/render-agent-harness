@@ -10,7 +10,9 @@
  */
 
 import type {
+  AgentModelSummary,
   AgentSummary,
+  DeploymentEnvVar,
   CancelRunResp,
   ContentBlock,
   ConversationDetailResp,
@@ -19,6 +21,9 @@ import type {
   CreateConversationResp,
   CreateRunBody,
   CreateRunResp,
+  DeploymentAgentInfo,
+  DeploymentAgentRuntime,
+  DeploymentInfo,
   DiagnosticCheck,
   HealthInfo,
   ListConversationsResp,
@@ -35,9 +40,14 @@ import type {
 } from "@render-harness/contracts";
 
 export type {
+  AgentModelSummary,
   AgentSummary,
   ContentBlock,
+  DeploymentEnvVar,
   ConversationSummary,
+  DeploymentAgentInfo,
+  DeploymentAgentRuntime,
+  DeploymentInfo,
   DiagnosticCheck,
   HealthInfo,
   MessageRecord,
@@ -161,14 +171,11 @@ export function sendConversationMessage(
   id: string,
   body: SendConversationMessageBody,
 ): Promise<SendConversationMessageResp> {
-  return request<SendConversationMessageResp>(
-    `/conversations/${encodeURIComponent(id)}/messages`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
+  return request<SendConversationMessageResp>(`/conversations/${encodeURIComponent(id)}/messages`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export function getToolCalls(id: string): Promise<{ toolCalls: ToolCallRecord[] }> {
@@ -213,6 +220,64 @@ export async function getBlueprint(): Promise<string> {
 
 export function listAgents(): Promise<{ agents: AgentSummary[] }> {
   return request<{ agents: AgentSummary[] }>("/agents");
+}
+
+export function getDeployment(): Promise<DeploymentInfo> {
+  return request<DeploymentInfo>("/deployment");
+}
+
+export function listEnvVars(): Promise<{ envVars: DeploymentEnvVar[] }> {
+  return request<{ envVars: DeploymentEnvVar[] }>("/config/env-vars");
+}
+
+export interface SetEnvVarResp {
+  ok?: boolean;
+  name?: string;
+  restart?: string;
+  error?: string;
+  details?: string;
+  status?: number;
+}
+
+/**
+ * Set an env var on this Render service. The harness calls the Render
+ * API; Render auto-deploys, which may kill the current process before
+ * the response lands. The UI treats a clean 202 as "saved, restart in
+ * flight" and a disconnect after submit as "probably saved, re-poll".
+ */
+export function setEnvVar(name: string, value: string): Promise<SetEnvVarResp> {
+  return request<SetEnvVarResp>(`/config/env-vars/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+}
+
+export interface UpdateAgentModelResp {
+  ok?: boolean;
+  unchanged?: boolean;
+  commitSha?: string | null;
+  error?: string;
+  details?: string;
+  /** Set on 409 needs_install responses. */
+  installUrl?: string;
+}
+
+/**
+ * Edit an agent's model spec. The deployed worker proxies the request
+ * to the wizard service, which commits a `render-harness.yaml` change
+ * to the scaffolded repo and lets Render auto-deploy redeploy with
+ * the new model.
+ */
+export function updateAgentModel(
+  slug: string,
+  spec: AgentModelSummary,
+): Promise<UpdateAgentModelResp> {
+  return request<UpdateAgentModelResp>(`/agents/${encodeURIComponent(slug)}/model`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ spec }),
+  });
 }
 
 export function getUsage(opts?: {
@@ -283,10 +348,7 @@ export interface ConversationStreamHandlers {
  * the next user message enqueues a fresh run that pushes more events
  * down the same channel. Caller closes by invoking the returned dispose.
  */
-export function streamConversation(
-  id: string,
-  handlers: ConversationStreamHandlers,
-): () => void {
+export function streamConversation(id: string, handlers: ConversationStreamHandlers): () => void {
   const url = `/conversations/${encodeURIComponent(id)}/stream`;
   const es = new EventSource(url, { withCredentials: true });
   es.addEventListener("message", (event) => {

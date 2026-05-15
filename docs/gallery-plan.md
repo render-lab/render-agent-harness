@@ -245,3 +245,19 @@ Numbered for incremental commits / PRs:
 6. **Docs** — `gallery/README.md` (contributor guide) + a section in `docs/registry-guide.md` linking out from the existing author guide.
 
 Each step is independently mergeable. After step 4 the wizard is end-to-end usable on top of the in-monorepo gallery; steps 5–6 are polish.
+
+## 9. Bundles addendum (shipped after Phase 4)
+
+The gallery now distinguishes two entry kinds — see [`bundles-plan.md`](./bundles-plan.md) for the design and [`bundle-authoring.md`](./bundle-authoring.md) for the contributor guide.
+
+- **`kind: "agent"`** — single-agent template. The wizard collects per-agent prompts (name, system prompt, model, runtimes, capabilities) seeded from the entry's manifest, then `buildFileMap` emits the templated project. Today's three entries (`chat`, `support-bot`, `research-cron`) all fall into this bucket.
+- **`kind: "bundle"`** — sealed multi-agent template. The wizard short-circuits the per-agent steps. `buildFileMap` materializes the bundle's manifest + `src/*.ts` source files verbatim and generates V2-aware runtime entrypoints (`src/web.ts`, `src/worker.ts`, `src/cron.ts`). The first bundle is `chief-of-staff`.
+
+The `kind` is *derived* from the manifest at load time (single agent whose id matches the bundle name → `agent`; otherwise → `bundle`), not declared in `index.yaml`. The cross-check at [`packages/registry/src/gallery.ts:186-196`](../packages/registry/src/gallery.ts) uses `flattenRuntimeKinds` to union runtime kinds across all agents in the manifest.
+
+`ResolvedAgentEntry` gained two fields to support bundles:
+
+- `kind: "agent" | "bundle"`
+- `sourceFiles: Record<string, string>` — populated for bundles (empty for single-agent entries)
+
+Both the CLI (`packages/create-render-agent/src/prompts.ts:runBundleWizard`) and the browser wizard (`packages/wizard/web/src/steps/BundleReview.tsx`) detect bundle entries on the Template step and route to a sealed-bundle review screen instead of the per-agent wizard.

@@ -22,9 +22,41 @@ export async function postScaffold(args: {
       capabilities: args.state.capabilities,
       ui: args.state.ui,
       templateSlug: args.state.templateSlug,
+      bundleSlug: null,
       turnstileToken: args.turnstileToken,
     }),
   });
+  return parseScaffoldResponse(res);
+}
+
+export async function postBundleScaffold(args: {
+  bundleSlug: string;
+  agentName: string;
+  description: string;
+  turnstileToken: string;
+}): Promise<ScaffoldResponse> {
+  const res = await fetch("/api/scaffold", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      agentName: args.agentName,
+      description: args.description,
+      systemPrompt: "",
+      // Server ignores model/runtimes/capabilities/ui in bundle mode,
+      // but the request schema still requires the fields. Stable defaults.
+      model: { provider: "anthropic", model: "claude-sonnet-4-6" },
+      runtimes: [],
+      capabilities: [],
+      ui: false,
+      templateSlug: args.bundleSlug,
+      bundleSlug: args.bundleSlug,
+      turnstileToken: args.turnstileToken,
+    }),
+  });
+  return parseScaffoldResponse(res);
+}
+
+async function parseScaffoldResponse(res: Response): Promise<ScaffoldResponse> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({ error: "unknown" }))) as {
       error: string;

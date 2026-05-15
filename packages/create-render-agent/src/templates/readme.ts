@@ -43,7 +43,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 ${harnessDepNote(answers)}
 \`\`\`sh
 ${pm} install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY
+# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Other values (DATABASE_URL, KV_URL) are pre-populated to match \`${run} db:up\`.
 ${run} db:up               # Postgres + Valkey via docker-compose
 ${run} dev
 \`\`\`${uiBlurb}
@@ -60,20 +61,24 @@ ${run} db:logs    # tail logs
 
 ## Customizing the agent
 
-Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml):
+Everything about the agent lives in [\`render-harness.yaml\`](./render-harness.yaml). The manifest declares one or more agents in an \`agents\` list and bundle-wide defaults under \`shared\`:
 
 | Field | What to change |
 |---|---|
-| \`agent.systemPrompt\` | The agent's persona / instructions. |
-| \`model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. |
-| \`mcpServers\` | Add an MCP server (stdio or http transport). |
-| \`capabilities\` | Add a capability pack (see "Adding capabilities" below). |
-| \`runtimes\` | Add/remove trigger surfaces; tweak cron schedule or worker queue. |
+| \`agents[<i>].agent.systemPrompt\` | This agent's persona / instructions. |
+| \`shared.model.model\` | Swap to \`claude-opus-4-7\`, \`claude-haiku-4-5\`, etc. (each agent can override via its own \`model\`). |
+| \`agents[<i>].mcpServers\` | Add an MCP server (stdio or http transport) to this agent. |
+| \`agents[<i>].runtimes\` | Add/remove trigger surfaces for this agent; tweak cron schedule or worker queue. |
+| \`agents[<i>].workflowTask\` | \`true\` registers this agent as a task on the bundle's Workflow service. |
+| \`capabilities\` | Bundle-wide capability packs (see "Adding capabilities" below). |
+| \`envSchema\` | Bundle-wide env vars surfaced at deploy time. |
+
+Add a second agent by appending another entry to \`agents:\` — the scaffolder is single-agent by default, but the runtime + emitter already support multi-agent bundles. See the harness docs for the bundle authoring guide.
 
 Edit the YAML, then restart the dev process to pick up changes. ${
     answers.ui
-      ? "The operator UI at `/ui` shows the resolved agent under the **Agents** tab (read-only — editing prompts at runtime is intentionally not supported; the agent is built at boot via `defineFromConfig`)."
-      : "The agent is built at boot via `defineFromConfig`, so edits take effect on restart."
+      ? "The operator UI at `/ui` shows the resolved agents under the **Agents** tab (read-only — editing prompts at runtime is intentionally not supported; agents are built at boot via `defineFromConfig`)."
+      : "Agents are built at boot via `defineFromConfig`, so edits take effect on restart."
   }
 
 ## Regenerating render.yaml

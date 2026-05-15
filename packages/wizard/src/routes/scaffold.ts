@@ -90,24 +90,63 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
     const template = body.templateSlug
       ? (opts.gallery.agents.find((a) => a.slug === body.templateSlug) ?? null)
       : null;
+    const bundleEntry = body.bundleSlug
+      ? (opts.gallery.agents.find((a) => a.slug === body.bundleSlug) ?? null)
+      : null;
+
+    if (body.bundleSlug && (!bundleEntry || bundleEntry.kind !== "bundle")) {
+      return c.json<ErrorResponse>(
+        {
+          error: "bundle_not_found",
+          details: `bundleSlug "${body.bundleSlug}" is not a sealed bundle in the gallery`,
+        },
+        400,
+      );
+    }
 
     let fileMap: Map<string, string>;
     try {
-      const answers: Answers = {
-        directory: "/managed", // placeholder; buildFileMap doesn't use it for path construction in the file map
-        agentName: body.agentName,
-        description: body.description,
-        systemPrompt: body.systemPrompt,
-        model: body.model,
-        runtimes: body.runtimes,
-        capabilities: body.capabilities,
-        templateManifest: template ? (template.manifest as Record<string, unknown>) : null,
-        ui: body.ui,
-        packageManager: "npm", // managed-repo doesn't know its consumer; npm is the lowest-common-denominator default
-        harnessRoot: null, // published deps, not link:
-        gitInit: false,
-        installDeps: false,
-      };
+      const answers: Answers = bundleEntry
+        ? {
+            directory: "/managed",
+            agentName: body.agentName,
+            description: body.description,
+            systemPrompt: "",
+            model: body.model,
+            runtimes: [],
+            capabilities: bundleEntry.capabilities.map((pack) => ({ pack })),
+            templateManifest: bundleEntry.manifest as unknown as Record<string, unknown>,
+            bundle: {
+              slug: bundleEntry.slug,
+              manifest: bundleEntry.manifest as unknown as Record<string, unknown>,
+              sourceFiles: bundleEntry.sourceFiles,
+              runtimeKinds: bundleEntry.runtimeKinds,
+              capabilities: bundleEntry.capabilities,
+            },
+            ui: bundleEntry.manifest.shared?.ui ?? false,
+            packageManager: "npm",
+            harnessRoot: null,
+            gitInit: false,
+            installDeps: false,
+          }
+        : {
+            directory: "/managed", // placeholder; buildFileMap doesn't use it for path construction in the file map
+            agentName: body.agentName,
+            description: body.description,
+            systemPrompt: body.systemPrompt,
+            model: body.model,
+            runtimes: body.runtimes,
+            capabilities: body.capabilities,
+            templateManifest: template
+              ? (template.manifest as unknown as Record<string, unknown>)
+              : null,
+            bundle: null,
+            ui: body.ui,
+            packageManager: "npm", // managed-repo doesn't know its consumer; npm is the lowest-common-denominator default
+            harnessRoot: null, // published deps, not link:
+            gitInit: false,
+            installDeps: false,
+          };
       fileMap = buildFileMap(answers);
     } catch (err) {
       return c.json<ErrorResponse>(
@@ -132,12 +171,31 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
 
     try {
       const octokit = await deps.createOctokit({ creds: opts.github });
+      const installationId = opts.github.installationId;
+      const agentSlug = body.agentName;
       const result = await deps.createScaffoldedRepo({
         octokit,
         org: opts.org,
         desiredName: body.agentName,
         description: body.description,
         files: fileMap,
+        beforeCommit: ({ org, repoName }) =>
+          new Map([
+            [
+              ".render-harness/agent.json",
+              `${JSON.stringify(
+                {
+                  schemaVersion: 1,
+                  agentSlug,
+                  org,
+                  repo: repoName,
+                  installationId,
+                },
+                null,
+                2,
+              )}\n`,
+            ],
+          ]),
       });
       const response: ScaffoldResponse = {
         repoUrl: result.repoUrl,

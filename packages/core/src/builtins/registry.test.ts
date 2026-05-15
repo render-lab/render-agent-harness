@@ -43,10 +43,12 @@ describe("buildBuiltinTools registry", () => {
     expect(names).not.toContain("web_search");
     expect(names).not.toContain("web_extract");
     expect(names).not.toContain("image_generate");
+    expect(names).not.toContain("trigger_workflow");
     const skippedNames = skipped.map((s) => s.name);
     expect(skippedNames).toContain("web_search");
     expect(skippedNames).toContain("web_extract");
     expect(skippedNames).toContain("image_generate");
+    expect(skippedNames).toContain("trigger_workflow");
   });
 
   it("registers web_search via Exa when EXA_API_KEY is set", () => {
@@ -84,5 +86,26 @@ describe("buildBuiltinTools registry", () => {
     const { tools } = buildBuiltinTools(makeCtx({ OPENAI_API_KEY: "k" }));
     const ig = tools.find((t) => t.definition.name === "image_generate");
     expect(ig?.definition.description).toMatch(/openai/i);
+  });
+
+  it("registers trigger_workflow when RENDER_API_KEY and WORKFLOW_SLUG are both set", () => {
+    const { tools } = buildBuiltinTools(
+      makeCtx({ RENDER_API_KEY: "rnd_x", WORKFLOW_SLUG: "demo-workflows" }),
+    );
+    const tw = tools.find((t) => t.definition.name === "trigger_workflow");
+    expect(tw).toBeDefined();
+    expect(tw?.definition.description).toContain("demo-workflows");
+  });
+
+  it("skips trigger_workflow with a clear reason when only RENDER_API_KEY is set", () => {
+    const { skipped } = buildBuiltinTools(makeCtx({ RENDER_API_KEY: "rnd_x" }));
+    const entry = skipped.find((s) => s.name === "trigger_workflow");
+    expect(entry?.reason).toMatch(/WORKFLOW_SLUG/);
+  });
+
+  it("skips trigger_workflow with a clear reason when only WORKFLOW_SLUG is set", () => {
+    const { skipped } = buildBuiltinTools(makeCtx({ WORKFLOW_SLUG: "demo-workflows" }));
+    const entry = skipped.find((s) => s.name === "trigger_workflow");
+    expect(entry?.reason).toMatch(/RENDER_API_KEY/);
   });
 });

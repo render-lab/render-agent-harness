@@ -4,24 +4,26 @@ description: Queue-driven support agent. Web service enqueues; worker processes.
 harnessVersion: "^0.1"
 license: MIT
 
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: |
-    You are a first-line support agent. You triage incoming user reports,
-    answer common questions clearly, and escalate anything you're not
-    confident about by labelling the conversation for a human to pick up.
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
 
-    Be concise. Quote the user's exact issue when summarizing. Never
-    fabricate product details — if you don't know, say so and escalate.
+agents:
+  - id: support-bot
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a first-line support agent. You triage incoming user reports,
+        answer common questions clearly, and escalate anything you're not
+        confident about by labelling the conversation for a human to pick up.
 
-runtimes:
-  - kind: web
-    plan: starter
-  - kind: worker
-    plan: starter
-    queue: support-bot-runs
-
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
+        Be concise. Quote the user's exact issue when summarizing. Never
+        fabricate product details — if you don't know, say so and escalate.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: support-bot-runs

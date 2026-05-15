@@ -12,7 +12,15 @@ import {
   select,
   text,
 } from "@clack/prompts";
+import {
+  BASE_URL_ALLOWLIST,
+  DEFAULT_MODEL_PRESET_ID,
+  findPreset,
+  MODEL_PRESETS,
+  matchPreset,
+} from "@render-harness/registry";
 import type { ResolvedAgentEntry, ResolvedGallery } from "@render-harness/registry/gallery";
+import type { ModelSpecInput } from "@render-harness/registry/schema";
 import type {
   Answers,
   CapabilityPick,
@@ -20,12 +28,6 @@ import type {
   RuntimeKind,
   RuntimeSelection,
 } from "./types.js";
-
-const KNOWN_MODELS: ReadonlyArray<{ value: string; label: string; hint?: string }> = [
-  { value: "claude-sonnet-4-6", label: "claude-sonnet-4-6", hint: "default — best balance" },
-  { value: "claude-opus-4-7", label: "claude-opus-4-7", hint: "most capable" },
-  { value: "claude-haiku-4-5", label: "claude-haiku-4-5", hint: "fastest / cheapest" },
-];
 
 /**
  * Run the interactive wizard. `presetDirectory`, if given, comes from
@@ -45,6 +47,21 @@ export async function runWizard(options: {
 
   const template = await promptTemplate(options.gallery);
 
+  // Sealed bundle: no per-agent prompts. Just project name + lifecycle.
+  if (template && template.kind === "bundle") {
+    return runBundleWizard({
+      template,
+      directory,
+      packageManager: options.packageManager,
+      harnessRoot: options.harnessRoot,
+    });
+  }
+
+  const templatePrimaryAgent = template?.manifest.agents[0];
+  const templateAgentBlock = templatePrimaryAgent?.agent;
+  const templateModel: ModelSpecInput | undefined =
+    templatePrimaryAgent?.model ?? template?.manifest.shared?.model;
+
   const defaultName = sanitizeName(basename(resolve(directory)));
   const agentName = await promptText({
     message: "Agent name (used in render-harness.yaml & package.json)",
@@ -59,7 +76,7 @@ export async function runWizard(options: {
   });
 
   const templatePrompt =
-    template?.manifest.agent.kind === "builtin" ? template.manifest.agent.systemPrompt : null;
+    templateAgentBlock?.kind === "builtin" ? templateAgentBlock.systemPrompt : null;
   const systemPrompt = await promptText({
     message: "System prompt",
     initialValue:
@@ -67,14 +84,7 @@ export async function runWizard(options: {
     validate: (v) => (v.length > 0 ? undefined : "required"),
   });
 
-  const model = await promptSelect({
-    message: "Model",
-    options: KNOWN_MODELS,
-    initialValue: (template?.manifest.model.model ?? "claude-sonnet-4-6") as
-      | "claude-sonnet-4-6"
-      | "claude-opus-4-7"
-      | "claude-haiku-4-5",
-  });
+  const model = await promptModel(templateModel);
 
   note(
     "Pick one or more — multi-runtime agents (e.g. web + cron) share the same\nagent definition and the same Postgres + Key Value state.",
@@ -135,8 +145,69 @@ export async function runWizard(options: {
     model,
     runtimes,
     capabilities,
-    templateManifest: template ? (template.manifest as Record<string, unknown>) : null,
+    templateManifest: template ? (template.manifest as unknown as Record<string, unknown>) : null,
+    bundle: null,
     ui,
+    packageManager: options.packageManager,
+    harnessRoot: options.harnessRoot,
+    gitInit,
+    installDeps,
+  };
+}
+
+/**
+ * Sealed-bundle wizard flow. Collects only project-level prompts
+ * (directory, git init, install) and returns Answers with the bundle
+ * payload populated. The generator materializes the manifest + source
+ * tree verbatim.
+ */
+async function runBundleWizard(options: {
+  template: ResolvedAgentEntry;
+  directory: string;
+  packageManager: PackageManager;
+  harnessRoot: string | null;
+}): Promise<Answers> {
+  const { template } = options;
+  const agentList = template.manifest.agents
+    .map((a) => `  • ${a.id}${a.description ? ` — ${a.description}` : ""}`)
+    .join("\n");
+  note(
+    `Bundled template "${template.name}" is sealed — it ships ${template.manifest.agents.length} agents that share one harness deployment:\n${agentList}\n\nThe wizard will write all files as-is. Customize after.`,
+    "Bundle",
+  );
+
+  const gitInit = await promptConfirm({
+    message: "Initialize a git repo?",
+    initialValue: true,
+  });
+  const installDeps = await promptConfirm({
+    message: `Install dependencies with ${options.packageManager}?`,
+    initialValue: true,
+  });
+
+  outro("Ready to scaffold bundle.");
+
+  return {
+    directory: options.directory,
+    // Single-agent fields are ignored when bundle is set, but TypeScript
+    // wants them. Use deterministic placeholders.
+    agentName: template.manifest.name,
+    description: template.description,
+    systemPrompt: "",
+    model:
+      template.manifest.shared?.model ??
+      (findPreset(DEFAULT_MODEL_PRESET_ID).spec as ModelSpecInput),
+    runtimes: [],
+    capabilities: template.capabilities.map((pack) => ({ pack })),
+    templateManifest: template.manifest as unknown as Record<string, unknown>,
+    bundle: {
+      slug: template.slug,
+      manifest: template.manifest as unknown as Record<string, unknown>,
+      sourceFiles: template.sourceFiles,
+      runtimeKinds: template.runtimeKinds,
+      capabilities: template.capabilities,
+    },
+    ui: template.manifest.shared?.ui ?? false,
     packageManager: options.packageManager,
     harnessRoot: options.harnessRoot,
     gitInit,
@@ -259,6 +330,85 @@ async function promptCapabilities(
   });
   const picked = unwrap(result);
   return picked.map((pack) => ({ pack }));
+}
+
+async function promptModel(templateModel: ModelSpecInput | undefined): Promise<ModelSpecInput> {
+  const initialId = templateModel ? matchPreset(templateModel).id : DEFAULT_MODEL_PRESET_ID;
+  const choice = await promptSelect({
+    message: "Model",
+    options: MODEL_PRESETS.map((p) => ({
+      value: p.id,
+      label: p.label,
+      ...(p.hint ? { hint: p.hint } : {}),
+    })),
+    initialValue: initialId,
+  });
+  const preset = findPreset(choice);
+  if (preset.spec) return preset.spec;
+  return promptCustomModel(templateModel);
+}
+
+async function promptCustomModel(
+  templateModel: ModelSpecInput | undefined,
+): Promise<ModelSpecInput> {
+  const provider = await promptSelect<"anthropic" | "openai-compat">({
+    message: "Provider",
+    options: [
+      { value: "anthropic", label: "anthropic", hint: "direct Anthropic SDK" },
+      {
+        value: "openai-compat",
+        label: "openai-compat",
+        hint: "OpenAI, OpenRouter, vLLM, etc.",
+      },
+    ],
+    initialValue: templateModel?.provider ?? "openai-compat",
+  });
+
+  const model = await promptText({
+    message: "Model id (e.g. openai/gpt-4o, anthropic/claude-sonnet-4-6)",
+    initialValue: templateModel?.model ?? "",
+    validate: (v) => (v.length > 0 ? undefined : "required"),
+  });
+
+  let baseURL: string | undefined;
+  if (provider === "openai-compat") {
+    const raw = await promptText({
+      message: "Base URL (leave blank for OpenAI's default)",
+      initialValue: templateModel?.baseURL ?? "",
+      validate: (v) => {
+        if (v.length === 0) return undefined;
+        try {
+          const u = new URL(v);
+          if (u.protocol !== "https:" && u.protocol !== "http:") return "must be http(s)";
+          return undefined;
+        } catch {
+          return "not a valid URL";
+        }
+      },
+    });
+    if (raw.length > 0) {
+      baseURL = raw;
+      const host = new URL(raw).host;
+      if (!BASE_URL_ALLOWLIST.includes(host)) {
+        note(
+          `Host "${host}" isn't on the known-providers list. Make sure you trust it — your prompts and tool outputs will be sent there.`,
+          "Unfamiliar base URL",
+        );
+      }
+    }
+  }
+
+  const apiKeyEnv = await promptText({
+    message: "API key env var name",
+    initialValue:
+      templateModel?.apiKeyEnv ??
+      (provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"),
+    validate: (v) => (/^[A-Z][A-Z0-9_]*$/.test(v) ? undefined : "must be UPPER_SNAKE_CASE"),
+  });
+
+  const spec: ModelSpecInput = { provider, model, apiKeyEnv };
+  if (baseURL) spec.baseURL = baseURL;
+  return spec;
 }
 
 async function promptTemplate(gallery: ResolvedGallery): Promise<ResolvedAgentEntry | null> {

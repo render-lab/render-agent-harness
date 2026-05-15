@@ -1,49 +1,72 @@
 import { useEffect, useState } from "react";
 import { type AgentSummary, ApiError, listAgents } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
+import { useDeployment, useDeploymentName } from "../../deployment-context.js";
 import { CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 const PROSE_AGENT = `
-Every agent in the harness is just a value passed to \`defineAgent()\`. There's no class hierarchy and no implicit registry — what you write is what runs. This is the entire definition of the demo agent you're chatting with right now:
+Every agent in the harness is just a value passed to \`defineAgent()\`. There's no class hierarchy and no implicit registry — what you write is what runs. The example below shows the canonical shape of an agent declaration:
 `;
 
-const PROSE_RUNTIME = `
-The agent is a value; the runtime is what actually drives it. The harness ships four runtime adapters that share the same loop in \`@render-harness/core\`. Operator-demo uses two of them:
+function buildRuntimeProse(name: string, hasWorker: boolean): string {
+  const runtimes = [
+    "- `@render-harness/web` — multi-tenant HTTP service. Mounts the UI, exposes `/runs`, persists messages, streams via SSE, doesn't call the model itself.",
+    hasWorker
+      ? "- `@render-harness/runtime-worker` — long-lived process. Pulls jobs from a Postgres queue (pg-boss) and runs the agent loop."
+      : "- `@render-harness/runtime-web` — single-process synchronous shape. Runs the agent loop inline in the request handler. Best for sub-30s interactions.",
+  ];
+  return `
+The agent is a value; the runtime is what actually drives it. The harness ships four runtime adapters that share the same loop in \`@render-harness/core\`. **${name}** uses ${
+    hasWorker ? "the web + worker pair" : "the single-process web runtime"
+  }:
 
-- \`@render-harness/web\` — multi-tenant HTTP service. Mounts the UI, exposes \`/runs\`, persists messages, streams via SSE, doesn't call the model itself.
-- \`@render-harness/runtime-worker\` — long-lived process. Pulls jobs from a Postgres queue (pg-boss) and runs the agent loop.
+${runtimes.join("\n")}
 
-Both processes load the **same agent definition** by importing \`buildDemoAgent()\`. That's the whole story — one agent, two adapters, separate scaling.
+${
+  hasWorker
+    ? "Both processes load the **same agent definition** from `render-harness.yaml` via `defineFromConfig()`. One agent, two adapters, separate scaling."
+    : "The web service loads the agent definition from `render-harness.yaml` via `defineFromConfig()` and runs the agent loop in-process — no separate worker needed."
+}
 
 For other shapes the harness has \`@render-harness/runtime-cron\` (one-shot scheduled runs) and \`@render-harness/runtime-workflows\` (durable, multi-day, human-in-the-loop). Same \`AgentDefinition\` runs unchanged on any of them.
 `;
+}
 
 const PROSE_CHAT_SHAPE = `
 Multi-turn chat is built on \`agent_conversations\`: one row groups many runs together. Each user turn enqueues a fresh run on the same \`conversationId\`; the run loads message history across every prior run in the conversation, completes normally, and the next user turn starts another run. The Chat tab uses \`POST /conversations/:id/messages\` for every turn and subscribes to \`GET /conversations/:id/stream\` (which stays open across run boundaries). Runs always end in a terminal state — \`paused\` is now strictly HITL (\`ask_user\`, approval gates), never "waiting for the next user message."
 `;
 
 export function AgentRuntimeSection() {
+  const name = useDeploymentName();
+  const deployment = useDeployment();
+  const hasWorker = (deployment?.agents ?? []).some((a) =>
+    a.runtimes.some((r) => r.kind === "worker"),
+  );
+  const queueName = `${name}-runs`;
   return (
     <GuideSectionShell
       title="agent + runtime — the smallest moving parts"
-      lede="One AgentDefinition, two adapters, one shared agent loop."
+      lede={
+        hasWorker
+          ? "One AgentDefinition, two adapters, one shared agent loop."
+          : "One AgentDefinition, one runtime adapter, one shared agent loop."
+      }
       body={
         <>
           <Markdown text={PROSE_AGENT} />
-          <CodeBlock language="examples/operator-demo/src/agent.ts">
+          <CodeBlock language="src/agent.ts">
 {`import { type AgentDefinition, defineAgent } from "@render-harness/core";
 
 const SYSTEM_PROMPT = \`\\
-You are a friendly demo agent running behind the Render harness
-operator UI. Read the latest user message in context with the prior
-turns and respond in Markdown.
+You are a helpful agent. Read the latest user message in context with
+the prior turns and respond in Markdown.
 
 Keep answers short — usually one or two paragraphs.\`;
 
-export function buildDemoAgent(): AgentDefinition {
+export function buildAgent(): AgentDefinition {
   return defineAgent({
-    name: "operator-demo",
-    version: "0.2.0",
+    name: "${name}",
+    version: "0.1.0",
     model: {
       provider: "anthropic",
       model: process.env.LLM_MODEL ?? "claude-sonnet-4-6",
@@ -54,36 +77,49 @@ export function buildDemoAgent(): AgentDefinition {
 }`}
           </CodeBlock>
 
-          <Markdown text={PROSE_RUNTIME} />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <CodeBlock language="src/web.ts">
+          <Markdown text={buildRuntimeProse(name, hasWorker)} />
+          {hasWorker ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <CodeBlock language="src/web.ts">
 {`import { serveWeb } from "@render-harness/web";
-import { buildDemoAgent } from "./agent.js";
+import { buildAgent } from "./agent.js";
 
 await serveWeb({
-  agent: buildDemoAgent(),
-  queue: process.env.WORKER_QUEUE ?? "operator-demo-runs",
+  agent: buildAgent(),
+  queue: process.env.WORKER_QUEUE ?? "${queueName}",
   ui: true,
 });`}
-            </CodeBlock>
-            <CodeBlock language="src/worker.ts">
+              </CodeBlock>
+              <CodeBlock language="src/worker.ts">
 {`import { startWorkerAndWait } from "@render-harness/runtime-worker";
-import { buildDemoAgent } from "./agent.js";
+import { buildAgent } from "./agent.js";
 
 await startWorkerAndWait({
-  agent: buildDemoAgent(),
-  queue: process.env.WORKER_QUEUE ?? "operator-demo-runs",
+  agent: buildAgent(),
+  queue: process.env.WORKER_QUEUE ?? "${queueName}",
 });`}
-            </CodeBlock>
-          </div>
+              </CodeBlock>
+            </div>
+          ) : (
+            <CodeBlock language="src/web.ts">
+{`import { serveAgent } from "@render-harness/runtime-web";
+import { buildAgent } from "./agent.js";
 
-          <h3 className="label mt-6">why two processes?</h3>
-          <p>
-            Splitting the public API from the agent loop lets you scale them independently and put the worker on the private network in production. The web service stays cheap, predictable, and answerable to load balancers; the worker can be CPU-heavy and run for hours without breaking the request budget.
-          </p>
-          <p>
-            Locally they share the same image — Compose just runs <code className="bg-code-bg px-1">node dist/web.js</code> for one and <code className="bg-code-bg px-1">node dist/worker.js</code> for the other.
-          </p>
+await serveAgent({ agent: buildAgent() });`}
+            </CodeBlock>
+          )}
+
+          {hasWorker && (
+            <>
+              <h3 className="label mt-6">why two processes?</h3>
+              <p>
+                Splitting the public API from the agent loop lets you scale them independently and put the worker on the private network in production. The web service stays cheap, predictable, and answerable to load balancers; the worker can be CPU-heavy and run for hours without breaking the request budget.
+              </p>
+              <p>
+                Locally they share the same image — Compose just runs <code className="bg-code-bg px-1">node dist/web.js</code> for one and <code className="bg-code-bg px-1">node dist/worker.js</code> for the other.
+              </p>
+            </>
+          )}
 
           <h3 className="label mt-6">how multi-turn chat works</h3>
           <Markdown text={PROSE_CHAT_SHAPE} />

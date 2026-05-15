@@ -56,7 +56,7 @@ function webEntryWithUi(answers: Answers): string {
 
 import { serveWeb } from "@render-harness/web";
 import { config as loadEnv } from "dotenv";
-import { agent } from "../agent/index.js";
+import { agent, deployment } from "../agent/index.js";
 
 loadEnv({ quiet: true });
 
@@ -64,6 +64,7 @@ await serveWeb({
   agent,
   queue: process.env.WORKER_QUEUE ?? ${JSON.stringify(defaultQueue)},
   ui: true,
+  deployment,
 });
 `;
 }

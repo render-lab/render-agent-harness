@@ -15,17 +15,34 @@
  * Both surfaces share the schemas and the capability-pack contract.
  */
 
+export { type DefineChatAgentOpts, defineChatAgent } from "./builtin-chat.js";
 export {
-  type CapabilityPack,
-  type PackContext,
-  type RenderServiceSpec,
-  RenderServiceSpecSchema,
   assertCapabilityPack,
+  type CapabilityPack,
   definePack,
   namespacedMcpServerName,
   namespacedToolName,
+  type PackContext,
+  type RenderServiceSpec,
+  RenderServiceSpecSchema,
 } from "./capability.js";
-export { type DefineChatAgentOpts, defineChatAgent } from "./builtin-chat.js";
+export { enrichDeploymentInfo, toDeploymentInfo } from "./deployment-info.js";
+export {
+  type GalleryAgentEntryInput,
+  GalleryAgentEntrySchema,
+  type GalleryEntryKind,
+  type GalleryIndex,
+  GalleryIndexSchema,
+  type GalleryRuntimeKind,
+  loadGalleryFromBundle,
+  loadGalleryFromSource,
+  type ResolvedAgentEntry,
+  type ResolvedCapabilityEntry,
+  type ResolvedGallery,
+  ResolvedGallerySchema,
+  serializeGallery,
+} from "./gallery.js";
+export { type EnvLookup, interpolate, interpolateTree } from "./interpolate.js";
 export {
   type DefineFromConfigOpts,
   type DefineFromConfigResult,
@@ -33,43 +50,43 @@ export {
 } from "./load-config.js";
 export { type LoadedPack, type LoadPacksOpts, loadPacks, makePackContext } from "./load-pack.js";
 export {
-  type GalleryAgentEntryInput,
-  GalleryAgentEntrySchema,
-  type GalleryIndex,
-  GalleryIndexSchema,
-  type GalleryRuntimeKind,
-  type ResolvedAgentEntry,
-  type ResolvedCapabilityEntry,
-  type ResolvedGallery,
-  ResolvedGallerySchema,
-  loadGalleryFromBundle,
-  loadGalleryFromSource,
-  serializeGallery,
-} from "./gallery.js";
-export { type EnvLookup, interpolate, interpolateTree } from "./interpolate.js";
+  BASE_URL_ALLOWLIST,
+  DEFAULT_MODEL_PRESET_ID,
+  findPreset,
+  MODEL_PRESETS,
+  type ModelPreset,
+  matchPreset,
+} from "./model-presets.js";
 export {
   type AgentBlockInput,
+  type AgentEntryInput,
+  AgentEntrySchema,
   type BudgetInput,
   type CapabilityRef,
   CapabilityRefSchema,
   type EnvVarSpec,
   EnvVarSpecSchema,
+  flattenRuntimeKinds,
   type HarnessConfig,
   HarnessConfigSchema,
   type IndexEntry,
   IndexEntrySchema,
   type IndexFile,
   IndexSchema,
+  isWorkflowTaskAgent,
   type McpServerConfigInput,
   McpServerConfigSchema,
   type ModelSpecInput,
   ModelSpecSchema,
   type PermissionsInput,
   PermissionsSchema,
+  parseHarnessConfigYaml,
+  parseIndexJson,
   type RuntimeBlockInput,
   RuntimeBlockSchema,
   type SamplingParamsInput,
   SamplingParamsSchema,
-  parseHarnessConfigYaml,
-  parseIndexJson,
+  type SharedBlockInput,
+  SharedBlockSchema,
+  workflowTaskAgents,
 } from "./schema.js";

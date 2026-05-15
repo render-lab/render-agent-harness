@@ -61,7 +61,9 @@ describe("loadGalleryFromSource", () => {
     expect(gallery.agents.length).toBeGreaterThan(0);
     for (const a of gallery.agents) {
       expect(a.manifest.name).toBeTruthy();
-      expect(a.manifest.runtimes.length).toBeGreaterThan(0);
+      expect(a.manifest.agents.length).toBeGreaterThan(0);
+      expect(a.kind).toMatch(/^(agent|bundle)$/);
+      expect(a.sourceFiles).toBeDefined();
     }
     // The harness ships six capability packs; assert we found them all.
     expect(gallery.capabilities.length).toBeGreaterThanOrEqual(6);
@@ -94,9 +96,14 @@ agents:
 name: wrong
 description: x
 harnessVersion: "^0.1"
-agent: { kind: builtin, ref: chat, systemPrompt: x }
-runtimes: [{ kind: web }]   # actual: only web
-model: { provider: anthropic, model: claude-sonnet-4-6 }
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: wrong
+    agent: { kind: builtin, ref: chat, systemPrompt: x }
+    runtimes: [{ kind: web }]   # actual: only web (not web+worker)
 `,
         "utf8",
       );
@@ -151,8 +158,10 @@ describe("bundle round-trip", () => {
           runtimeKinds: ["web"],
           capabilities: [],
           author: null,
+          kind: "agent",
           manifest: {},
           readme: null,
+          sourceFiles: {},
         },
       ],
       capabilities: [],

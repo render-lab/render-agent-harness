@@ -27,10 +27,14 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { type HarnessConfig, HarnessConfigSchema } from "./schema.js";
+import {
+  flattenRuntimeKinds,
+  type HarnessConfig,
+  HarnessConfigSchema,
+} from "./schema.js";
 
 // ----------------------------------------------------------------------
 // Raw index schema (gallery/index.yaml)
@@ -95,6 +99,9 @@ export type GalleryIndex = z.infer<typeof GalleryIndexSchema>;
 // Resolved gallery (the shape callers actually consume)
 // ----------------------------------------------------------------------
 
+const galleryEntryKindSchema = z.enum(["agent", "bundle"]);
+export type GalleryEntryKind = z.infer<typeof galleryEntryKindSchema>;
+
 const ResolvedAgentEntrySchema = z
   .object({
     slug: slugSchema,
@@ -104,10 +111,23 @@ const ResolvedAgentEntrySchema = z
     runtimeKinds: z.array(runtimeKindSchema).min(1).max(4),
     capabilities: z.array(z.string().min(1)).max(20),
     author: z.string().min(1).max(128).nullable(),
-    /** Inlined render-harness.yaml. Parsed against HarnessConfigSchema. */
+    /**
+     * Discriminator: "agent" for single-agent templates (wizard seeds
+     * Answers, user customizes); "bundle" for sealed multi-agent
+     * templates (wizard short-circuits, files materialize verbatim).
+     */
+    kind: galleryEntryKindSchema,
+    /** Inlined render-harness.yaml (parsed + normalized to V2). */
     manifest: z.unknown(), // typed below
     /** README markdown for wizard preview, or null. */
     readme: z.string().nullable(),
+    /**
+     * Verbatim source files shipped with bundle templates. Keys are
+     * relative POSIX paths under the entry root (e.g. `src/chat.ts`).
+     * Empty for `kind: "agent"` entries — those generate sources via
+     * the wizard's templated emit instead.
+     */
+    sourceFiles: z.record(z.string(), z.string()),
   })
   .strict();
 
@@ -139,8 +159,10 @@ export interface ResolvedAgentEntry {
   runtimeKinds: GalleryRuntimeKind[];
   capabilities: string[];
   author: string | null;
+  kind: GalleryEntryKind;
   manifest: HarnessConfig;
   readme: string | null;
+  sourceFiles: Record<string, string>;
 }
 
 export interface ResolvedCapabilityEntry {
@@ -183,19 +205,22 @@ export async function loadGalleryFromSource(
     const manifestText = await readFile(join(absPath, "render-harness.yaml"), "utf8");
     const manifest = HarnessConfigSchema.parse(parseYaml(manifestText));
 
-    // Cross-check: declared runtimeKinds must match the manifest.
-    const manifestKinds = new Set(manifest.runtimes.map((r) => r.kind));
+    // Cross-check: declared runtimeKinds must match the union across
+    // all agents declared in the manifest.
+    const manifestKinds = new Set(flattenRuntimeKinds(manifest));
     const declaredKinds = new Set(entry.runtimeKinds);
     if (
       manifestKinds.size !== declaredKinds.size ||
       [...manifestKinds].some((k) => !declaredKinds.has(k as GalleryRuntimeKind))
     ) {
       throw new Error(
-        `gallery entry "${entry.slug}": runtimeKinds in index.yaml [${entry.runtimeKinds.join(", ")}] do not match render-harness.yaml runtimes [${[...manifestKinds].join(", ")}]`,
+        `gallery entry "${entry.slug}": runtimeKinds in index.yaml [${entry.runtimeKinds.join(", ")}] do not match render-harness.yaml union [${[...manifestKinds].join(", ")}]`,
       );
     }
 
     const readme = await readFileSafe(join(absPath, "README.md"));
+    const kind = deriveEntryKind(manifest);
+    const sourceFiles = kind === "bundle" ? await collectBundleSources(absPath) : {};
 
     agents.push({
       slug: entry.slug,
@@ -205,8 +230,10 @@ export async function loadGalleryFromSource(
       runtimeKinds: entry.runtimeKinds,
       capabilities: entry.capabilities ?? [],
       author: entry.author ?? null,
+      kind,
       manifest,
       readme,
+      sourceFiles,
     });
   }
 
@@ -231,7 +258,9 @@ export async function loadGalleryFromBundle(
   const raw = JSON.parse(text);
   const parsed = ResolvedGallerySchema.parse(raw);
 
-  // The schema uses z.unknown() for manifest; coerce + validate now.
+  // The schema uses z.unknown() for manifest; coerce + validate via the
+  // V2 schema. Bundled snapshots store V2-normalized manifests so this
+  // is always a no-op pass-through for valid bundles.
   const agents = parsed.agents.map((a) => ({
     ...a,
     manifest: HarnessConfigSchema.parse(a.manifest),
@@ -258,6 +287,57 @@ export function serializeGallery(gallery: ResolvedGallery): string {
 
 function normalizeRelPath(p: string): string {
   return p.replace(/^\.\//, "");
+}
+
+/**
+ * "agent" when the entry has exactly one agent whose id matches the
+ * bundle name (the wizard seeds Answers and the user customizes).
+ * "bundle" otherwise: multiple agents or a renamed single agent that
+ * the wizard should treat as a sealed template.
+ */
+function deriveEntryKind(manifest: HarnessConfig): GalleryEntryKind {
+  if (manifest.agents.length !== 1) return "bundle";
+  return manifest.agents[0]?.id === manifest.name ? "agent" : "bundle";
+}
+
+/**
+ * Walk an entry directory and collect every file under `src/`. Used
+ * only for `kind: "bundle"` entries — the scaffolder copies these
+ * verbatim into the user's project. Skips dot-files, build artifacts,
+ * and `node_modules` defensively.
+ */
+async function collectBundleSources(absPath: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const srcRoot = join(absPath, "src");
+  await walkDirectory(srcRoot, async (filePath) => {
+    const relPosix = relative(absPath, filePath).split(sep).join("/");
+    if (relPosix.startsWith("node_modules/")) return;
+    if (relPosix.includes("/.")) return;
+    out[relPosix] = await readFile(filePath, "utf8");
+  });
+  return out;
+}
+
+async function walkDirectory(
+  dir: string,
+  visit: (filePath: string) => Promise<void>,
+): Promise<void> {
+  let entries: Array<{ name: string; isFile(): boolean; isDirectory(): boolean }>;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  for (const ent of entries) {
+    const full = join(dir, ent.name);
+    if (ent.isDirectory()) {
+      if (ent.name === "node_modules" || ent.name === "dist") continue;
+      await walkDirectory(full, visit);
+    } else if (ent.isFile()) {
+      await visit(full);
+    }
+  }
 }
 
 async function readFileSafe(p: string): Promise<string | null> {

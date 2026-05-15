@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { ApiError, getBlueprint } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
+import { useDeployment, useDeploymentName } from "../../deployment-context.js";
 import { CTA, CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
-const PROSE_INTRO = `
-The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render service: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`operator-demo-web\` becomes a public web service, \`operator-demo-worker\` becomes a private service. The harness uses the same image and same code; only the runtime layout changes.
+function buildIntro(name: string): string {
+  return `
+The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render service: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`${name}-web\` becomes a public web service, \`${name}-worker\` becomes a private service. The harness uses the same image and same code; only the runtime layout changes.
 `;
+}
 
 const PROSE_BLUEPRINT = `
 ### The Blueprint
@@ -14,7 +17,7 @@ A starter \`render.yaml\` that matches your loaded agent is just one HTTP call a
 
 - a managed Postgres for state + queue
 - Render Key Value for cancel signals
-- a public \`type: web\` for the operator UI / JSON API
+- a public \`type: web\` for the agent console / JSON API
 - a private \`type: pserv\` for the worker
 
 Why private for the worker? It runs the agent loop, which means it talks to model providers and (sometimes) third-party MCP servers. Putting it on the private network keeps DB and KV traffic off the public internet — the only outbound is to the model and any MCP endpoints.
@@ -25,7 +28,7 @@ const PROSE_ENV = `
 
 Each generated service needs these set in the Render Dashboard before the first deploy:
 
-- **\`WEB_API_KEY\`** — bearer token for the JSON API and the operator UI's login form. Use a strong shared secret.
+- **\`WEB_API_KEY\`** — bearer token for the JSON API and the agent console's login form. Use a strong shared secret.
 - **\`UI_COOKIE_SECRET\`** — Render generates this automatically with \`generateValue: true\` in the Blueprint. Don't override.
 - **\`ANTHROPIC_API_KEY\`** (or \`OPENAI_API_KEY\`, etc., based on your model adapter) — model provider key.
 - Pack-specific keys (e.g. \`EXA_API_KEY\`, \`RENDER_API_KEY\`) — only the ones you've actually wired in.
@@ -37,30 +40,65 @@ const PROSE_DEPLOY = `
 1. Push the repo (with your edited \`agent.ts\`) to GitHub.
 2. In the Render Dashboard, **New → Blueprint**, point it at your repo's \`render.yaml\`.
 3. Render reads the file, prompts for the \`sync: false\` env vars, and provisions all four services together.
-4. Once the build finishes, your operator UI is at the assigned \`*.onrender.com\` URL plus \`/ui\`.
+4. Once the build finishes, the agent console is at the assigned \`*.onrender.com\` URL plus \`/ui\`.
 
 For zero-downtime rolling deploys, keep each conversation turn idempotent (state lives in \`agent_conversations\` + \`agent_runs\`, not in process memory) and let Render's rolling deploy handle the rest. Worker jobs in flight finish before the old container exits — the worker has a SIGTERM handler that waits up to 30s for in-flight runs.
 `;
 
-const PROSE_OTHER_RUNTIMES = `
-### Other runtimes
-
-Operator-demo focuses on \`runtime-web\` + \`runtime-worker\`. The harness has two more:
-
-- [\`runtime-cron\`](https://github.com/render/render-harness/tree/main/packages/runtime-cron) — one-shot scheduled runs, max 12 hours each. See the [\`citations-monitor\`](https://github.com/render/render-harness/tree/main/examples/citations-monitor) example.
-- [\`runtime-workflows\`](https://github.com/render/render-harness/tree/main/packages/runtime-workflows) — durable, multi-day, human-in-the-loop. See the [\`deploy-agent\`](https://github.com/render/render-harness/tree/main/examples/deploy-agent) example.
-
-Same \`AgentDefinition\`. Same skills. Same MCP wiring. Different deploy shape.
-`;
+function buildOtherRuntimes(used: Set<string>): string {
+  const usedList = [...used].map((k) => `\`runtime-${k}\``).join(" + ");
+  const cronUsed = used.has("cron");
+  const wfUsed = used.has("workflows");
+  const remaining: string[] = [];
+  if (!used.has("web")) {
+    remaining.push(
+      "- [`runtime-web`](https://github.com/render/render-harness/tree/main/packages/runtime-web) — synchronous HTTP shape (sub-30s). The bundled `runtime-worker` pair (above) is the multi-tenant production default.",
+    );
+  }
+  if (!cronUsed) {
+    remaining.push(
+      "- [`runtime-cron`](https://github.com/render/render-harness/tree/main/packages/runtime-cron) — one-shot scheduled runs, max 12 hours each. See the [`citations-monitor`](https://github.com/render/render-harness/tree/main/examples/citations-monitor) example.",
+    );
+  }
+  if (!wfUsed) {
+    remaining.push(
+      "- [`runtime-workflows`](https://github.com/render/render-harness/tree/main/packages/runtime-workflows) — durable, multi-day, human-in-the-loop. See the [`deploy-agent`](https://github.com/render/render-harness/tree/main/examples/deploy-agent) example.",
+    );
+  }
+  if (remaining.length === 0) {
+    return `\n### Other runtimes\n\nThis bundle already uses every runtime adapter the harness ships (${usedList}). Same \`AgentDefinition\` would run unchanged on any of them — different deploy shape, same code.\n`;
+  }
+  return `\n### Other runtimes\n\nThis bundle uses ${usedList}. The harness also ships:\n\n${remaining.join("\n")}\n\nSame \`AgentDefinition\`. Same skills. Same MCP wiring. Different deploy shape.\n`;
+}
 
 export function DeploySection() {
+  const name = useDeploymentName();
+  const deployment = useDeployment();
+  const services = deriveServiceList(name, deployment);
+  const usedRuntimes = new Set<string>();
+  for (const a of deployment?.agents ?? []) {
+    for (const rt of a.runtimes) usedRuntimes.add(rt.kind);
+    if (a.workflowTask) usedRuntimes.add("workflows");
+  }
   return (
     <GuideSectionShell
       title="deploy — go to render"
-      lede="Local Compose stack → render.yaml. One file, four services."
+      lede="Local Compose stack → render.yaml. One file, every service."
       body={
         <>
-          <Markdown text={PROSE_INTRO} />
+          <Markdown text={buildIntro(name)} />
+          {services.length > 0 && (
+            <div className="border border-line p-3 text-xs">
+              <div className="label mb-2">// services this bundle deploys</div>
+              <ul className="space-y-1 font-mono">
+                {services.map((s) => (
+                  <li key={s.label}>
+                    <code className="bg-code-bg px-1">{s.label}</code> — {s.role}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Markdown text={PROSE_BLUEPRINT} />
 
           <p className="text-xs text-muted">
@@ -80,16 +118,75 @@ export function DeploySection() {
             </div>
             <div>
               Tail logs in production:{" "}
-              <CmdBadge cmd="render logs --tail --service <service>" />
+              <CmdBadge cmd={`render logs --tail --service ${name}-worker`} />
             </div>
           </div>
 
-          <Markdown text={PROSE_OTHER_RUNTIMES} />
+          <Markdown text={buildOtherRuntimes(usedRuntimes)} />
         </>
       }
       livePanel={<DeployLivePanel />}
     />
   );
+}
+
+/**
+ * Build the per-service preview list shown above the Blueprint prose.
+ * Mirrors how the emitter coalesces runtimes: one web + one worker
+ * service total (shared across agents), one cron-job per cron runtime
+ * fanned out per-agent, plus the dashboard-provisioned Workflow service
+ * when any agent is a workflow task.
+ */
+interface ServiceRow {
+  label: string;
+  role: string;
+}
+function deriveServiceList(
+  bundleName: string,
+  deployment: ReturnType<typeof useDeployment>,
+): ServiceRow[] {
+  if (!deployment) return [];
+  const rows: ServiceRow[] = [];
+  const kinds = new Set<string>();
+  let hasWorkflowTask = false;
+  for (const a of deployment.agents) {
+    if (a.workflowTask) hasWorkflowTask = true;
+    for (const rt of a.runtimes) {
+      kinds.add(rt.kind);
+      if (rt.kind === "cron") {
+        rows.push({
+          label:
+            rt.via === "workflow"
+              ? `${bundleName}-cron-trigger-${a.id}`
+              : `${bundleName}-cron-${a.id}`,
+          role:
+            rt.via === "workflow"
+              ? `triggers ${a.id} as a workflow task on \`${rt.schedule}\``
+              : `runs ${a.id} inline on \`${rt.schedule}\``,
+        });
+      }
+    }
+  }
+  if (kinds.has("web")) {
+    rows.unshift({
+      label: `${bundleName}-web`,
+      role: "public HTTP / SSE + agent console",
+    });
+  }
+  if (kinds.has("worker")) {
+    const webIdx = rows.findIndex((r) => r.label === `${bundleName}-web`);
+    rows.splice(webIdx + 1, 0, {
+      label: `${bundleName}-worker`,
+      role: "private pserv — pulls jobs from the pg-boss queue",
+    });
+  }
+  if (hasWorkflowTask) {
+    rows.push({
+      label: `${bundleName}-workflows`,
+      role: "Render Workflows service (Dashboard-provisioned)",
+    });
+  }
+  return rows;
 }
 
 function DeployLivePanel() {

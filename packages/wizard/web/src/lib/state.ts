@@ -1,17 +1,146 @@
-import type { GalleryAgent, RuntimeKind, RuntimeSelection, WizardState } from "./types.js";
+import type {
+  GalleryAgent,
+  ModelSpec,
+  RuntimeKind,
+  RuntimeSelection,
+  WizardState,
+} from "./types.js";
 
-export const KNOWN_MODELS = [
-  { value: "claude-sonnet-4-6", label: "claude-sonnet-4-6", hint: "default — best balance" },
-  { value: "claude-opus-4-7", label: "claude-opus-4-7", hint: "most capable" },
-  { value: "claude-haiku-4-5", label: "claude-haiku-4-5", hint: "fastest / cheapest" },
-] as const;
+/**
+ * Model presets shown in the wizard. Mirrors the canonical list in
+ * `@render-harness/registry/model-presets`; kept in sync by hand so the
+ * SPA bundle doesn't have to pull in the registry's zod runtime.
+ *
+ * Each preset carries either a full `ModelSpec` or `null` to mark the
+ * synthetic "custom" entry — selecting it routes the wizard into a
+ * sub-form (`<CustomModelForm>`) for provider / baseURL / apiKeyEnv.
+ */
+export interface ModelPreset {
+  id: string;
+  label: string;
+  hint?: string;
+  spec: ModelSpec | null;
+}
+
+export const MODEL_PRESETS: readonly ModelPreset[] = [
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    hint: "default — best balance",
+    spec: { provider: "anthropic", model: "claude-sonnet-4-6" },
+  },
+  {
+    id: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    hint: "Anthropic flagship",
+    spec: { provider: "anthropic", model: "claude-opus-4-7" },
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    hint: "fastest Anthropic",
+    spec: { provider: "anthropic", model: "claude-haiku-4-5" },
+  },
+  {
+    id: "gpt-5-1",
+    label: "GPT-5.1",
+    hint: "OpenAI flagship — needs OPENAI_API_KEY",
+    spec: { provider: "openai-compat", model: "gpt-5.1", apiKeyEnv: "OPENAI_API_KEY" },
+  },
+  {
+    id: "gpt-5-1-mini",
+    label: "GPT-5.1 Mini",
+    hint: "OpenAI small/fast — needs OPENAI_API_KEY",
+    spec: { provider: "openai-compat", model: "gpt-5.1-mini", apiKeyEnv: "OPENAI_API_KEY" },
+  },
+  {
+    id: "gemini-2-5-pro",
+    label: "Gemini 2.5 Pro",
+    hint: "Google flagship — needs GEMINI_API_KEY",
+    spec: {
+      provider: "openai-compat",
+      model: "gemini-2.5-pro",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKeyEnv: "GEMINI_API_KEY",
+    },
+  },
+  {
+    id: "gemini-2-5-flash",
+    label: "Gemini 2.5 Flash",
+    hint: "Google fast — needs GEMINI_API_KEY",
+    spec: {
+      provider: "openai-compat",
+      model: "gemini-2.5-flash",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKeyEnv: "GEMINI_API_KEY",
+    },
+  },
+  {
+    id: "grok-4",
+    label: "Grok 4",
+    hint: "xAI — needs XAI_API_KEY",
+    spec: {
+      provider: "openai-compat",
+      model: "grok-4",
+      baseURL: "https://api.x.ai/v1",
+      apiKeyEnv: "XAI_API_KEY",
+    },
+  },
+  {
+    id: "custom",
+    label: "Custom…",
+    hint: "any OpenAI-compatible gateway",
+    spec: null,
+  },
+];
+
+export const DEFAULT_MODEL_PRESET_ID = "claude-sonnet-4-6";
+
+export const BASE_URL_ALLOWLIST: readonly string[] = [
+  "api.anthropic.com",
+  "api.openai.com",
+  "openrouter.ai",
+  "api.groq.com",
+  "api.fireworks.ai",
+  "generativelanguage.googleapis.com",
+  "api.x.ai",
+  "api.deepseek.com",
+  "api.mistral.ai",
+];
+
+export function findPreset(id: string): ModelPreset {
+  return (
+    MODEL_PRESETS.find((p) => p.id === id) ??
+    MODEL_PRESETS.find((p) => p.id === "custom") ??
+    (MODEL_PRESETS[0] as ModelPreset)
+  );
+}
+
+export function matchPreset(spec: ModelSpec): ModelPreset {
+  for (const p of MODEL_PRESETS) {
+    if (!p.spec) continue;
+    if (
+      p.spec.provider === spec.provider &&
+      p.spec.model === spec.model &&
+      (p.spec.baseURL ?? null) === (spec.baseURL ?? null) &&
+      (p.spec.apiKeyEnv ?? null) === (spec.apiKeyEnv ?? null)
+    ) {
+      return p;
+    }
+  }
+  return findPreset("custom");
+}
 
 export const DEFAULT_STATE: WizardState = {
   templateSlug: null,
   agentName: "my-agent",
   description: "An agent built with the Render harness.",
   systemPrompt: "You are a helpful assistant deployed on Render via the agent harness.",
-  model: "claude-sonnet-4-6",
+  modelPresetId: DEFAULT_MODEL_PRESET_ID,
+  model: findPreset(DEFAULT_MODEL_PRESET_ID).spec ?? {
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
+  },
   runtimes: [{ kind: "web" }],
   ui: true,
   capabilities: [],
@@ -23,10 +152,17 @@ export const DEFAULT_STATE: WizardState = {
  * submitting.
  */
 export function seedFromTemplate(t: GalleryAgent): WizardState {
+  // For single-agent templates we read the V2-normalized first agent's
+  // block. Bundle templates ship sealed and are scaffolded verbatim;
+  // they don't seed Answers (Phase 7 wires the bundle-aware UI).
+  const primary = t.manifest.agents[0];
+  const agentBlock = primary?.agent;
+  const templateSpec: ModelSpec | undefined = primary?.model ?? t.manifest.shared?.model;
+  const matchedPreset = templateSpec
+    ? matchPreset(templateSpec)
+    : findPreset(DEFAULT_MODEL_PRESET_ID);
   const systemPrompt =
-    t.manifest.agent.kind === "builtin"
-      ? t.manifest.agent.systemPrompt
-      : DEFAULT_STATE.systemPrompt;
+    agentBlock?.kind === "builtin" ? agentBlock.systemPrompt : DEFAULT_STATE.systemPrompt;
   // Filter to v1-supported kinds (drop "workflows" since render.yaml
   // Blueprints don't support workflow services yet).
   const supportedKinds: RuntimeKind[] = (t.runtimeKinds as readonly string[]).filter(
@@ -42,7 +178,8 @@ export function seedFromTemplate(t: GalleryAgent): WizardState {
     agentName: t.slug,
     description: t.description,
     systemPrompt,
-    model: t.manifest.model.model,
+    modelPresetId: matchedPreset.id,
+    model: templateSpec ?? DEFAULT_STATE.model,
     runtimes: runtimes.length > 0 ? runtimes : [{ kind: "web" }],
     ui: true,
     capabilities: t.capabilities.map((pack) => ({ pack })),

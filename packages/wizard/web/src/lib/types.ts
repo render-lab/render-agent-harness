@@ -14,15 +14,41 @@ export interface CapabilityPick {
   pack: string;
 }
 
+/**
+ * Full model spec emitted to render-harness.yaml. Mirrors
+ * `ModelSpecInput` from `@render-harness/registry/schema` but defined
+ * locally so the SPA bundle doesn't pull in the zod runtime.
+ */
+export interface ModelSpec {
+  provider: "anthropic" | "openai-compat";
+  model: string;
+  baseURL?: string;
+  apiKeyEnv?: string;
+}
+
 export interface WizardState {
   templateSlug: string | null;
   agentName: string;
   description: string;
   systemPrompt: string;
-  model: string;
+  /** Currently-picked preset id. "custom" routes to the sub-form. */
+  modelPresetId: string;
+  /** Full model spec emitted to YAML on submit. */
+  model: ModelSpec;
   runtimes: RuntimeSelection[];
   ui: boolean;
   capabilities: CapabilityPick[];
+}
+
+export type GalleryEntryKind = "agent" | "bundle";
+
+interface ManifestAgent {
+  id: string;
+  description?: string;
+  agent:
+    | { kind: "builtin"; ref: "chat"; systemPrompt: string }
+    | { kind: "custom"; entrypoint: string };
+  model?: ModelSpec;
 }
 
 export interface GalleryAgent {
@@ -33,12 +59,15 @@ export interface GalleryAgent {
   runtimeKinds: RuntimeKind[] | ReadonlyArray<RuntimeKind | "workflows">;
   capabilities: string[];
   author: string | null;
+  /** Discriminator: "bundle" templates are sealed (multi-agent / verbatim source tree). */
+  kind: GalleryEntryKind;
   manifest: {
-    agent:
-      | { kind: "builtin"; ref: "chat"; systemPrompt: string }
-      | { kind: "custom"; entrypoint: string };
-    model: { provider: string; model: string };
+    name: string;
+    agents: ManifestAgent[];
+    shared?: { model?: ModelSpec; ui?: boolean };
   };
+  /** Verbatim source files for bundle templates; empty for single-agent. */
+  sourceFiles: Record<string, string>;
   readme: string | null;
 }
 

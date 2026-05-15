@@ -1,6 +1,15 @@
+import type { ModelSpecInput } from "@render-harness/registry/schema";
+
 /**
  * Inputs that drive the scaffolder. The wizard (prompts.ts) collects these;
  * the generator (generate.ts) consumes them.
+ *
+ * Two flows share this shape:
+ *  - **Single-agent** (default): the wizard collects every field.
+ *  - **Bundle**: `bundle` is set and the per-agent fields
+ *    (`agentName`, `systemPrompt`, `model`, `runtimes`, `capabilities`,
+ *    `templateManifest`, `ui`) are ignored by the generator. The bundle's
+ *    `manifest` + `sourceFiles` are materialized verbatim.
  */
 export interface Answers {
   /** Absolute or relative path to the directory to create. */
@@ -9,8 +18,8 @@ export interface Answers {
   agentName: string;
   description: string;
   systemPrompt: string;
-  /** Model ID, e.g. `claude-sonnet-4-6`. */
-  model: string;
+  /** Full model spec. Lands verbatim under `shared.model` in render-harness.yaml. */
+  model: ModelSpecInput;
   /** ≥1 runtime selections. v1 supports web, cron, worker. */
   runtimes: RuntimeSelection[];
   /** Capability packs to wire into render-harness.yaml. Empty by default. */
@@ -26,6 +35,12 @@ export interface Answers {
    * uses fields.
    */
   templateManifest: Record<string, unknown> | null;
+  /**
+   * Set when the user picked a sealed bundle template. The generator
+   * detects this and materializes the bundled manifest + source tree
+   * verbatim, bypassing the single-agent templating pipeline.
+   */
+  bundle: BundlePick | null;
   /**
    * When web is selected, mount the operator UI from `@render-harness/ui`
    * via `serveWeb({ ui: true })`. Implies a worker runtime, which is added
@@ -59,6 +74,22 @@ export interface Answers {
 }
 
 export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
+/**
+ * A sealed-bundle template chosen by the wizard. The manifest is the
+ * V2 render-harness.yaml shipped with the gallery entry (verbatim);
+ * `sourceFiles` is a map of relative POSIX paths → file contents to
+ * write under the scaffolded project root, verbatim. The generator
+ * adds runtime entrypoints (`src/web.ts`, `src/worker.ts`,
+ * `src/cron.ts`) on top of this map.
+ */
+export interface BundlePick {
+  slug: string;
+  manifest: Record<string, unknown>;
+  sourceFiles: Record<string, string>;
+  runtimeKinds: ReadonlyArray<RuntimeKind | "workflows">;
+  capabilities: ReadonlyArray<string>;
+}
 
 /**
  * Returns the shell prefix used for invoking package.json scripts under

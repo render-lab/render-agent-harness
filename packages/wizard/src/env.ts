@@ -21,6 +21,24 @@ export interface WizardEnv {
    * deployments must leave this unset.
    */
   mockScaffold: boolean;
+  /**
+   * Shared secret used to authenticate server-to-server PATCH requests
+   * from a deployed worker's `/agents/:slug/model` proxy route. Same
+   * value must be set on both services. Unset = `/api/agents/:slug/model`
+   * returns 503.
+   */
+  wizardSharedSecret: string | null;
+  /**
+   * HMAC secret used to sign the install-flow state token. Unset =
+   * install routes return 503.
+   */
+  stateSecret: string | null;
+  /**
+   * Slug of the GitHub App as it appears in the install URL:
+   * `https://github.com/apps/<APP_NAME>/installations/new`. Unset =
+   * `/api/installs/start` returns 503.
+   */
+  githubAppName: string | null;
 }
 
 export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
@@ -44,5 +62,19 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
 
   const mockScaffold = env.MOCK_SCAFFOLD === "1" || env.MOCK_SCAFFOLD === "true";
 
-  return { port, managedOrg, publicUrl, github, turnstile, mockScaffold };
+  const wizardSharedSecret = env.WIZARD_SHARED_SECRET ?? null;
+  const stateSecret = env.WIZARD_STATE_SECRET ?? null;
+  const githubAppName = env.GITHUB_APP_NAME ?? null;
+
+  return {
+    port,
+    managedOrg,
+    publicUrl,
+    github,
+    turnstile,
+    mockScaffold,
+    wizardSharedSecret,
+    stateSecret,
+    githubAppName,
+  };
 }

@@ -5,46 +5,41 @@ harnessVersion: "^0.1"
 license: MIT
 categories: [demo, chat, render-mcp]
 
-# This example has its agent definition inlined in src/main.ts, which
-# is what gets executed at runtime. The YAML-driven loader path
-# (`agent.kind: custom`) isn't wired here yet; the YAML is descriptive
-# metadata that the Blueprint emitter consumes.
-agent:
-  kind: builtin
-  ref: chat
-  systemPrompt: |
-    You are a helpful chat agent running on Render. Each HTTP request is a
-    fresh, single-turn conversation: the user posts a question, you may use
-    tools, and you produce a single Markdown answer.
-
-runtimes:
-  - kind: web
-    plan: starter
-
-model:
-  provider: anthropic
-  model: claude-sonnet-4-6
-
-mcpServers:
-  - name: render
-    transport: http
-    url: https://mcp.render.com/mcp
-    headers:
-      Authorization: "Bearer ${RENDER_API_KEY:-}"
-
-permissions:
-  deniedTools:
-    - render__delete_service
-    - render__delete_postgres
-    - render__delete_keyvalue
-    - render__update_environment_variables
-
-sampling:
-  temperature: 0.4
-  maxOutputTokens: 4096
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    deniedTools:
+      - render__delete_service
+      - render__delete_postgres
+      - render__delete_keyvalue
+      - render__update_environment_variables
+  sampling:
+    temperature: 0.4
+    maxOutputTokens: 4096
 
 envSchema:
   - name: RENDER_API_KEY
     required: false
     secret: true
     description: "Optional. When set, enables Render MCP tools (read-only by default)."
+
+agents:
+  - id: web-chat
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a helpful chat agent running on Render. Each HTTP request is a
+        fresh, single-turn conversation: the user posts a question, you may use
+        tools, and you produce a single Markdown answer.
+    runtimes:
+      - kind: web
+        plan: starter
+    mcpServers:
+      - name: render
+        transport: http
+        url: https://mcp.render.com/mcp
+        headers:
+          Authorization: "Bearer ${RENDER_API_KEY:-}"

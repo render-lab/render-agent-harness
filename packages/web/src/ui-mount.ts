@@ -100,5 +100,5 @@ export async function mountUiIfAvailable(app: Hono, args: MountUiArgs): Promise<
     ...(args.cookieSecure !== undefined ? { cookieSecure: args.cookieSecure } : {}),
     ...(args.staticDir !== undefined ? { staticDir: args.staticDir } : {}),
   });
-  args.logger.info({ path: args.path ?? "/ui" }, "ui: operator UI mounted");
+  args.logger.info({ path: args.path ?? "/ui" }, "ui: agent console mounted");
 }
