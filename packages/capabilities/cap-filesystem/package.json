@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-filesystem",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Path-scoped filesystem tools for the Render agent harness. Opt-in per agent; the worker pserv is multi-tenant by default so this is NOT a core builtin.",
   "type": "module",
   "license": "MIT",

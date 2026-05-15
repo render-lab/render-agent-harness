@@ -1,6 +1,6 @@
 {
   "name": "create-render-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scaffold a new Render agent harness project. Run via `npm init render-agent` or `npx create-render-agent`.",
   "type": "module",
   "license": "MIT",
