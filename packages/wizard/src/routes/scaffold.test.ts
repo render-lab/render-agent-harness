@@ -79,8 +79,10 @@ describe("POST /api/scaffold", () => {
     // Confirm the file map contains the expected files.
     const call = createScaffoldedRepo.mock.calls[0]?.[0] as { files: Map<string, string> };
     expect(call.files.has("render-harness.yaml")).toBe(true);
+    expect(call.files.has("render.yaml")).toBe(true);
     expect(call.files.has("package.json")).toBe(true);
     expect(call.files.has("src/main.ts")).toBe(true);
+    expect(call.files.get("render.yaml")).toContain("services:");
   });
 
   it("returns 503 when GitHub App credentials are missing", async () => {

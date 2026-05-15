@@ -32,6 +32,14 @@ const STEP_TITLES = [
   "Review",
 ] as const;
 
+const SUBMIT_MESSAGES = [
+  "Creating a private GitHub repository",
+  "Preparing the scaffolded file tree",
+  "Writing the initial harness files",
+  "Adding render-harness metadata",
+  "Building the Deploy to Render link",
+] as const;
+
 export function App() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
@@ -54,7 +62,7 @@ export function App() {
   }
 
   if (phase.kind === "submitting") {
-    return <CenteredMessage>Creating repository…</CenteredMessage>;
+    return <SubmittingScreen state={phase.state} />;
   }
   if (phase.kind === "error") {
     return (
@@ -262,6 +270,67 @@ function Progress({ current, total }: { current: number; total: number }) {
           />
         ),
       )}
+    </div>
+  );
+}
+
+function SubmittingScreen({ state }: { state: WizardState }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const activeIndex = Math.min(SUBMIT_MESSAGES.length - 1, Math.floor(elapsed / 6));
+
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6 py-10">
+      <div className="panel w-full max-w-2xl p-6">
+        <div className="hr-section">
+          <span>{"// CREATING REPOSITORY"}</span>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-line p-3">
+          <div>
+            <div className="text-sm font-bold">{state.agentName}</div>
+            <div className="mt-1 text-xs text-muted">
+              GitHub repo creation and initial file writes can take a minute.
+            </div>
+          </div>
+          <div className="font-mono text-xs text-muted">{elapsed}s elapsed</div>
+        </div>
+
+        <ol className="mt-5 space-y-2 text-xs">
+          {SUBMIT_MESSAGES.map((message, idx) => {
+            const done = idx < activeIndex;
+            const active = idx === activeIndex;
+            return (
+              <li
+                key={message}
+                className={`flex items-center justify-between border border-line p-3 ${
+                  active ? "bg-surface-hover text-ink" : "text-muted"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={active ? "text-accent" : ""}>
+                    {done ? "✓" : active ? "▊" : "·"}
+                  </span>
+                  <span>{message}</span>
+                </span>
+                {active && <span className="cli-dots" aria-hidden="true" />}
+              </li>
+            );
+          })}
+        </ol>
+
+        <p className="mt-5 text-xs text-muted">
+          Keep this tab open. If GitHub rejects the request, the wizard returns an actionable error
+          instead of leaving this screen.
+        </p>
+      </div>
     </div>
   );
 }

@@ -213,4 +213,28 @@
     font-size: 0.7rem;
     letter-spacing: 0.08em;
   }
+
+  .cli-dots::after {
+    content: "";
+    display: inline-block;
+    min-width: 3ch;
+    color: var(--color-accent);
+    animation: rh-cli-dots 1.2s steps(4, end) infinite;
+  }
+
+  @keyframes rh-cli-dots {
+    0% {
+      content: "";
+    }
+    25% {
+      content: ".";
+    }
+    50% {
+      content: "..";
+    }
+    75%,
+    100% {
+      content: "...";
+    }
+  }
 }
