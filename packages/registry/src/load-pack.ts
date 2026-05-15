@@ -23,11 +23,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  type CapabilityPack,
-  assertCapabilityPack,
-  type PackContext,
-} from "./capability.js";
+import { assertCapabilityPack, type CapabilityPack, type PackContext } from "./capability.js";
 import type { CapabilityRef } from "./schema.js";
 
 export interface LoadedPack {
@@ -117,7 +113,11 @@ async function resolvePackEntry(entryRoot: string, pkgName: string): Promise<str
   return resolve(pkgDir, rel);
 }
 
-export function makePackContext(loaded: LoadedPack, entryName: string, env: NodeJS.ProcessEnv): PackContext {
+export function makePackContext(
+  loaded: LoadedPack,
+  entryName: string,
+  env: NodeJS.ProcessEnv,
+): PackContext {
   return {
     config: loaded.ref.config ?? {},
     env: (name) => env[name],

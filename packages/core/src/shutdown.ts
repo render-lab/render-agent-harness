@@ -34,10 +34,7 @@ export function installShutdownHandlers(
       await stop();
       process.exit(exitCode);
     } catch (err) {
-      logger.error(
-        { err: err instanceof Error ? err.message : String(err) },
-        "shutdown errored",
-      );
+      logger.error({ err: err instanceof Error ? err.message : String(err) }, "shutdown errored");
       process.exit(1);
     }
   };

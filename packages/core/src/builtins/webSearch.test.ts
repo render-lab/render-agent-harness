@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { webSearchFactory } from "./webSearch.js";
 import type { BuiltinContext } from "./types.js";
+import { webSearchFactory } from "./webSearch.js";
 
 function makeCtx(env: Record<string, string | undefined>): BuiltinContext {
   return { env: env as NodeJS.ProcessEnv } as BuiltinContext;

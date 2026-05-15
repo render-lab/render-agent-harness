@@ -552,12 +552,14 @@ describe("buildFileMap — sealed bundle", () => {
 
   it("generated runtime entries win on collision with bundle sourceFiles", () => {
     const conflicting = bundleAnswers();
+    const bundle = conflicting.bundle;
+    if (!bundle) throw new Error("expected bundle answers");
     // Inject a `src/web.ts` into the bundle's source map; the generator
     // should still emit its own (which knows about V2 multi-agent).
     conflicting.bundle = {
-      ...conflicting.bundle!,
+      ...bundle,
       sourceFiles: {
-        ...conflicting.bundle!.sourceFiles,
+        ...bundle.sourceFiles,
         "src/web.ts": "// SHOULD BE OVERWRITTEN\n",
       },
     };
@@ -652,13 +654,15 @@ describe("buildFileMap — bundle with workflow-mode agents", () => {
 
   it("omits src/cron.ts when only via:workflow crons are present", () => {
     const answers = hybridAnswers();
+    const bundle = answers.bundle;
+    if (!bundle) throw new Error("expected bundle answers");
     // Mutate manifest to remove inline cron — only via:workflow + workflows.
     const trimmedManifest = {
       ...HYBRID_MANIFEST,
       agents: HYBRID_MANIFEST.agents.filter((a) => a.id !== "fast-check"),
     };
     answers.bundle = {
-      ...answers.bundle!,
+      ...bundle,
       manifest: trimmedManifest as unknown as Record<string, unknown>,
     };
     const map = buildFileMap(answers);

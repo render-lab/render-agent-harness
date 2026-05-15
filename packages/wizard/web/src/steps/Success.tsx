@@ -5,7 +5,7 @@ export function Success({ state, result }: { state: WizardState; result: Scaffol
     <div className="mx-auto max-w-2xl px-6 py-10">
       <header className="mb-6">
         <div className="hr-section">
-          <span>// {state.agentName.toUpperCase()} READY</span>
+          <span>{`// ${state.agentName.toUpperCase()} READY`}</span>
         </div>
       </header>
 
@@ -47,7 +47,7 @@ export function Success({ state, result }: { state: WizardState; result: Scaffol
       </div>
 
       <div className="panel mt-5 p-6">
-        <div className="label">// WHAT HAPPENS NEXT</div>
+        <div className="label">{"// WHAT HAPPENS NEXT"}</div>
         <ol className="mt-3 space-y-1.5 text-sm">
           <Step n={1}>
             Click <span className="text-accent">Deploy to Render</span>.

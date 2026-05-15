@@ -5,9 +5,14 @@ import type {
   ContentBlock,
   ConversationId,
   Message,
+  NotificationConfig,
+  NotificationDelivery,
   RunCursor,
   RunId,
   RunStatus,
+  Schedule,
+  ScheduleId,
+  ScheduleRun,
   SerializedError,
   TokenUsage,
   ToolCall,
@@ -17,6 +22,7 @@ import type {
 } from "../types.js";
 
 const NOTIFY_CHANNEL = "agent_runs";
+export const SCHEDULE_NOTIFY_CHANNEL = "schedules_changed";
 
 const ZERO_USAGE: TokenUsage = { inputTokens: 0, outputTokens: 0 };
 const ZERO_CURSOR: RunCursor = {
@@ -65,6 +71,41 @@ interface ConversationRow {
   created_at: Date;
   updated_at: Date;
   last_active_at: Date;
+}
+
+interface ScheduleRow {
+  id: string;
+  user_id: string;
+  agent_name: string;
+  input: string;
+  metadata: Record<string, unknown>;
+  cron_expr: string;
+  timezone: string;
+  notifications: NotificationConfig[];
+  enabled: boolean;
+  created_at: Date;
+  updated_at: Date;
+  last_fired_at: Date | null;
+  next_fire_at: Date | null;
+}
+
+interface ScheduleRunRow {
+  schedule_id: string;
+  run_id: string;
+  fired_at: Date;
+}
+
+interface NotificationDeliveryRow {
+  id: string;
+  run_id: string;
+  schedule_id: string | null;
+  user_id: string;
+  kind: NotificationDelivery["kind"];
+  target: string | null;
+  summary: string;
+  status: NotificationDelivery["status"];
+  error: string | null;
+  created_at: Date;
 }
 
 interface ToolCallRow {
@@ -335,10 +376,9 @@ export async function listMessages(pool: Pool, runId: RunId): Promise<Message[]>
  * full run history on every NOTIFY.
  */
 export async function loadMessage(pool: Pool, messageId: string): Promise<Message | null> {
-  const { rows } = await pool.query<MessageRow>(
-    "SELECT * FROM agent_messages WHERE id = $1",
-    [messageId],
-  );
+  const { rows } = await pool.query<MessageRow>("SELECT * FROM agent_messages WHERE id = $1", [
+    messageId,
+  ]);
   return rows.length > 0 ? rowToMessage(rows[0] as MessageRow) : null;
 }
 
@@ -936,6 +976,279 @@ export async function aggregateUsage(
 }
 
 // --------------------------------------------------------------------
+// Scheduled runs and notifications
+// --------------------------------------------------------------------
+
+export interface CreateScheduleInput {
+  userId: UserId;
+  agentName: string;
+  input: string;
+  cronExpr: string;
+  timezone?: string;
+  notifications?: NotificationConfig[];
+  metadata?: Record<string, unknown>;
+  nextFireAt?: Date | null;
+}
+
+export async function createSchedule(pool: Pool, input: CreateScheduleInput): Promise<Schedule> {
+  const { rows } = await pool.query<ScheduleRow>(
+    `INSERT INTO agent_schedules
+       (user_id, agent_name, input, metadata, cron_expr, timezone, notifications, next_fire_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8)
+       RETURNING *`,
+    [
+      input.userId,
+      input.agentName,
+      input.input,
+      JSON.stringify(input.metadata ?? {}),
+      input.cronExpr,
+      input.timezone ?? "UTC",
+      JSON.stringify(input.notifications ?? []),
+      input.nextFireAt ?? null,
+    ],
+  );
+  const schedule = rowToSchedule(expectOne(rows, "createSchedule"));
+  await notifyScheduleChanged(pool, schedule.id);
+  return schedule;
+}
+
+export interface ListSchedulesFilter {
+  userId: UserId;
+  enabled?: boolean;
+}
+
+export async function listSchedules(pool: Pool, filter: ListSchedulesFilter): Promise<Schedule[]> {
+  const params: unknown[] = [filter.userId];
+  const where = ["user_id = $1"];
+  if (filter.enabled !== undefined) {
+    params.push(filter.enabled);
+    where.push(`enabled = $${params.length}`);
+  }
+  const { rows } = await pool.query<ScheduleRow>(
+    `SELECT * FROM agent_schedules
+      WHERE ${where.join(" AND ")}
+      ORDER BY enabled DESC, next_fire_at ASC NULLS LAST, created_at DESC`,
+    params,
+  );
+  return rows.map(rowToSchedule);
+}
+
+export async function listEnabledSchedules(pool: Pool): Promise<Schedule[]> {
+  const { rows } = await pool.query<ScheduleRow>(
+    "SELECT * FROM agent_schedules WHERE enabled = true ORDER BY next_fire_at ASC NULLS LAST",
+  );
+  return rows.map(rowToSchedule);
+}
+
+export async function getSchedule(
+  pool: Pool,
+  args: { id: ScheduleId; userId?: UserId },
+): Promise<Schedule | null> {
+  const params: unknown[] = [args.id];
+  const where = ["id = $1"];
+  if (args.userId !== undefined) {
+    params.push(args.userId);
+    where.push(`user_id = $${params.length}`);
+  }
+  const { rows } = await pool.query<ScheduleRow>(
+    `SELECT * FROM agent_schedules WHERE ${where.join(" AND ")}`,
+    params,
+  );
+  const row = rows[0];
+  return row ? rowToSchedule(row) : null;
+}
+
+export interface UpdateSchedulePatch {
+  input?: string;
+  cronExpr?: string;
+  timezone?: string;
+  notifications?: NotificationConfig[];
+  metadata?: Record<string, unknown>;
+  enabled?: boolean;
+  lastFiredAt?: Date | null;
+  nextFireAt?: Date | null;
+}
+
+export async function updateSchedule(
+  pool: Pool,
+  args: { id: ScheduleId; userId?: UserId; patch: UpdateSchedulePatch },
+): Promise<Schedule> {
+  const sets: string[] = ["updated_at = now()"];
+  const params: unknown[] = [];
+  const add = (sql: string, value: unknown) => {
+    params.push(value);
+    sets.push(`${sql} = $${params.length}`);
+  };
+  if (args.patch.input !== undefined) add("input", args.patch.input);
+  if (args.patch.cronExpr !== undefined) add("cron_expr", args.patch.cronExpr);
+  if (args.patch.timezone !== undefined) add("timezone", args.patch.timezone);
+  if (args.patch.notifications !== undefined) {
+    add("notifications", JSON.stringify(args.patch.notifications));
+  }
+  if (args.patch.metadata !== undefined) add("metadata", JSON.stringify(args.patch.metadata));
+  if (args.patch.enabled !== undefined) add("enabled", args.patch.enabled);
+  if (args.patch.lastFiredAt !== undefined) add("last_fired_at", args.patch.lastFiredAt);
+  if (args.patch.nextFireAt !== undefined) add("next_fire_at", args.patch.nextFireAt);
+
+  params.push(args.id);
+  const where: string[] = [`id = $${params.length}`];
+  if (args.userId !== undefined) {
+    params.push(args.userId);
+    where.push(`user_id = $${params.length}`);
+  }
+
+  const { rows } = await pool.query<ScheduleRow>(
+    `UPDATE agent_schedules
+       SET ${sets.join(", ")}
+       WHERE ${where.join(" AND ")}
+       RETURNING *`,
+    params,
+  );
+  const schedule = rowToSchedule(expectOne(rows, "updateSchedule"));
+  await notifyScheduleChanged(pool, schedule.id);
+  return schedule;
+}
+
+export async function setScheduleEnabled(
+  pool: Pool,
+  args: { id: ScheduleId; userId: UserId; enabled: boolean },
+): Promise<void> {
+  await updateSchedule(pool, {
+    id: args.id,
+    userId: args.userId,
+    patch: { enabled: args.enabled },
+  });
+}
+
+export async function deleteSchedule(
+  pool: Pool,
+  args: { id: ScheduleId; userId: UserId },
+): Promise<void> {
+  await pool.query("DELETE FROM agent_schedules WHERE id = $1 AND user_id = $2", [
+    args.id,
+    args.userId,
+  ]);
+  await notifyScheduleChanged(pool, args.id);
+}
+
+export async function recordScheduleRun(
+  pool: Pool,
+  args: { scheduleId: ScheduleId; runId: RunId; firedAt?: Date },
+): Promise<ScheduleRun> {
+  const { rows } = await pool.query<ScheduleRunRow>(
+    `INSERT INTO schedule_runs (schedule_id, run_id, fired_at)
+       VALUES ($1, $2, COALESCE($3::timestamptz, now()))
+       ON CONFLICT (schedule_id, run_id) DO UPDATE SET fired_at = EXCLUDED.fired_at
+       RETURNING *`,
+    [args.scheduleId, args.runId, args.firedAt ?? null],
+  );
+  return rowToScheduleRun(expectOne(rows, "recordScheduleRun"));
+}
+
+export async function listScheduleRuns(
+  pool: Pool,
+  args: { scheduleId: ScheduleId; userId: UserId; limit?: number },
+): Promise<Array<{ scheduleRun: ScheduleRun; run: AgentRun; summary: string | null }>> {
+  const limit = clampLimit(args.limit);
+  const { rows } = await pool.query<
+    ScheduleRunRow & RunRow & { summary: string | null; schedule_id: string; run_id: string }
+  >(
+    `SELECT
+        sr.schedule_id,
+        sr.run_id,
+        sr.fired_at,
+        ar.*,
+        (
+          SELECT string_agg(elem->>'text', E'\n')
+          FROM (
+            SELECT content
+            FROM agent_messages
+            WHERE run_id = ar.id AND role = 'assistant'
+            ORDER BY created_at DESC
+            LIMIT 1
+          ) latest
+          CROSS JOIN LATERAL jsonb_array_elements(latest.content) elem
+          WHERE elem->>'type' = 'text'
+        ) AS summary
+       FROM schedule_runs sr
+       JOIN agent_schedules s ON s.id = sr.schedule_id
+       JOIN agent_runs ar ON ar.id = sr.run_id
+       WHERE sr.schedule_id = $1 AND s.user_id = $2
+       ORDER BY sr.fired_at DESC
+       LIMIT $3`,
+    [args.scheduleId, args.userId, limit],
+  );
+  return rows.map((row) => ({
+    scheduleRun: rowToScheduleRun(row),
+    run: rowToRun(row),
+    summary: row.summary,
+  }));
+}
+
+export async function loadLastAssistantText(pool: Pool, runId: RunId): Promise<string | null> {
+  const { rows } = await pool.query<{ text: string | null }>(
+    `SELECT string_agg(elem->>'text', E'\n') AS text
+       FROM agent_messages am
+       CROSS JOIN LATERAL jsonb_array_elements(am.content) elem
+       WHERE am.run_id = $1
+         AND am.role = 'assistant'
+         AND elem->>'type' = 'text'
+       GROUP BY am.id, am.created_at
+       ORDER BY am.created_at DESC
+       LIMIT 1`,
+    [runId],
+  );
+  return rows[0]?.text ?? null;
+}
+
+export async function recordNotificationDelivery(
+  pool: Pool,
+  delivery: {
+    runId: RunId;
+    scheduleId?: ScheduleId | null;
+    userId: UserId;
+    kind: NotificationDelivery["kind"];
+    target?: string | null;
+    summary: string;
+    status: NotificationDelivery["status"];
+    error?: string | null;
+  },
+): Promise<NotificationDelivery> {
+  const { rows } = await pool.query<NotificationDeliveryRow>(
+    `INSERT INTO notification_deliveries
+       (run_id, schedule_id, user_id, kind, target, summary, status, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+    [
+      delivery.runId,
+      delivery.scheduleId ?? null,
+      delivery.userId,
+      delivery.kind,
+      delivery.target ?? null,
+      delivery.summary,
+      delivery.status,
+      delivery.error ?? null,
+    ],
+  );
+  return rowToNotificationDelivery(expectOne(rows, "recordNotificationDelivery"));
+}
+
+export async function listInboxItems(
+  pool: Pool,
+  args: { userId: UserId; limit?: number },
+): Promise<NotificationDelivery[]> {
+  const limit = clampLimit(args.limit);
+  const { rows } = await pool.query<NotificationDeliveryRow>(
+    `SELECT * FROM notification_deliveries
+      WHERE user_id = $1 AND kind = 'inbox'
+      ORDER BY created_at DESC
+      LIMIT $2`,
+    [args.userId, limit],
+  );
+  return rows.map(rowToNotificationDelivery);
+}
+
+// --------------------------------------------------------------------
 // LISTEN/NOTIFY
 // --------------------------------------------------------------------
 
@@ -955,6 +1268,10 @@ export type NotifyPayload =
 async function notify(pool: Pool, payload: NotifyPayload): Promise<void> {
   // Payload is small (pointer-sized) and always under the 8 KB NOTIFY cap.
   await pool.query("SELECT pg_notify($1, $2)", [NOTIFY_CHANNEL, JSON.stringify(payload)]);
+}
+
+async function notifyScheduleChanged(pool: Pool, scheduleId: string): Promise<void> {
+  await pool.query("SELECT pg_notify($1, $2)", [SCHEDULE_NOTIFY_CHANNEL, scheduleId]);
 }
 
 export const STREAM_NOTIFY_CHANNEL = NOTIFY_CHANNEL;
@@ -993,6 +1310,47 @@ function rowToConversation(row: ConversationRow): AgentConversation {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastActiveAt: row.last_active_at,
+  };
+}
+
+function rowToSchedule(row: ScheduleRow): Schedule {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    agentName: row.agent_name,
+    input: row.input,
+    metadata: row.metadata ?? {},
+    cronExpr: row.cron_expr,
+    timezone: row.timezone,
+    notifications: row.notifications ?? [],
+    enabled: row.enabled,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(row.last_fired_at ? { lastFiredAt: row.last_fired_at } : {}),
+    ...(row.next_fire_at ? { nextFireAt: row.next_fire_at } : {}),
+  };
+}
+
+function rowToScheduleRun(row: ScheduleRunRow): ScheduleRun {
+  return {
+    scheduleId: row.schedule_id,
+    runId: row.run_id,
+    firedAt: row.fired_at,
+  };
+}
+
+function rowToNotificationDelivery(row: NotificationDeliveryRow): NotificationDelivery {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    scheduleId: row.schedule_id,
+    userId: row.user_id,
+    kind: row.kind,
+    target: row.target,
+    summary: row.summary,
+    status: row.status,
+    error: row.error,
+    createdAt: row.created_at,
   };
 }
 

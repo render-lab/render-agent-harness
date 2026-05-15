@@ -16,12 +16,13 @@ import { PgBoss } from "pg-boss";
 import { defaultApiKeyAuth } from "./auth.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
-import { registerConfigRoutes } from "./routes/config.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
+import { registerConfigRoutes } from "./routes/config.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerDeploymentRoutes } from "./routes/deployment.js";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.js";
 import { registerRunRoutes } from "./routes/runs.js";
+import { registerScheduleRoutes } from "./routes/schedules.js";
 import { registerUsageRoutes } from "./routes/usage.js";
 import {
   mountUiIfAvailable,
@@ -67,6 +68,9 @@ export type { UiMountConfig } from "./ui-mount.js";
  *   GET  /agents                 — summary of agents loaded into this service.
  *   GET  /usage                  — daily/per-agent rollups of runs, cost,
  *                                   and tokens.
+ *   GET  /schedules              — list chat-created recurring runs.
+ *   GET  /schedules/:id/runs     — history for one schedule.
+ *   GET  /inbox                  — scheduled-run notification inbox.
  *   GET  /healthz                — liveness probe.
  *
  * Auth is API-key bearer by default. Set `auth: undefined` to disable (NOT
@@ -210,6 +214,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
   });
   registerUsageRoutes(app, { pool, auth, pathPrefix });
+  registerScheduleRoutes(app, { pool, auth, pathPrefix });
   registerDiagnosticsRoutes(app, { pool, auth, agents, queue, pathPrefix });
   registerBlueprintRoutes(app, { auth, agents, queue, pathPrefix });
 

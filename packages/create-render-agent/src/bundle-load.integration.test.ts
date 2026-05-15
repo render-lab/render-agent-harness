@@ -21,13 +21,13 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadGalleryFromSource } from "@render-harness/registry/gallery";
 import {
   flattenRuntimeKinds,
   isWorkflowTaskAgent,
   parseHarnessConfigYaml,
   workflowTaskAgents,
 } from "@render-harness/registry";
+import { loadGalleryFromSource } from "@render-harness/registry/gallery";
 import { describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,6 +37,12 @@ const COS_DIR = resolve(HARNESS_ROOT, "gallery", "agents", "chief-of-staff");
 async function loadManifest() {
   const text = await readFile(resolve(COS_DIR, "render-harness.yaml"), "utf8");
   return parseHarnessConfigYaml(text);
+}
+
+function requireAgent(cfg: Awaited<ReturnType<typeof loadManifest>>, id: string) {
+  const agent = cfg.agents.find((a) => a.id === id);
+  if (!agent) throw new Error(`expected ${id} agent`);
+  return agent;
 }
 
 async function loadCosBundle() {
@@ -65,8 +71,8 @@ describe("chief-of-staff bundle — manifest pipeline", () => {
       "interview-prep",
       "interview-feedback",
     ]);
-    expect(isWorkflowTaskAgent(cfg.agents.find((a) => a.id === "chat")!)).toBe(false);
-    expect(isWorkflowTaskAgent(cfg.agents.find((a) => a.id === "meeting-prep")!)).toBe(false);
+    expect(isWorkflowTaskAgent(requireAgent(cfg, "chat"))).toBe(false);
+    expect(isWorkflowTaskAgent(requireAgent(cfg, "meeting-prep"))).toBe(false);
   });
 
   it("flattens runtime kinds across all five agents", async () => {
@@ -76,7 +82,7 @@ describe("chief-of-staff bundle — manifest pipeline", () => {
 
   it("weekly-recap is cron via:workflow", async () => {
     const cfg = await loadManifest();
-    const weekly = cfg.agents.find((a) => a.id === "weekly-recap")!;
+    const weekly = requireAgent(cfg, "weekly-recap");
     expect(weekly.workflowTask).toBe(true);
     expect(weekly.runtimes).toHaveLength(1);
     expect(weekly.runtimes[0]).toMatchObject({ kind: "cron", via: "workflow" });
@@ -84,7 +90,7 @@ describe("chief-of-staff bundle — manifest pipeline", () => {
 
   it("interview-prep is cron via:workflow on weekday mornings", async () => {
     const cfg = await loadManifest();
-    const prep = cfg.agents.find((a) => a.id === "interview-prep")!;
+    const prep = requireAgent(cfg, "interview-prep");
     expect(prep.workflowTask).toBe(true);
     expect(prep.runtimes).toHaveLength(1);
     expect(prep.runtimes[0]).toMatchObject({
@@ -96,7 +102,7 @@ describe("chief-of-staff bundle — manifest pipeline", () => {
 
   it("interview-feedback is workflows-only (no schedule)", async () => {
     const cfg = await loadManifest();
-    const feedback = cfg.agents.find((a) => a.id === "interview-feedback")!;
+    const feedback = requireAgent(cfg, "interview-feedback");
     expect(feedback.workflowTask).toBe(true);
     expect(feedback.runtimes).toHaveLength(1);
     expect(feedback.runtimes[0]?.kind).toBe("workflows");
@@ -104,7 +110,7 @@ describe("chief-of-staff bundle — manifest pipeline", () => {
 
   it("chat gates trigger_workflow via requireApproval", async () => {
     const cfg = await loadManifest();
-    const chat = cfg.agents.find((a) => a.id === "chat")!;
+    const chat = requireAgent(cfg, "chat");
     expect(chat.permissions?.requireApproval).toContain("trigger_workflow");
   });
 });
@@ -114,7 +120,9 @@ describe("chief-of-staff bundle — interview agents source structure", () => {
     const cos = await loadCosBundle();
     const prepSource = cos.sourceFiles["src/interview-prep.ts"];
     expect(prepSource).toBeDefined();
-    expect(prepSource).toContain('import { type AgentDefinition, defineAgent } from "@render-harness/core"');
+    expect(prepSource).toContain(
+      'import { type AgentDefinition, defineAgent } from "@render-harness/core"',
+    );
     expect(prepSource).toContain('name: "interview-prep"');
     expect(prepSource).toContain("CALENDAR_ICS_URL");
     // The agent's prompt references the namespaced tool names exactly as
@@ -132,9 +140,7 @@ describe("chief-of-staff bundle — interview agents source structure", () => {
     expect(feedbackSource).toContain('name: "interview-feedback"');
     // The agent gates the final memory.write — this is the load-bearing
     // promise of the workflow shape (user reviews before it lands).
-    expect(feedbackSource).toContain(
-      'requireApproval: ["cap-memory-pg__memory_write"]',
-    );
+    expect(feedbackSource).toContain('requireApproval: ["cap-memory-pg__memory_write"]');
     // The agent must instruct the model on what to extract from the
     // unstructured user dump. Sanity-check the prompt anchors.
     expect(feedbackSource).toMatch(/strengths/i);
@@ -168,9 +174,7 @@ describe("chief-of-staff bundle — end-to-end emit", () => {
     // interview-feedback has no schedule; it doesn't appear as its own
     // Render service. It only appears as a task on the bundled Workflow
     // service (verified via the dashboard checklist).
-    const interviewFeedbackService = services.find((s) =>
-      s.name?.includes("interview-feedback"),
-    );
+    const interviewFeedbackService = services.find((s) => s.name?.includes("interview-feedback"));
     expect(interviewFeedbackService).toBeUndefined();
 
     // The dashboard checklist lists all three workflow tasks.

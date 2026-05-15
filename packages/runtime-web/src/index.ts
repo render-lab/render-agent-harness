@@ -297,4 +297,3 @@ function serializeToolResult(r: ToolResult): Record<string, unknown> {
     truncatedContent: r.truncatedContent,
   };
 }
-

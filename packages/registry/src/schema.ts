@@ -222,10 +222,7 @@ const RuntimeWebSchema = z
   .object({
     kind: z.literal("web"),
     plan: planSchema.optional(),
-    healthCheckPath: z
-      .string()
-      .regex(/^\//, "health-check path must start with /")
-      .optional(),
+    healthCheckPath: z.string().regex(/^\//, "health-check path must start with /").optional(),
     region: z.string().min(1).max(32).optional(),
   })
   .strict();
@@ -436,9 +433,7 @@ export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
  * Used by the gallery cross-check to validate that an entry's declared
  * `runtimeKinds` matches the manifest.
  */
-export function flattenRuntimeKinds(
-  cfg: HarnessConfig,
-): Array<RuntimeBlockInput["kind"]> {
+export function flattenRuntimeKinds(cfg: HarnessConfig): Array<RuntimeBlockInput["kind"]> {
   const kinds = new Set<RuntimeBlockInput["kind"]>();
   for (const a of cfg.agents) {
     for (const r of a.runtimes) kinds.add(r.kind);

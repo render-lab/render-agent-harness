@@ -50,7 +50,11 @@ function buildHandler(ctx: { pool: import("pg").Pool; runId: string }): LocalToo
         type: "object",
         additionalProperties: false,
         properties: {
-          action: { type: "string", enum: ["list", "write"], description: "Defaults to 'list' if no `todos` provided, 'write' otherwise." },
+          action: {
+            type: "string",
+            enum: ["list", "write"],
+            description: "Defaults to 'list' if no `todos` provided, 'write' otherwise.",
+          },
           merge: {
             type: "boolean",
             description:
@@ -107,7 +111,11 @@ function buildHandler(ctx: { pool: import("pg").Pool; runId: string }): LocalToo
             isError: true,
           };
         }
-        incoming.push({ id: raw.id, content: raw.content, status: raw.status as TodoItem["status"] });
+        incoming.push({
+          id: raw.id,
+          content: raw.content,
+          status: raw.status as TodoItem["status"],
+        });
       }
 
       const merge = args.merge ?? true;

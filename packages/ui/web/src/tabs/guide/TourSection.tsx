@@ -66,27 +66,24 @@ export function TourSection() {
           <Markdown text={buildProse(name)} />
           <Diagram name={name} deployment={deployment} />
           <h3 className="label mt-6">peek at the wiring</h3>
-          <p>
-            From your shell, watch what each container is doing right now:
-          </p>
+          <p>From your shell, watch what each container is doing right now:</p>
           <div className="space-y-2">
             <div>
-              <CmdBadge cmd={`docker compose logs -f ${name}-worker`} /> — agent
-              loop, model calls, tool use.
+              <CmdBadge cmd={`docker compose logs -f ${name}-worker`} /> — agent loop, model calls,
+              tool use.
             </div>
             <div>
-              <CmdBadge cmd={`docker compose logs -f ${name}-web`} /> — HTTP
-              requests, SSE streams.
+              <CmdBadge cmd={`docker compose logs -f ${name}-web`} /> — HTTP requests, SSE streams.
             </div>
             <div>
-              <CmdBadge cmd="docker compose exec postgres psql -U harness -d harness" />{" "}
-              — runs and messages live in <code className="bg-code-bg px-1">agent_runs</code>
-              {" "}and <code className="bg-code-bg px-1">agent_messages</code>.
+              <CmdBadge cmd="docker compose exec postgres psql -U harness -d harness" /> — runs and
+              messages live in <code className="bg-code-bg px-1">agent_runs</code> and{" "}
+              <code className="bg-code-bg px-1">agent_messages</code>.
             </div>
             <div>
               <CmdBadge cmd="docker compose exec valkey valkey-cli" /> — try{" "}
-              <code className="bg-code-bg px-1">KEYS cancel:*</code> after you click cancel
-              on an active run.
+              <code className="bg-code-bg px-1">KEYS cancel:*</code> after you click cancel on an
+              active run.
             </div>
           </div>
         </>
@@ -109,10 +106,7 @@ export function TourSection() {
               />
               <KV k="health" v={summariseChecks(checks)} />
               <KV k="errors" v={String(checks.filter((c) => c.level === "error").length)} />
-              <KV
-                k="warnings"
-                v={String(checks.filter((c) => c.level === "warn").length)}
-              />
+              <KV k="warnings" v={String(checks.filter((c) => c.level === "warn").length)} />
               <div className="hairline-top mt-3 border-t border-line pt-3">
                 <CTA
                   label="see all checks"
@@ -147,13 +141,7 @@ function summariseChecks(checks: DiagnosticCheck[]): string {
  * If deployment info isn't loaded yet, falls back to the canonical
  * web+worker layout — better than a blank box while the fetch resolves.
  */
-function Diagram({
-  name,
-  deployment,
-}: {
-  name: string;
-  deployment: DeploymentInfo | null;
-}) {
+function Diagram({ name, deployment }: { name: string; deployment: DeploymentInfo | null }) {
   const lines = deployment
     ? buildTopologyLines(name, deployment)
     : buildTopologyLines(name, fallbackDeployment(name));
@@ -180,10 +168,7 @@ function fallbackDeployment(name: string): DeploymentInfo {
 
 const BOX_WIDTH = 28;
 
-function buildTopologyLines(
-  name: string,
-  deployment: DeploymentInfo,
-): string[] {
+function buildTopologyLines(name: string, deployment: DeploymentInfo): string[] {
   const kinds = new Set<string>();
   const inlineCrons: DeploymentAgentInfo[] = [];
   const cronTriggers: DeploymentAgentInfo[] = [];
@@ -210,9 +195,7 @@ function buildTopologyLines(
   out.push(...drawBox("postgres", "agent_runs · agent_messages · pgboss.job"));
   if (hasWorker) {
     out.push(...arrow("pull job  (LISTEN/NOTIFY)"));
-    out.push(
-      ...drawBox(`${name}-worker`, "startWorkerAndWait → model / MCP"),
-    );
+    out.push(...drawBox(`${name}-worker`, "startWorkerAndWait → model / MCP"));
   }
   out.push(...arrow("cancel signal (TTL)"));
   out.push(...drawBox("valkey (KV)", "cancel:<runId>"));
@@ -224,12 +207,7 @@ function buildTopologyLines(
   }
   for (const agent of cronTriggers) {
     out.push("");
-    out.push(
-      ...drawBox(
-        `${name}-cron-trigger-${agent.id}`,
-        "calls render.workflows.runTask",
-      ),
-    );
+    out.push(...drawBox(`${name}-cron-trigger-${agent.id}`, "calls render.workflows.runTask"));
     out.push(`     ${gutter()}── starts ${agent.id} workflow task`);
   }
   if (hasWorkflows) {
@@ -240,11 +218,7 @@ function buildTopologyLines(
         `Render Workflows · ${workflowTasks.length} task${workflowTasks.length === 1 ? "" : "s"}`,
       ),
     );
-    out.push(
-      `     ${gutter()}── tasks: ${workflowTasks
-        .map((a) => a.id)
-        .join(", ")}`,
-    );
+    out.push(`     ${gutter()}── tasks: ${workflowTasks.map((a) => a.id).join(", ")}`);
   }
   return out;
 }

@@ -70,11 +70,7 @@ const components: Components = {
     }
     const match = /language-([\w-]+)/.exec(className ?? "");
     const code = String(children).replace(/\n$/, "");
-    return match?.[1] ? (
-      <ShikiBlock code={code} language={match[1]} />
-    ) : (
-      <ShikiBlock code={code} />
-    );
+    return match?.[1] ? <ShikiBlock code={code} language={match[1]} /> : <ShikiBlock code={code} />;
   },
   // Disable the default <pre> wrapper around fenced code — ShikiBlock
   // emits its own <pre>, and double-wrapping breaks the layout.

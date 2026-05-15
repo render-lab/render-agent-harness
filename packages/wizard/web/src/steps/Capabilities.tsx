@@ -32,7 +32,7 @@ export function Capabilities({
       onPrev={onPrev}
     >
       {gallery.capabilities.length === 0 ? (
-        <p className="label">// no capability packs available</p>
+        <p className="label">{"// no capability packs available"}</p>
       ) : (
         <div className="space-y-1.5">
           {gallery.capabilities.map((cap) => {

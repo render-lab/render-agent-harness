@@ -166,9 +166,7 @@ describe("emitBlueprint — env schema merging", () => {
         description: "x",
         systemPrompt: "x",
         runtimes: [{ kind: "web" }],
-        envSchema: [
-          { name: "CUSTOM_THING", required: true, secret: false, description: "Doc." },
-        ],
+        envSchema: [{ name: "CUSTOM_THING", required: true, secret: false, description: "Doc." }],
       }),
     );
     const { effectiveEnvSchema } = await emitBlueprint({ config });
@@ -193,7 +191,10 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       {
         id: "chat",
         agent: { kind: "custom", entrypoint: "./src/chat.ts" },
-        runtimes: [{ kind: "web", plan: "starter" }, { kind: "worker", plan: "starter" }],
+        runtimes: [
+          { kind: "web", plan: "starter" },
+          { kind: "worker", plan: "starter" },
+        ],
       },
       {
         id: "meeting-prep",
@@ -257,9 +258,7 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     });
     const web = blueprint.services?.find((s) => s.name === "chief-of-staff-web");
     expect(web?.type).toBe("web");
-    expect(web?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe(
-      "chief-of-staff-runs",
-    );
+    expect(web?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe("chief-of-staff-runs");
     expect(web?.envVars?.find((e) => e.key === "KV_URL")?.fromService).toMatchObject({
       name: "chief-of-staff-kv",
       type: "keyvalue",

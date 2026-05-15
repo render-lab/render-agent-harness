@@ -181,7 +181,7 @@ function Shell({
     <div className="mx-auto max-w-2xl px-6 py-10">
       <header className="mb-6">
         <div className="hr-section">
-          <span>// CREATE A RENDER AGENT</span>
+          <span>{"// CREATE A RENDER AGENT"}</span>
         </div>
         <div className="mt-3 flex items-center justify-between">
           <span className="label">
@@ -199,12 +199,14 @@ function Shell({
 function Progress({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex gap-1">
-      {Array.from({ length: total }, (_, i) => (
-        <div
-          key={`step-${i}`}
-          className={`h-1 flex-1 ${i <= current ? "bg-accent" : "border border-line"}`}
-        />
-      ))}
+      {Array.from({ length: total }, (_, i) => ({ id: `progress-${i}`, active: i <= current })).map(
+        (segment) => (
+          <div
+            key={segment.id}
+            className={`h-1 flex-1 ${segment.active ? "bg-accent" : "border border-line"}`}
+          />
+        ),
+      )}
     </div>
   );
 }
@@ -221,7 +223,7 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry?: () => vo
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
       <div className="panel max-w-md border-err p-6">
-        <h2 className="label text-err">// SOMETHING WENT WRONG</h2>
+        <h2 className="label text-err">{"// SOMETHING WENT WRONG"}</h2>
         <p className="mt-3 text-sm">{message}</p>
         {onRetry && (
           <button type="button" onClick={onRetry} className="btn btn-danger mt-4">

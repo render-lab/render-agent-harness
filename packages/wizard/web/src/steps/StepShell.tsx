@@ -24,7 +24,7 @@ export function StepShell({
     <div className="space-y-5">
       <div>
         <div className="hr-section">
-          <span>// {title.toUpperCase()}</span>
+          <span>{`// ${title.toUpperCase()}`}</span>
         </div>
         {description && <p className="mt-3 text-sm text-muted">{description}</p>}
       </div>

@@ -245,7 +245,6 @@ function ActionsCard({
               onChange={(e) => setHitlInput(e.target.value)}
               placeholder="reply to the paused agent…"
               className="w-full text-xs"
-              autoFocus
             />
           </div>
           <button
@@ -280,7 +279,7 @@ function buildTimeline(messages: MessageRecord[], toolCalls: ToolCallRecord[]): 
 
 function Timeline({ items }: { items: TimelineItem[] }) {
   if (items.length === 0) {
-    return <div className="panel p-6 text-center text-xs text-muted">// no activity yet</div>;
+    return <div className="panel p-6 text-center text-xs text-muted">{"// no activity yet"}</div>;
   }
   return (
     <div className="space-y-3">
@@ -406,7 +405,7 @@ function ToolCallCard({ call }: { call: ToolCallRecord }) {
               </details>
             </div>
           ) : (
-            <div className="text-muted">// result not yet recorded</div>
+            <div className="text-muted">{"// result not yet recorded"}</div>
           )}
         </div>
       )}

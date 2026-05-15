@@ -38,7 +38,7 @@ export function Review({
         </Row>
         <Row label="capabilities">
           {state.capabilities.length === 0 ? (
-            <span className="text-muted">// none</span>
+            <span className="text-muted">{"// none"}</span>
           ) : (
             <ul className="space-y-0.5 text-[12px]">
               {state.capabilities.map((c) => (
@@ -57,8 +57,9 @@ export function Review({
         </Row>
       </dl>
       <div className="border border-accent p-3 text-[12px] text-accent">
-        // ANONYMOUS — no login. Clicking Create returns a one-time link to the managed repo and a
-        Deploy-to-Render button. The wizard won't show this agent again.
+        {
+          "// ANONYMOUS — no login. Clicking Create returns a one-time link to the managed repo and a Deploy-to-Render button. The wizard won't show this agent again."
+        }
       </div>
     </StepShell>
   );

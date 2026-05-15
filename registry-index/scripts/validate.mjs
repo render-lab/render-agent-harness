@@ -7,8 +7,8 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseIndexJson } from "@render-harness/registry";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,8 @@ try {
   const parsed = parseIndexJson(text);
   process.stdout.write(`index.json is valid (${parsed.entries.length} entries)\n`);
 } catch (err) {
-  process.stderr.write(`index.json is invalid:\n${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(
+    `index.json is invalid:\n${err instanceof Error ? err.message : String(err)}\n`,
+  );
   process.exit(1);
 }

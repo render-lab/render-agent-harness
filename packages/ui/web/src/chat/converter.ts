@@ -24,8 +24,7 @@ export function convertMessage(msg: MessageRecord): ThreadMessageLike {
   // assistant-ui constraint: system messages MUST have exactly one text
   // part. Collapse multi-part tool/system messages into a single text
   // blob; fall back to a placeholder if there's nothing renderable.
-  const content =
-    role === "system" ? [collapseToSingleText(parts)] : parts;
+  const content = role === "system" ? [collapseToSingleText(parts)] : parts;
   return {
     id: msg.id,
     role,
@@ -71,9 +70,7 @@ function blockToPart(block: ContentBlock): ThreadPart {
   if (block.type === "tool_result") {
     return {
       type: "text",
-      text: block.is_error
-        ? `[tool error] ${block.content}`
-        : `[tool result] ${block.content}`,
+      text: block.is_error ? `[tool error] ${block.content}` : `[tool result] ${block.content}`,
     };
   }
   return { type: "text", text: JSON.stringify(block) };

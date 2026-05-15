@@ -30,11 +30,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import {
-  flattenRuntimeKinds,
-  type HarnessConfig,
-  HarnessConfigSchema,
-} from "./schema.js";
+import { flattenRuntimeKinds, type HarnessConfig, HarnessConfigSchema } from "./schema.js";
 
 // ----------------------------------------------------------------------
 // Raw index schema (gallery/index.yaml)

@@ -20,22 +20,23 @@ import { pathToFileURL } from "node:url";
 import {
   type AgentDefinition,
   type Budget,
+  defineAgent,
   type LocalToolHandler,
   type McpServerConfig,
   type ModelSpec,
   type Permissions,
   type SamplingParams,
   type SkillMetadata,
-  defineAgent,
 } from "@render-harness/core";
 import { defineChatAgent } from "./builtin-chat.js";
 import {
   type CapabilityPack,
-  type PackContext,
   namespacedMcpServerName,
   namespacedToolName,
+  type PackContext,
 } from "./capability.js";
 import { interpolateTree } from "./interpolate.js";
+import { type LoadedPack, loadPacks, makePackContext } from "./load-pack.js";
 import {
   type AgentEntryInput,
   type BudgetInput,
@@ -43,10 +44,9 @@ import {
   type HarnessConfig,
   type ModelSpecInput,
   type PermissionsInput,
-  type SamplingParamsInput,
   parseHarnessConfigYaml,
+  type SamplingParamsInput,
 } from "./schema.js";
-import { type LoadedPack, loadPacks, makePackContext } from "./load-pack.js";
 import { dropUndefined } from "./util.js";
 
 export interface DefineFromConfigOpts {
@@ -138,8 +138,7 @@ async function resolveAgentEntry(
       `agent "${entry.id}" entrypoint "${entry.agent.entrypoint}" does not export a default or named "agent" value`,
     );
   }
-  const candidate =
-    typeof exported === "function" ? await (exported as () => unknown)() : exported;
+  const candidate = typeof exported === "function" ? await (exported as () => unknown)() : exported;
   if (!isAgentDefinitionShape(candidate)) {
     throw new Error(
       `agent "${entry.id}" entrypoint "${entry.agent.entrypoint}": export is not an AgentDefinition`,
@@ -165,10 +164,7 @@ interface AgentDefaults {
   sampling: SamplingParamsInput | undefined;
 }
 
-function effectiveAgentDefaults(
-  cfg: HarnessConfig,
-  entry: AgentEntryInput,
-): AgentDefaults {
+function effectiveAgentDefaults(cfg: HarnessConfig, entry: AgentEntryInput): AgentDefaults {
   const model = entry.model ?? cfg.shared?.model;
   if (!model) {
     throw new Error(
@@ -233,8 +229,7 @@ function buildChatBuiltin(
     systemPrompt: entry.agent.systemPrompt,
   };
   if (entry.mcpServers) opts.mcpServers = entry.mcpServers as McpServerConfig[];
-  if (defaults.permissions)
-    opts.permissions = dropUndefined(defaults.permissions) as Permissions;
+  if (defaults.permissions) opts.permissions = dropUndefined(defaults.permissions) as Permissions;
   if (defaults.budget) opts.budget = dropUndefined(defaults.budget) as Partial<Budget>;
   if (defaults.sampling) opts.sampling = dropUndefined(defaults.sampling) as SamplingParams;
   return defineChatAgent(opts);
@@ -334,10 +329,7 @@ async function contributeFromPack(
 // Selective env interpolation
 // ----------------------------------------------------------------------
 
-function interpolateEnvSlots(
-  cfg: HarnessConfig,
-  env: NodeJS.ProcessEnv,
-): HarnessConfig {
+function interpolateEnvSlots(cfg: HarnessConfig, env: NodeJS.ProcessEnv): HarnessConfig {
   const lookup = (name: string): string | undefined => env[name];
   const out: HarnessConfig = { ...cfg };
   if (cfg.capabilities) {

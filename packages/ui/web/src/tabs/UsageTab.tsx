@@ -166,10 +166,7 @@ function Table({ headers, rows }: TableProps) {
         <thead className="label">
           <tr>
             {headers.map((h) => (
-              <th
-                key={h}
-                className="border-b border-line px-3 py-2 text-left font-medium"
-              >
+              <th key={h} className="border-b border-line px-3 py-2 text-left font-medium">
                 {h}
               </th>
             ))}

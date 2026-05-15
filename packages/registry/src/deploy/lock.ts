@@ -53,9 +53,7 @@ export async function readLock(projectRoot: string): Promise<DeployLock | null> 
     const text = await readFile(path, "utf8");
     const parsed = JSON.parse(text) as DeployLock;
     if (parsed.schemaVersion !== 1) {
-      throw new Error(
-        `unsupported render-deploy lock schema version: ${parsed.schemaVersion}`,
-      );
+      throw new Error(`unsupported render-deploy lock schema version: ${parsed.schemaVersion}`);
     }
     return parsed;
   } catch (err) {

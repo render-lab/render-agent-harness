@@ -70,9 +70,7 @@ export function useConversationSession(
   const { agentName } = opts;
   const initialConversationId = opts.conversationId ?? null;
 
-  const [conversationId, setConversationIdState] = useState<string | null>(
-    initialConversationId,
-  );
+  const [conversationId, setConversationIdState] = useState<string | null>(initialConversationId);
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [status, setStatus] = useState<RunStatus | null>(null);

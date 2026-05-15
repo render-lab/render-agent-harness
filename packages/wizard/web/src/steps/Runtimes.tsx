@@ -64,7 +64,6 @@ export function Runtimes({
       </div>
 
       {hasCron && hasCron.kind === "cron" && (
-        // biome-ignore lint/a11y/noLabelWithoutControl: input is rendered as a child via the children prop
         <label className="block border border-accent p-3">
           <span className="label text-accent">cron schedule (UTC, 5-field)</span>
           <input
@@ -82,7 +81,6 @@ export function Runtimes({
       )}
 
       {hasWorker && hasWorker.kind === "worker" && (
-        // biome-ignore lint/a11y/noLabelWithoutControl: input is rendered as a child via the children prop
         <label className="block border border-accent p-3">
           <span className="label text-accent">worker queue name</span>
           <input

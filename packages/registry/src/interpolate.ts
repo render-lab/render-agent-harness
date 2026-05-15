@@ -22,8 +22,8 @@ export interface InterpolateOpts {
 
 export function interpolate(input: string, lookup: EnvLookup, opts: InterpolateOpts = {}): string {
   const errorPrefix = opts.errorPrefix ?? "interpolate";
-  return input.replace(VAR_PATTERN, (match, escape, name, _maybe, fallback) => {
-    if (escape === "\\") {
+  return input.replace(VAR_PATTERN, (match, escaped, name, _maybe, fallback) => {
+    if (escaped === "\\") {
       // Strip the backslash and pass through literally.
       return match.slice(1);
     }

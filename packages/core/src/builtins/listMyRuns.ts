@@ -86,7 +86,7 @@ function buildHandler(ctx: {
       }
       const args = (input ?? {}) as Input;
       const limit = clamp(args.limit, 20, 1, 50);
-      const agent = args.agent === "*" ? undefined : args.agent ?? ctx.agentName;
+      const agent = args.agent === "*" ? undefined : (args.agent ?? ctx.agentName);
       const statuses = normalizeStatuses(args.status);
 
       const page = await listRuns(ctx.pool, {

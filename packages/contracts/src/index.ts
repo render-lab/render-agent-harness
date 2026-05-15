@@ -25,6 +25,7 @@ export type ToolCallId = string;
 export type MessageId = string;
 export type UserId = string;
 export type ConversationId = string;
+export type ScheduleId = string;
 
 // --------------------------------------------------------------------
 // Messages and content blocks
@@ -256,6 +257,53 @@ export interface UsageRow {
 }
 
 // --------------------------------------------------------------------
+// Scheduled runs
+// --------------------------------------------------------------------
+
+export type NotificationKind = "slack" | "webhook" | "inbox";
+
+export interface NotificationConfig {
+  kind: NotificationKind;
+  target: string | null;
+}
+
+export interface ScheduleSummary {
+  id: ScheduleId;
+  userId: UserId;
+  agentName: string;
+  input: string;
+  metadata: Record<string, unknown>;
+  cronExpr: string;
+  timezone: string;
+  notifications: NotificationConfig[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastFiredAt: string | null;
+  nextFireAt: string | null;
+}
+
+export interface ScheduleHistoryItem {
+  scheduleId: ScheduleId;
+  run: RunSummary;
+  firedAt: string;
+  summary: string | null;
+}
+
+export interface InboxItem {
+  id: string;
+  scheduleId: ScheduleId | null;
+  runId: RunId;
+  userId: UserId;
+  kind: NotificationKind;
+  target: string | null;
+  summary: string;
+  status: "delivered" | "failed";
+  error: string | null;
+  createdAt: string;
+}
+
+// --------------------------------------------------------------------
 // Endpoint envelopes
 // --------------------------------------------------------------------
 
@@ -403,6 +451,18 @@ export interface DiagnosticsResp {
 
 export interface UsageResp {
   rollups: UsageRow[];
+}
+
+export interface ListSchedulesResp {
+  schedules: ScheduleSummary[];
+}
+
+export interface ScheduleRunsResp {
+  runs: ScheduleHistoryItem[];
+}
+
+export interface InboxResp {
+  items: InboxItem[];
 }
 
 export interface CreateRunBody {

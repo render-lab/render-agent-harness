@@ -144,10 +144,10 @@ function CustomFields({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="block text-[10px] uppercase tracking-wide text-muted">{label}</span>
       <div className="mt-1">{children}</div>
-    </label>
+    </div>
   );
 }
 

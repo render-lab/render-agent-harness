@@ -403,43 +403,46 @@ describe("repo integration: conversations", () => {
     expect(snapshot?.totalCostUsd).toBeCloseTo(0.05, 5);
   });
 
-  dbTest("sequential-only invariant: a second active run on the same conversation fails", async (db) => {
-    const convId = `it-conv-seq-${Date.now()}`;
-    await createConversation(db, {
-      id: convId,
-      agentName: "it",
-      agentVersion: "0.0.0",
-    });
-    const first = `${convId}-r1`;
-    await createRun(db, {
-      id: first,
-      agentName: "it",
-      agentVersion: "0.0.0",
-      conversationId: convId,
-    });
+  dbTest(
+    "sequential-only invariant: a second active run on the same conversation fails",
+    async (db) => {
+      const convId = `it-conv-seq-${Date.now()}`;
+      await createConversation(db, {
+        id: convId,
+        agentName: "it",
+        agentVersion: "0.0.0",
+      });
+      const first = `${convId}-r1`;
+      await createRun(db, {
+        id: first,
+        agentName: "it",
+        agentVersion: "0.0.0",
+        conversationId: convId,
+      });
 
-    const active = await findActiveRunForConversation(db, convId);
-    expect(active?.id).toBe(first);
+      const active = await findActiveRunForConversation(db, convId);
+      expect(active?.id).toBe(first);
 
-    await expect(
-      createRun(db, {
+      await expect(
+        createRun(db, {
+          id: `${convId}-r2`,
+          agentName: "it",
+          agentVersion: "0.0.0",
+          conversationId: convId,
+        }),
+      ).rejects.toThrow(/agent_runs_conversation_active_uq/);
+
+      // Once the first run reaches a terminal state, a new run becomes legal.
+      await setRunStatus(db, first, "completed");
+      const next = await createRun(db, {
         id: `${convId}-r2`,
         agentName: "it",
         agentVersion: "0.0.0",
         conversationId: convId,
-      }),
-    ).rejects.toThrow(/agent_runs_conversation_active_uq/);
-
-    // Once the first run reaches a terminal state, a new run becomes legal.
-    await setRunStatus(db, first, "completed");
-    const next = await createRun(db, {
-      id: `${convId}-r2`,
-      agentName: "it",
-      agentVersion: "0.0.0",
-      conversationId: convId,
-    });
-    expect(next.conversationId).toBe(convId);
-  });
+      });
+      expect(next.conversationId).toBe(convId);
+    },
+  );
 });
 
 describe("repo integration: messages and cursor", () => {

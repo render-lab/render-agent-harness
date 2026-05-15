@@ -221,7 +221,10 @@ function toApiEnvVar(v: BlueprintEnvVar): CreateServiceEnvVar {
     // YAML does. The executor resolves these refs after creating the
     // database — we emit a sentinel value here that the executor
     // replaces with the actual connection string.
-    return { key: v.key, value: `__RESOLVE_FROM_DATABASE:${v.fromDatabase.name}:${v.fromDatabase.property}__` };
+    return {
+      key: v.key,
+      value: `__RESOLVE_FROM_DATABASE:${v.fromDatabase.name}:${v.fromDatabase.property}__`,
+    };
   }
   if (v.fromService) {
     return {

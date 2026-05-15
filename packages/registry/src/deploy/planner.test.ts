@@ -111,9 +111,7 @@ describe("planFromBlueprint", () => {
       description: "x",
       harnessVersion: "^0.1",
       shared: { model: ANTHROPIC_MODEL },
-      envSchema: [
-        { name: "CALENDAR_ICS_URL", required: false, secret: true },
-      ],
+      envSchema: [{ name: "CALENDAR_ICS_URL", required: false, secret: true }],
       agents: [
         {
           id: "wfonly",

@@ -17,6 +17,9 @@
  *
  * Tier C — auto-on when harness primitives are present:
  *   - `list_my_runs` (Postgres pool, scoped to caller userId)
+ *   - `schedule_run`, `list_schedules`, `update_schedule`,
+ *     `cancel_schedule`, `list_scheduled_outputs` (Postgres pool,
+ *     scoped to caller userId)
  *
  * Filesystem / terminal tools live OUTSIDE core (`cap-filesystem` pack)
  * because the worker pserv is multi-tenant and filesystem access is
@@ -25,12 +28,16 @@
 
 import type { LocalToolHandler } from "../types.js";
 import { askUserFactory } from "./askUser.js";
+import { cancelScheduleFactory } from "./cancelSchedule.js";
 import { currentTimeFactory } from "./currentTime.js";
 import { fetchFullResultFactory } from "./fetchFullResult.js";
 import { fetchUrlFactory } from "./fetchUrl.js";
 import { imageGenerateFactory } from "./imageGenerate.js";
 import { listMyRunsFactory } from "./listMyRuns.js";
+import { listScheduledOutputsFactory } from "./listScheduledOutputs.js";
+import { listSchedulesFactory } from "./listSchedules.js";
 import { loadSkillFactory } from "./loadSkill.js";
+import { scheduleRunFactory } from "./scheduleRun.js";
 import { todoFactory } from "./todo.js";
 import { triggerWorkflowFactory } from "./triggerWorkflow.js";
 import type {
@@ -39,9 +46,11 @@ import type {
   BuiltinFactory,
   SkippedBuiltin,
 } from "./types.js";
+import { updateScheduleFactory } from "./updateSchedule.js";
 import { webExtractFactory } from "./webExtract.js";
 import { webSearchFactory } from "./webSearch.js";
 
+export { AwaitingInputError } from "./askUser.js";
 export type {
   BuildBuiltinsResult,
   BuiltinContext,
@@ -49,7 +58,6 @@ export type {
   BuiltinRegistration,
   SkippedBuiltin,
 } from "./types.js";
-export { AwaitingInputError } from "./askUser.js";
 
 const FACTORIES: BuiltinFactory[] = [
   loadSkillFactory,
@@ -59,6 +67,11 @@ const FACTORIES: BuiltinFactory[] = [
   askUserFactory,
   todoFactory,
   listMyRunsFactory,
+  scheduleRunFactory,
+  listSchedulesFactory,
+  updateScheduleFactory,
+  cancelScheduleFactory,
+  listScheduledOutputsFactory,
   webSearchFactory,
   webExtractFactory,
   imageGenerateFactory,

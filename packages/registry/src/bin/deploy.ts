@@ -26,8 +26,8 @@
  */
 
 import { parseArgs } from "node:util";
-import { deploy } from "../deploy/index.js";
 import { RenderApiError } from "../deploy/api.js";
+import { deploy } from "../deploy/index.js";
 
 interface CliArgs {
   apiKey: string | undefined;

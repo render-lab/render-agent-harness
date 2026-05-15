@@ -143,7 +143,10 @@ async function fetchUrl(
         };
       }
       const msg = err instanceof Error ? err.message : String(err);
-      return { content: `fetch_url: network error fetching ${current.href}: ${msg}`, isError: true };
+      return {
+        content: `fetch_url: network error fetching ${current.href}: ${msg}`,
+        isError: true,
+      };
     }
 
     if (res.status >= 300 && res.status < 400) {
@@ -277,7 +280,10 @@ async function checkSsrf(url: URL): Promise<SsrfResult> {
     try {
       addresses = await lookup(host, { all: true });
     } catch (err) {
-      return { ok: false, reason: `DNS lookup failed: ${err instanceof Error ? err.message : String(err)}` };
+      return {
+        ok: false,
+        reason: `DNS lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
     }
   }
 
@@ -336,7 +342,7 @@ function sanitizeHeaders(headers: Record<string, string> | undefined): Record<st
     out["User-Agent"] = "render-harness/fetch_url";
   }
   if (!Object.keys(out).some((k) => k.toLowerCase() === "accept")) {
-    out["Accept"] = "*/*";
+    out.Accept = "*/*";
   }
   return out;
 }

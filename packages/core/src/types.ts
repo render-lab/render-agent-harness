@@ -22,6 +22,7 @@ import type {
   RunId,
   RunStatus,
   SamplingParams,
+  ScheduleId,
   TokenUsage,
   ToolCallId,
   UserId,
@@ -44,6 +45,7 @@ export type {
   RunId,
   RunStatus,
   SamplingParams,
+  ScheduleId,
   TextBlock,
   ThinkingBlock,
   TokenUsage,
@@ -149,6 +151,48 @@ export interface AgentConversation {
   createdAt: Date;
   updatedAt: Date;
   lastActiveAt: Date;
+}
+
+export type NotificationKind = "slack" | "webhook" | "inbox";
+
+export interface NotificationConfig {
+  kind: NotificationKind;
+  target: string | null;
+}
+
+export interface Schedule {
+  id: ScheduleId;
+  userId: UserId;
+  agentName: string;
+  input: string;
+  metadata: Record<string, unknown>;
+  cronExpr: string;
+  timezone: string;
+  notifications: NotificationConfig[];
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastFiredAt?: Date;
+  nextFireAt?: Date;
+}
+
+export interface ScheduleRun {
+  scheduleId: ScheduleId;
+  runId: RunId;
+  firedAt: Date;
+}
+
+export interface NotificationDelivery {
+  id: string;
+  runId: RunId;
+  scheduleId: ScheduleId | null;
+  userId: UserId;
+  kind: NotificationKind;
+  target: string | null;
+  summary: string;
+  status: "delivered" | "failed";
+  error: string | null;
+  createdAt: Date;
 }
 
 // --------------------------------------------------------------------

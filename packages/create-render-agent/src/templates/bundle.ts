@@ -23,7 +23,7 @@
  */
 
 import { stringify as stringifyYaml } from "yaml";
-import type { BundlePick, Answers, PackageManager } from "../types.js";
+import type { Answers, BundlePick, PackageManager } from "../types.js";
 
 export type BundleRuntimeKind = "web" | "worker" | "cron";
 
@@ -563,11 +563,18 @@ export function bundleReadme(opts: BundleReadmeOpts): string {
   const firstCronAgent = cronAgents[0];
 
   const layoutLines: string[] = [];
-  if (opts.kinds.has("web")) layoutLines.push("  web.ts                    # serveWeb({ agents: agentsById })");
-  if (opts.kinds.has("worker")) layoutLines.push("  worker.ts                 # startWorkerAndWait + agent resolver");
-  if (opts.hasInlineCron) layoutLines.push("  cron.ts                   # one-shot; dispatches via HARNESS_AGENT_ID");
-  if (opts.hasCronTrigger) layoutLines.push("  cron-trigger.ts           # one-shot; calls render.workflows.runTask + exits");
-  if (opts.hasWorkflowTasks) layoutLines.push("  workflows.ts              # registers every workflow-mode agent as a task");
+  if (opts.kinds.has("web"))
+    layoutLines.push("  web.ts                    # serveWeb({ agents: agentsById })");
+  if (opts.kinds.has("worker"))
+    layoutLines.push("  worker.ts                 # startWorkerAndWait + agent resolver");
+  if (opts.hasInlineCron)
+    layoutLines.push("  cron.ts                   # one-shot; dispatches via HARNESS_AGENT_ID");
+  if (opts.hasCronTrigger)
+    layoutLines.push(
+      "  cron-trigger.ts           # one-shot; calls render.workflows.runTask + exits",
+    );
+  if (opts.hasWorkflowTasks)
+    layoutLines.push("  workflows.ts              # registers every workflow-mode agent as a task");
 
   const longRunningServices: string[] = [];
   if (opts.kinds.has("web")) longRunningServices.push("web");
@@ -593,7 +600,7 @@ ${layoutLines.join("\n")}
 ## Run locally
 
 Prereqs:
-- Node 22+, ${opts.packageManager}, Docker (for db + KV)${opts.hasWorkflowTasks ? "\n- Render CLI 2.11.0+ (\`brew install render\`) for workflow-mode agents" : ""}
+- Node 22+, ${opts.packageManager}, Docker (for db + KV)${opts.hasWorkflowTasks ? "\n- Render CLI 2.11.0+ (`brew install render`) for workflow-mode agents" : ""}
 
 1. Open \`.env\` and fill in the entries marked \`# fill in\` — \`ANTHROPIC_API_KEY\`${opts.hasWorkflowTasks ? ", `RENDER_API_KEY`" : ""}, plus any manifest-declared secrets. Everything else (database URL, KV URL, workflow slug, local-dev flag) is already set for you.
 
@@ -623,8 +630,8 @@ curl -X POST http://127.0.0.1:8080/runs \\
    Or open \`http://127.0.0.1:8080/ui\` for the operator UI.
 
 ${
-    opts.hasInlineCron && firstCronAgent
-      ? `### Running a cron entry one-shot
+  opts.hasInlineCron && firstCronAgent
+    ? `### Running a cron entry one-shot
 
 Inline cron jobs are billed-per-invocation. Trigger one manually for testing:
 
@@ -633,10 +640,10 @@ HARNESS_AGENT_ID=${firstCronAgent} ${runner} dev:cron
 \`\`\`
 
 `
-      : ""
-  }${
-    opts.hasCronTrigger
-      ? `### Triggering a workflow-mode cron one-shot
+    : ""
+}${
+  opts.hasCronTrigger
+    ? `### Triggering a workflow-mode cron one-shot
 
 \`\`\`sh
 HARNESS_AGENT_ID=<agent-id> WORKFLOW_TASK_REF=${opts.bundle.slug}-workflows/<agent-id> \\
@@ -644,8 +651,8 @@ HARNESS_AGENT_ID=<agent-id> WORKFLOW_TASK_REF=${opts.bundle.slug}-workflows/<age
 \`\`\`
 
 `
-      : ""
-  }## Deploy
+    : ""
+}## Deploy
 
 Generate the Blueprint:
 
@@ -656,8 +663,8 @@ npx @render-harness/registry build render-harness.yaml --output render.yaml
 Commit and click the Deploy-to-Render badge. The Blueprint creates: 1 Postgres + 1 Key Value + 1 web + 1 worker${opts.hasInlineCron ? " + N inline cron services" : ""}${opts.hasCronTrigger ? " + N cron-trigger services" : ""}.
 
 ${
-    opts.hasWorkflowTasks
-      ? `### One Dashboard step after Blueprint deploy
+  opts.hasWorkflowTasks
+    ? `### One Dashboard step after Blueprint deploy
 
 Render Workflows aren't yet Blueprintable. After the first deploy lands, create one Workflow service in the Dashboard:
 
@@ -668,8 +675,8 @@ Render Workflows aren't yet Blueprintable. After the first deploy lands, create 
 
 It will host every workflow-mode agent in this bundle as one Workflow task. Tasks auto-register on service boot, so adding agents later is just a push.
 `
-      : ""
-  }`;
+    : ""
+}`;
 }
 
 function manifestAgentCount(bundle: BundlePick): number {
@@ -678,9 +685,11 @@ function manifestAgentCount(bundle: BundlePick): number {
 }
 
 function cronAgentIds(bundle: BundlePick): string[] {
-  const agents = (bundle.manifest as {
-    agents?: Array<{ id?: string; runtimes?: Array<{ kind?: string }> }>;
-  }).agents;
+  const agents = (
+    bundle.manifest as {
+      agents?: Array<{ id?: string; runtimes?: Array<{ kind?: string }> }>;
+    }
+  ).agents;
   if (!Array.isArray(agents)) return [];
   return agents
     .filter((a) => a.runtimes?.some((r) => r.kind === "cron"))

@@ -27,6 +27,7 @@
     "@anthropic-ai/sdk": "^0.95.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@render-harness/contracts": "workspace:*",
+    "cron-parser": "^5.5.0",
     "ioredis": "^5.10.1",
     "ipaddr.js": "^2.2.0",
     "luxon": "^3.7.2",

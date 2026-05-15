@@ -50,7 +50,11 @@ function Field({
   label,
   hint,
   children,
-}: { label: string; hint?: string; children: React.ReactNode }) {
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     // biome-ignore lint/a11y/noLabelWithoutControl: input is rendered as a child via the children prop
     <label className="block">

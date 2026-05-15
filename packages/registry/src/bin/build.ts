@@ -22,13 +22,12 @@
  *   2  unexpected I/O error
  */
 
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { emitBlueprint } from "../emitter.js";
 import { loadPacks } from "../load-pack.js";
 import { parseHarnessConfigYaml } from "../schema.js";
-import { readFile } from "node:fs/promises";
 
 interface CliArgs {
   configPath: string;
@@ -117,7 +116,7 @@ async function main(): Promise<number> {
   }
 
   const entryRoot = dirname(args.configPath);
-  let packs;
+  let packs: Awaited<ReturnType<typeof loadPacks>>;
   try {
     packs = await loadPacks(
       config.capabilities ? { entryRoot, refs: config.capabilities } : { entryRoot },
@@ -176,16 +175,17 @@ function printSummary(
 
   process.stdout.write("\nEffective env schema (for the README and the Deploy badge):\n");
   for (const spec of result.effectiveEnvSchema) {
-    const tags = [
-      spec.required ? "required" : "optional",
-      spec.secret ? "secret" : "plain",
-    ].join(", ");
+    const tags = [spec.required ? "required" : "optional", spec.secret ? "secret" : "plain"].join(
+      ", ",
+    );
     const desc = spec.description ? ` — ${spec.description}` : "";
     process.stdout.write(`  ${spec.name} (${tags})${desc}\n`);
   }
 
   process.stdout.write("\nDeploy-to-Render badge snippet (paste into README):\n");
-  process.stdout.write(`  [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/${config.name})\n`);
+  process.stdout.write(
+    `  [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<owner>/${config.name})\n`,
+  );
 }
 
 main().then(

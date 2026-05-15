@@ -42,10 +42,7 @@ export function getKvSafe(logger?: Logger): KvLike | null {
   try {
     return getKv();
   } catch (err) {
-    logger?.debug(
-      { err: err instanceof Error ? err.message : String(err) },
-      "no KV configured",
-    );
+    logger?.debug({ err: err instanceof Error ? err.message : String(err) }, "no KV configured");
     return null;
   }
 }

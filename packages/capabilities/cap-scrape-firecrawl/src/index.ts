@@ -28,10 +28,10 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  getPool,
   type LocalToolHandler,
   type McpServerConfig,
   type SkillMetadata,
-  getPool,
 } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
 

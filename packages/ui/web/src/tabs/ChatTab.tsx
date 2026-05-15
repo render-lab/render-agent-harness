@@ -4,8 +4,8 @@ import {
   MessagePrimitive,
   type ReasoningMessagePartProps,
   type TextMessagePartProps,
-  type ToolCallMessagePartProps,
   ThreadPrimitive,
+  type ToolCallMessagePartProps,
   useThreadRuntime,
 } from "@assistant-ui/react";
 import { useCallback, useEffect, useState } from "react";
@@ -191,7 +191,7 @@ function ChatToolbar({
       {conversationId ? (
         <span className="font-mono">{conversationId.slice(0, 16)}…</span>
       ) : (
-        <span className="text-muted">// new chat</span>
+        <span className="text-muted">{"// new chat"}</span>
       )}
 
       {status && (
@@ -225,13 +225,7 @@ function statusBadgeClass(status: string): string {
 // Empty state and message renderers
 // --------------------------------------------------------------------
 
-function EmptyState({
-  agent,
-  hydrating,
-}: {
-  agent: AgentSummary | null;
-  hydrating: boolean;
-}) {
+function EmptyState({ agent, hydrating }: { agent: AgentSummary | null; hydrating: boolean }) {
   if (hydrating) {
     return (
       <div className="text-center text-xs text-muted">
@@ -245,7 +239,7 @@ function EmptyState({
   return (
     <div className="space-y-2 text-xs text-muted">
       <div>
-        <span className="label">// chat</span>
+        <span className="label">{"// chat"}</span>
       </div>
       {agent ? (
         <div>
@@ -255,7 +249,7 @@ function EmptyState({
           </span>
         </div>
       ) : (
-        <div>// pick an agent above to start chatting</div>
+        <div>{"// pick an agent above to start chatting"}</div>
       )}
     </div>
   );
@@ -319,7 +313,8 @@ function PlainText(props: TextMessagePartProps) {
 function ThinkingText() {
   return (
     <span className="text-muted">
-      thinking<span className="cli-dots" aria-hidden="true" />
+      thinking
+      <span className="cli-dots" aria-hidden="true" />
       <span className="sr-only">...</span>
     </span>
   );
@@ -336,9 +331,7 @@ function ReasoningBlock(props: ReasoningMessagePartProps) {
 
 function ToolCallBlock(props: ToolCallMessagePartProps) {
   const argsText =
-    typeof props.argsText === "string"
-      ? props.argsText
-      : safeJsonStringify(props.args ?? {});
+    typeof props.argsText === "string" ? props.argsText : safeJsonStringify(props.args ?? {});
   return (
     <div className="my-1 border border-line p-2 text-xs">
       <div className="label text-accent!">tool · {props.toolName}</div>
@@ -403,11 +396,7 @@ function Composer() {
 function CancelRunButton() {
   const runtime = useThreadRuntime();
   return (
-    <button
-      type="button"
-      className="btn btn-danger"
-      onClick={() => runtime.cancelRun()}
-    >
+    <button type="button" className="btn btn-danger" onClick={() => runtime.cancelRun()}>
       stop
     </button>
   );

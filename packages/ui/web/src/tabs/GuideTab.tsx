@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { TourSection } from "./guide/TourSection.js";
 import { AgentRuntimeSection } from "./guide/AgentRuntimeSection.js";
-import { CustomizingSection } from "./guide/CustomizingSection.js";
 import { CapabilitiesSection } from "./guide/CapabilitiesSection.js";
+import { CustomizingSection } from "./guide/CustomizingSection.js";
 import { DeploySection } from "./guide/DeploySection.js";
+import { TourSection } from "./guide/TourSection.js";
 
 /**
  * In-product guide for new operators. Linear narrative anchored on the
@@ -16,12 +16,7 @@ import { DeploySection } from "./guide/DeploySection.js";
  * order in the sidebar and the only thing that determines layout.
  */
 
-export type GuideSectionId =
-  | "tour"
-  | "agent"
-  | "customizing"
-  | "capabilities"
-  | "deploy";
+export type GuideSectionId = "tour" | "agent" | "customizing" | "capabilities" | "deploy";
 
 interface SectionDef {
   id: GuideSectionId;
@@ -78,13 +73,13 @@ interface GuideTabProps {
 export function GuideTab({ section, onSectionChange }: GuideTabProps) {
   // Default to the first section if none is in the URL yet.
   const active = section ?? SECTIONS[0]?.id ?? "tour";
-  const ActiveComponent =
-    SECTIONS.find((s) => s.id === active)?.Component ?? TourSection;
+  const ActiveComponent = SECTIONS.find((s) => s.id === active)?.Component ?? TourSection;
 
   // When the user picks a section, scroll the body back to the top so
   // they don't land mid-section.
   const bodyRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    if (!active) return;
     bodyRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [active]);
 
@@ -106,7 +101,7 @@ interface SidebarProps {
 function Sidebar({ active, onSectionChange }: SidebarProps) {
   return (
     <aside className="lg:sticky lg:top-4 lg:self-start">
-      <div className="label mb-3">// guide</div>
+      <div className="label mb-3">{"// guide"}</div>
       <nav className="space-y-1 text-xs">
         {SECTIONS.map((s) => {
           const isActive = s.id === active;

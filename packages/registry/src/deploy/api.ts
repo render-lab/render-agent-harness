@@ -31,19 +31,12 @@ export class RenderApi {
   }
 
   async listOwners(): Promise<OwnerSummary[]> {
-    const raw = await this.fetchJson<Array<{ owner: OwnerSummary }>>(
-      "GET",
-      "/owners?limit=100",
-    );
+    const raw = await this.fetchJson<Array<{ owner: OwnerSummary }>>("GET", "/owners?limit=100");
     return raw.map((r) => r.owner);
   }
 
   async createService(body: CreateServiceBody): Promise<ServiceRef> {
-    const res = await this.fetchJson<{ service: ServiceRef }>(
-      "POST",
-      "/services",
-      body,
-    );
+    const res = await this.fetchJson<{ service: ServiceRef }>("POST", "/services", body);
     return res.service;
   }
 
@@ -61,17 +54,11 @@ export class RenderApi {
 
   /** Get a Postgres' connectionString once it's provisioned. */
   async getPostgresConnectionInfo(id: string): Promise<PostgresConnectionInfo> {
-    return await this.fetchJson<PostgresConnectionInfo>(
-      "GET",
-      `/postgres/${id}/connection-info`,
-    );
+    return await this.fetchJson<PostgresConnectionInfo>("GET", `/postgres/${id}/connection-info`);
   }
 
   async getKeyValueConnectionInfo(id: string): Promise<KeyValueConnectionInfo> {
-    return await this.fetchJson<KeyValueConnectionInfo>(
-      "GET",
-      `/key-value/${id}/connection-info`,
-    );
+    return await this.fetchJson<KeyValueConnectionInfo>("GET", `/key-value/${id}/connection-info`);
   }
 
   private async fetchJson<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -124,11 +111,7 @@ export interface OwnerSummary {
   type?: "user" | "team";
 }
 
-export type ServiceType =
-  | "web_service"
-  | "private_service"
-  | "background_worker"
-  | "cron_job";
+export type ServiceType = "web_service" | "private_service" | "background_worker" | "cron_job";
 
 export interface CreateServiceEnvVar {
   key: string;

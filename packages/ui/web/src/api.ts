@@ -12,7 +12,6 @@
 import type {
   AgentModelSummary,
   AgentSummary,
-  DeploymentEnvVar,
   CancelRunResp,
   ContentBlock,
   ConversationDetailResp,
@@ -23,15 +22,22 @@ import type {
   CreateRunResp,
   DeploymentAgentInfo,
   DeploymentAgentRuntime,
+  DeploymentEnvVar,
   DeploymentInfo,
   DiagnosticCheck,
   HealthInfo,
+  InboxItem,
+  InboxResp,
   ListConversationsResp,
   ListRunsResp,
+  ListSchedulesResp,
   MessageRecord,
   RunDetailResp,
   RunStatus,
   RunSummary,
+  ScheduleHistoryItem,
+  ScheduleRunsResp,
+  ScheduleSummary,
   SendConversationMessageBody,
   SendConversationMessageResp,
   SendInputResp,
@@ -43,16 +49,19 @@ export type {
   AgentModelSummary,
   AgentSummary,
   ContentBlock,
-  DeploymentEnvVar,
   ConversationSummary,
   DeploymentAgentInfo,
   DeploymentAgentRuntime,
+  DeploymentEnvVar,
   DeploymentInfo,
   DiagnosticCheck,
   HealthInfo,
+  InboxItem,
   MessageRecord,
   RunStatus,
   RunSummary,
+  ScheduleHistoryItem,
+  ScheduleSummary,
   ToolCallRecord,
   UsageRow,
 };
@@ -200,6 +209,18 @@ export function getDiagnostics(): Promise<{ checks: DiagnosticCheck[] }> {
 
 export function getHealth(): Promise<HealthInfo> {
   return request<HealthInfo>("/healthz");
+}
+
+export function listSchedules(): Promise<ListSchedulesResp> {
+  return request<ListSchedulesResp>("/schedules");
+}
+
+export function listScheduleRuns(id: string): Promise<ScheduleRunsResp> {
+  return request<ScheduleRunsResp>(`/schedules/${encodeURIComponent(id)}/runs`);
+}
+
+export function listInbox(): Promise<InboxResp> {
+  return request<InboxResp>("/inbox");
 }
 
 /**

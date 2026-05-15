@@ -42,9 +42,9 @@
 import { stringify as stringifyYaml } from "yaml";
 import {
   type CapabilityPack,
-  type RenderServiceSpec,
   namespacedMcpServerName,
   namespacedToolName,
+  type RenderServiceSpec,
 } from "./capability.js";
 import type { LoadedPack } from "./load-pack.js";
 import { makePackContext } from "./load-pack.js";
@@ -160,12 +160,14 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
     const primary = buckets.web[0];
     if (!primary) throw new Error("unreachable: web bucket non-empty");
     if (buckets.web.length > 1) {
-      const divergent = buckets.web.slice(1).filter(
-        ({ rt }) =>
-          (rt.plan && rt.plan !== primary.rt.plan) ||
-          (rt.region && rt.region !== primary.rt.region) ||
-          (rt.healthCheckPath && rt.healthCheckPath !== primary.rt.healthCheckPath),
-      );
+      const divergent = buckets.web
+        .slice(1)
+        .filter(
+          ({ rt }) =>
+            (rt.plan && rt.plan !== primary.rt.plan) ||
+            (rt.region && rt.region !== primary.rt.region) ||
+            (rt.healthCheckPath && rt.healthCheckPath !== primary.rt.healthCheckPath),
+        );
       if (divergent.length > 0) {
         warnings.push(
           `Multiple agents declare kind:web with divergent plan/region/healthCheckPath. Using the first (agent "${primary.agent.id}"); others ignored.`,
@@ -326,7 +328,6 @@ function bucketByKind(cfg: HarnessConfig): Buckets {
   return buckets;
 }
 
-
 // ----------------------------------------------------------------------
 // Naming
 //
@@ -350,8 +351,7 @@ interface Naming {
 }
 
 function buildNaming(cfg: HarnessConfig): Naming {
-  const singleAgent =
-    cfg.agents.length === 1 && cfg.agents[0]?.id === cfg.name;
+  const singleAgent = cfg.agents.length === 1 && cfg.agents[0]?.id === cfg.name;
   return {
     singleAgent,
     cron(agentId) {
@@ -603,7 +603,9 @@ function translatePackService(
   return base;
 }
 
-function toBlueprintEnvVar(input: NonNullable<RenderServiceSpec["envVars"]>[number]): BlueprintEnvVar {
+function toBlueprintEnvVar(
+  input: NonNullable<RenderServiceSpec["envVars"]>[number],
+): BlueprintEnvVar {
   const out: BlueprintEnvVar = { key: input.key };
   if (input.value !== undefined) out.value = input.value;
   if (input.sync === false) out.sync = false;

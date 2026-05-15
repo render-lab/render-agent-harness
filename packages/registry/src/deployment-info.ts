@@ -7,12 +7,7 @@ import type {
   DeploymentInfo,
 } from "@render-harness/contracts";
 import type { LoadedPack } from "./load-pack.js";
-import type {
-  AgentEntryInput,
-  EnvVarSpec,
-  HarnessConfig,
-  RuntimeBlockInput,
-} from "./schema.js";
+import type { AgentEntryInput, EnvVarSpec, HarnessConfig, RuntimeBlockInput } from "./schema.js";
 import { isWorkflowTaskAgent } from "./schema.js";
 
 /**

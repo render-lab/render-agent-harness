@@ -15,7 +15,7 @@ import { loadPacks } from "../load-pack.js";
 import { type HarnessConfig, parseHarnessConfigYaml } from "../schema.js";
 import { RenderApi } from "./api.js";
 import { discoverContext } from "./discover.js";
-import { executePlan, type ExecutorResult } from "./executor.js";
+import { type ExecutorResult, executePlan } from "./executor.js";
 import { readLock } from "./lock.js";
 import { planFromBlueprint } from "./planner.js";
 
@@ -52,9 +52,7 @@ export async function deploy(opts: DeployOpts = {}): Promise<DeployResult> {
 
   const apiKey = opts.apiKey ?? env.RENDER_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "deploy: RENDER_API_KEY env var (or --api-key flag) is required",
-    );
+    throw new Error("deploy: RENDER_API_KEY env var (or --api-key flag) is required");
   }
 
   // 1. Load + validate manifest
@@ -80,7 +78,9 @@ export async function deploy(opts: DeployOpts = {}): Promise<DeployResult> {
 
   // 3. Emit the Blueprint (single source of truth for what gets deployed)
   const packs = await loadPacks(
-    config.capabilities ? { entryRoot: projectRoot, refs: config.capabilities } : { entryRoot: projectRoot },
+    config.capabilities
+      ? { entryRoot: projectRoot, refs: config.capabilities }
+      : { entryRoot: projectRoot },
   );
   const { blueprint, dashboardSteps } = await emitBlueprint({
     config,
@@ -121,7 +121,9 @@ export async function deploy(opts: DeployOpts = {}): Promise<DeployResult> {
 
   log("");
   if (opts.dryRun) {
-    log(`▸ Dry-run complete — would create ${result.created.length}, skip ${result.skipped.length}.`);
+    log(
+      `▸ Dry-run complete — would create ${result.created.length}, skip ${result.skipped.length}.`,
+    );
   } else {
     log(`▸ Deploy complete — created ${result.created.length}, skipped ${result.skipped.length}.`);
     log(`▸ Lock file: ${projectRoot}/.render-deploy.lock.json`);

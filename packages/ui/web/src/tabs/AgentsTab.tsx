@@ -103,7 +103,7 @@ function AgentCard({
 
       <Section title="mcp servers">
         {agent.mcpServers.length === 0 ? (
-          <p className="text-muted">// none configured</p>
+          <p className="text-muted">{"// none configured"}</p>
         ) : (
           <ul className="space-y-1">
             {agent.mcpServers.map((s) => (

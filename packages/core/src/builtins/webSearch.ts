@@ -19,8 +19,7 @@ export const webSearchFactory: BuiltinFactory = (ctx) => {
     return {
       registered: false,
       name: "web_search",
-      reason:
-        "no search provider configured (set EXA_API_KEY, TAVILY_API_KEY, or BRAVE_API_KEY)",
+      reason: "no search provider configured (set EXA_API_KEY, TAVILY_API_KEY, or BRAVE_API_KEY)",
     };
   }
   return {
@@ -39,8 +38,7 @@ function pickProvider(env: NodeJS.ProcessEnv): Provider | null {
   if (forced === "exa" && env.EXA_API_KEY) return { kind: "exa", apiKey: env.EXA_API_KEY };
   if (forced === "tavily" && env.TAVILY_API_KEY)
     return { kind: "tavily", apiKey: env.TAVILY_API_KEY };
-  if (forced === "brave" && env.BRAVE_API_KEY)
-    return { kind: "brave", apiKey: env.BRAVE_API_KEY };
+  if (forced === "brave" && env.BRAVE_API_KEY) return { kind: "brave", apiKey: env.BRAVE_API_KEY };
   if (forced) return null; // explicit pick failed
 
   if (env.EXA_API_KEY) return { kind: "exa", apiKey: env.EXA_API_KEY };
@@ -134,7 +132,9 @@ async function searchExa(
     signal,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 500)}`);
-  const data = (await res.json()) as { results?: Array<{ title?: string; url?: string; text?: string }> };
+  const data = (await res.json()) as {
+    results?: Array<{ title?: string; url?: string; text?: string }>;
+  };
   return (data.results ?? []).slice(0, limit).map((r) => ({
     title: r.title ?? r.url ?? "(untitled)",
     url: r.url ?? "",

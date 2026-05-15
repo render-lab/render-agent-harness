@@ -26,9 +26,7 @@ export const webExtractFactory: BuiltinFactory = (ctx) => {
   };
 };
 
-type Provider =
-  | { kind: "firecrawl"; apiKey: string }
-  | { kind: "exa"; apiKey: string };
+type Provider = { kind: "firecrawl"; apiKey: string } | { kind: "exa"; apiKey: string };
 
 function pickProvider(env: NodeJS.ProcessEnv): Provider | null {
   const forced = (env.HARNESS_WEB_EXTRACT_PROVIDER ?? "").toLowerCase().trim();
@@ -82,11 +80,7 @@ async function runProvider(provider: Provider, url: string, signal: AbortSignal)
   }
 }
 
-async function extractFirecrawl(
-  apiKey: string,
-  url: string,
-  signal: AbortSignal,
-): Promise<string> {
+async function extractFirecrawl(apiKey: string, url: string, signal: AbortSignal): Promise<string> {
   const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
     method: "POST",
     headers: {

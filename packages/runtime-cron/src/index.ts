@@ -182,9 +182,7 @@ export interface RunCronFromRegistryOpts extends Omit<RunCronOpts, "agent"> {
   agentId: string;
 }
 
-export async function runCronFromRegistry(
-  opts: RunCronFromRegistryOpts,
-): Promise<RunCronResult> {
+export async function runCronFromRegistry(opts: RunCronFromRegistryOpts): Promise<RunCronResult> {
   const agent = lookupAgent(opts.agents, opts.agentId);
   const { agents, agentId, ...rest } = opts;
   void agents;
@@ -192,9 +190,7 @@ export async function runCronFromRegistry(
   return runCron({ ...rest, agent });
 }
 
-export async function runCronFromRegistryAndExit(
-  opts: RunCronFromRegistryOpts,
-): Promise<never> {
+export async function runCronFromRegistryAndExit(opts: RunCronFromRegistryOpts): Promise<never> {
   try {
     const { exitCode } = await runCronFromRegistry(opts);
     process.exit(exitCode);
@@ -205,10 +201,7 @@ export async function runCronFromRegistryAndExit(
   }
 }
 
-function lookupAgent(
-  agents: Record<string, AgentDefinition>,
-  agentId: string,
-): AgentDefinition {
+function lookupAgent(agents: Record<string, AgentDefinition>, agentId: string): AgentDefinition {
   if (!agentId) {
     const known = Object.keys(agents).sort().join(", ") || "(none)";
     throw new Error(
@@ -240,4 +233,3 @@ function exitCodeFor(result: RunStepResult): number {
       return 3;
   }
 }
-

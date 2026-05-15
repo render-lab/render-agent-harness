@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  flattenRuntimeKinds,
   HarnessConfigSchema,
   IndexSchema,
-  flattenRuntimeKinds,
   isWorkflowTaskAgent,
   parseHarnessConfigYaml,
   workflowTaskAgents,
@@ -182,6 +182,12 @@ describe("workflow-task helpers", () => {
     });
   }
 
+  function firstAgent(cfg: ReturnType<typeof buildBundle>) {
+    const agent = cfg.agents[0];
+    if (!agent) throw new Error("expected first agent");
+    return agent;
+  }
+
   it("treats explicit workflowTask: true as a workflow-task agent", () => {
     const cfg = buildBundle({
       id: "a",
@@ -189,7 +195,7 @@ describe("workflow-task helpers", () => {
       agent: { kind: "custom", entrypoint: "./src/a.ts" },
       runtimes: [{ kind: "web" }],
     });
-    expect(isWorkflowTaskAgent(cfg.agents[0]!)).toBe(true);
+    expect(isWorkflowTaskAgent(firstAgent(cfg))).toBe(true);
     expect(workflowTaskAgents(cfg).map((a) => a.id)).toEqual(["a"]);
   });
 
@@ -199,7 +205,7 @@ describe("workflow-task helpers", () => {
       agent: { kind: "custom", entrypoint: "./src/a.ts" },
       runtimes: [{ kind: "workflows" }],
     });
-    expect(isWorkflowTaskAgent(cfg.agents[0]!)).toBe(true);
+    expect(isWorkflowTaskAgent(firstAgent(cfg))).toBe(true);
   });
 
   it("treats kind: cron, via: workflow as a workflow-task agent", () => {
@@ -208,7 +214,7 @@ describe("workflow-task helpers", () => {
       agent: { kind: "custom", entrypoint: "./src/a.ts" },
       runtimes: [{ kind: "cron", schedule: "0 0 * * *", via: "workflow" }],
     });
-    expect(isWorkflowTaskAgent(cfg.agents[0]!)).toBe(true);
+    expect(isWorkflowTaskAgent(firstAgent(cfg))).toBe(true);
   });
 
   it("does NOT treat a default-via cron agent as workflow-task", () => {
@@ -217,7 +223,7 @@ describe("workflow-task helpers", () => {
       agent: { kind: "custom", entrypoint: "./src/a.ts" },
       runtimes: [{ kind: "cron", schedule: "0 0 * * *" }],
     });
-    expect(isWorkflowTaskAgent(cfg.agents[0]!)).toBe(false);
+    expect(isWorkflowTaskAgent(firstAgent(cfg))).toBe(false);
     expect(workflowTaskAgents(cfg)).toEqual([]);
   });
 
@@ -227,7 +233,7 @@ describe("workflow-task helpers", () => {
       agent: { kind: "custom", entrypoint: "./src/a.ts" },
       runtimes: [{ kind: "cron", schedule: "0 0 * * *", via: "cron" }],
     });
-    expect(isWorkflowTaskAgent(cfg.agents[0]!)).toBe(false);
+    expect(isWorkflowTaskAgent(firstAgent(cfg))).toBe(false);
   });
 
   it("returns workflow-task agents in declaration order", () => {

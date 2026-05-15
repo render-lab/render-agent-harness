@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { getDeployment } from "./api.js";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { DeploymentInfo } from "./api.js";
+import { getDeployment } from "./api.js";
 
 /**
  * Browser-side context carrying the running deployment's bundle metadata
@@ -35,11 +35,7 @@ export function DeploymentProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return (
-    <DeploymentContext.Provider value={deployment}>
-      {children}
-    </DeploymentContext.Provider>
-  );
+  return <DeploymentContext.Provider value={deployment}>{children}</DeploymentContext.Provider>;
 }
 
 /** Returns the deployment info, or `null` while it's still loading. */

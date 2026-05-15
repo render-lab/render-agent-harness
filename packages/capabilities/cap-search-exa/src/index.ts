@@ -29,8 +29,8 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { definePack, type PackContext } from "@render-harness/registry";
 import type { McpServerConfig, SkillMetadata } from "@render-harness/core";
+import { definePack, type PackContext } from "@render-harness/registry";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // dist/ is one level under the package root, so skills/ is one above.
@@ -42,7 +42,9 @@ interface ExaConfig {
   defaultMaxResults?: number;
 }
 
-function readConfig(ctx: PackContext): Required<Pick<ExaConfig, "apiKeyEnv" | "baseUrl">> & ExaConfig {
+function readConfig(
+  ctx: PackContext,
+): Required<Pick<ExaConfig, "apiKeyEnv" | "baseUrl">> & ExaConfig {
   const cfg = ctx.config as ExaConfig;
   return {
     apiKeyEnv: cfg.apiKeyEnv ?? "EXA_API_KEY",
@@ -59,7 +61,8 @@ const pack = definePack({
       name: "EXA_API_KEY",
       required: true,
       secret: true,
-      description: "API key for Exa search (https://exa.ai). Used as a bearer token to the Exa MCP.",
+      description:
+        "API key for Exa search (https://exa.ai). Used as a bearer token to the Exa MCP.",
     },
   ],
   mcpServers(ctx: PackContext): McpServerConfig[] {

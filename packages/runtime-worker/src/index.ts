@@ -9,20 +9,28 @@ import {
   closeSharedPool,
   createCancelSignal,
   DEFAULT_BUDGET,
+  dispatchScheduledNotifications,
   ensureInitialMessage,
   ensureRun,
   getKvSafe,
   getPool,
+  getSchedule,
   installShutdownHandlers,
   type Logger,
+  listEnabledSchedules,
   type Message,
+  nextCronFire,
+  type PoolClient,
   type RunStepResult,
+  recordScheduleRun,
   runAgent,
+  SCHEDULE_NOTIFY_CHANNEL,
   serializeError,
   setRunStatus,
   type ToolCall,
   type ToolResult,
   type UserId,
+  updateSchedule,
 } from "@render-harness/core";
 import { PgBoss, type Job as PgBossJob } from "pg-boss";
 
@@ -107,6 +115,7 @@ export interface WorkerHandle {
 }
 
 const DEFAULT_QUEUE = "agent-runs";
+const SCHEDULE_QUEUE = "harness-scheduled-runs";
 
 const DEFAULT_CHECKPOINT: CheckpointPolicy = {
   kind: "soft",
@@ -138,9 +147,14 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
   });
   await boss.start();
   await boss.createQueue(queue);
+  await boss.createQueue(SCHEDULE_QUEUE);
   logger.info({ queue, concurrency }, "runtime-worker started");
 
   const inflight = new Set<string>();
+  const scheduledBoss = boss as unknown as PgBossScheduler;
+  const knownScheduleNames = new Set<string>();
+  let reconcileTimer: ReturnType<typeof setInterval> | null = null;
+  let scheduleListenClient: PoolClient | null = null;
 
   const handler = async (jobs: PgBossJob<RunJob>[]) => {
     for (const job of jobs) {
@@ -203,6 +217,23 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
           );
         }
       }
+      if (data.metadata?.scheduleId && data.userId && isTerminalResult(result)) {
+        try {
+          await dispatchScheduledNotifications({
+            pool,
+            runId: data.runId,
+            scheduleId: String(data.metadata.scheduleId),
+            userId: data.userId,
+            operatorUrl: process.env.RENDER_EXTERNAL_URL ?? null,
+            logger: log,
+          });
+        } catch (err) {
+          log.error(
+            { err: err instanceof Error ? err.message : String(err) },
+            "scheduled notification dispatch errored; ignoring",
+          );
+        }
+      }
       await handleResult(boss, queue, data, result, log);
     } catch (err) {
       const serialized = serializeError(err, "JobError");
@@ -211,12 +242,11 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
       // anything else reading run state) sees a terminal status. Without
       // this, a job that throws on its first attempt leaves the row stuck
       // at `running` forever even after pg-boss gives up.
-      await setRunStatus(pool, data.runId, "failed", { error: serialized }).catch(
-        (updateErr) =>
-          log.error(
-            { err: updateErr instanceof Error ? updateErr.message : String(updateErr) },
-            "failed to mark run as failed",
-          ),
+      await setRunStatus(pool, data.runId, "failed", { error: serialized }).catch((updateErr) =>
+        log.error(
+          { err: updateErr instanceof Error ? updateErr.message : String(updateErr) },
+          "failed to mark run as failed",
+        ),
       );
       throw err;
     } finally {
@@ -225,7 +255,102 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     }
   };
 
+  const processScheduledJob = async (data: ScheduledRunJob) => {
+    const log = logger.child({ scheduleId: data.scheduleId });
+    const schedule = await getSchedule(pool, { id: data.scheduleId });
+    if (!schedule?.enabled) {
+      log.info("scheduled job skipped; schedule missing or disabled");
+      return;
+    }
+    const agentDef = await resolveAgent(opts.agent, {
+      runId: "scheduled-preview",
+      agentName: schedule.agentName,
+    });
+    const firedAt = new Date();
+    const runId = await enqueueRun({
+      pool,
+      boss,
+      queue,
+      agentName: agentDef.name,
+      agentVersion: agentDef.version,
+      userId: schedule.userId,
+      initialContent: [{ type: "text", text: schedule.input }],
+      metadata: { scheduleId: schedule.id, firedAt: firedAt.toISOString(), ...schedule.metadata },
+    });
+    await recordScheduleRun(pool, { scheduleId: schedule.id, runId, firedAt });
+    let nextFireAt: Date | null = null;
+    try {
+      nextFireAt = nextCronFire(schedule.cronExpr, schedule.timezone);
+    } catch {
+      nextFireAt = null;
+    }
+    await updateSchedule(pool, {
+      id: schedule.id,
+      patch: { lastFiredAt: firedAt, nextFireAt },
+    });
+    log.info({ runId, agent: agentDef.name }, "scheduled run enqueued");
+  };
+
+  const reconcileSchedules = async () => {
+    const schedules = await listEnabledSchedules(pool);
+    const activeNames = new Set<string>();
+    for (const schedule of schedules) {
+      const name = scheduleJobName(schedule.id);
+      activeNames.add(name);
+      await scheduledBoss.schedule(
+        name,
+        schedule.cronExpr,
+        { scheduleId: schedule.id },
+        {
+          tz: schedule.timezone,
+          queue: SCHEDULE_QUEUE,
+        },
+      );
+      knownScheduleNames.add(name);
+    }
+    for (const name of Array.from(knownScheduleNames)) {
+      if (activeNames.has(name)) continue;
+      await scheduledBoss.unschedule(name);
+      knownScheduleNames.delete(name);
+    }
+  };
+
   await boss.work<RunJob>(queue, { batchSize: concurrency, pollingIntervalSeconds: 2 }, handler);
+  await boss.work<ScheduledRunJob>(
+    SCHEDULE_QUEUE,
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    async (jobs) => {
+      for (const job of jobs) {
+        await processScheduledJob(job.data);
+      }
+    },
+  );
+
+  await reconcileSchedules().catch((err) =>
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "initial schedule reconciliation failed",
+    ),
+  );
+  reconcileTimer = setInterval(() => {
+    void reconcileSchedules().catch((err) =>
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "schedule reconciliation failed",
+      ),
+    );
+  }, 30_000);
+
+  scheduleListenClient = await pool.connect();
+  await scheduleListenClient.query(`LISTEN "${SCHEDULE_NOTIFY_CHANNEL}"`);
+  scheduleListenClient.on("notification", () => {
+    void reconcileSchedules().catch((err) =>
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "schedule reconciliation after notify failed",
+      ),
+    );
+  });
 
   let stopping = false;
   const stop = async () => {
@@ -233,6 +358,13 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     stopping = true;
     logger.warn({ inflight: inflight.size }, "stopping runtime-worker; waiting for inflight jobs");
     try {
+      if (reconcileTimer) clearInterval(reconcileTimer);
+      const listenClient = scheduleListenClient;
+      if (listenClient) {
+        await listenClient.query(`UNLISTEN "${SCHEDULE_NOTIFY_CHANNEL}"`).catch(() => {});
+        listenClient.release();
+        scheduleListenClient = null;
+      }
       await boss.stop({ graceful: true, timeout: 30_000 });
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "boss.stop errored");
@@ -255,6 +387,20 @@ export async function startWorkerAndWait(opts: WorkerOpts): Promise<never> {
   // Keep the event loop alive; the SIGTERM handler will exit the process.
   await new Promise<never>(() => {});
   return undefined as never;
+}
+
+interface ScheduledRunJob {
+  scheduleId: string;
+}
+
+interface PgBossScheduler {
+  schedule: (
+    name: string,
+    cron: string,
+    data: ScheduledRunJob,
+    options?: { tz?: string; queue?: string },
+  ) => Promise<unknown>;
+  unschedule: (name: string) => Promise<unknown>;
 }
 
 /**
@@ -319,6 +465,16 @@ export async function enqueueRun(opts: {
 async function resolveAgent(source: WorkerOpts["agent"], job: RunJob): Promise<AgentDefinition> {
   if (typeof source === "function") return source(job);
   return source;
+}
+
+function scheduleJobName(scheduleId: string): string {
+  return `harness-sched-${scheduleId}`;
+}
+
+function isTerminalResult(result: RunStepResult): boolean {
+  return (
+    result.status === "completed" || result.status === "failed" || result.status === "cancelled"
+  );
 }
 
 async function handleResult(

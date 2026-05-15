@@ -5,14 +5,7 @@ import { formatRelative, formatTokens, formatUsd } from "../components/format.js
 import { StatusBadge } from "../components/StatusBadge.js";
 import { RunDetail } from "./RunDetail.js";
 
-const STATUSES: RunStatus[] = [
-  "pending",
-  "running",
-  "paused",
-  "completed",
-  "failed",
-  "cancelled",
-];
+const STATUSES: RunStatus[] = ["pending", "running", "paused", "completed", "failed", "cancelled"];
 
 interface RunsTabProps {
   runId: string | null;
@@ -187,17 +180,9 @@ function RunList({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="border-b border-line px-3 py-2 text-left font-medium">{children}</th>
-  );
+  return <th className="border-b border-line px-3 py-2 text-left font-medium">{children}</th>;
 }
 
-function Td({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2 align-top ${className ?? ""}`}>{children}</td>;
 }

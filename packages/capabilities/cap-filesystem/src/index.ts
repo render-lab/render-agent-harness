@@ -33,11 +33,10 @@
  *     a symlink under root pointing at /etc/passwd cannot escape.
  */
 
-import { dirname, join, resolve, sep } from "node:path";
-import { realpath, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { dirname as urlDirname, join as urlJoin } from "node:path";
+import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve, sep, dirname as urlDirname, join as urlJoin } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type LocalToolHandler, type SkillMetadata } from "@render-harness/core";
+import type { LocalToolHandler, SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
 
 const HERE = urlDirname(fileURLToPath(import.meta.url));
@@ -59,7 +58,7 @@ const pack = definePack({
     const cfg = (ctx.config ?? {}) as FsConfig;
     if (!cfg.root || typeof cfg.root !== "string") {
       throw new Error(
-        'cap-filesystem: `config.root` is required (absolute path the agent can read/write).',
+        "cap-filesystem: `config.root` is required (absolute path the agent can read/write).",
       );
     }
     // Resolve symlinks on the root once so subsequent realpath() checks of
@@ -326,7 +325,9 @@ function writeFileTool(root: string, maxBytes: number): LocalToolHandler {
       try {
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, args.content, "utf8");
-        return { content: `fs.write_file: wrote ${Buffer.byteLength(args.content, "utf8")} bytes to ${args.path}` };
+        return {
+          content: `fs.write_file: wrote ${Buffer.byteLength(args.content, "utf8")} bytes to ${args.path}`,
+        };
       } catch (err) {
         return { content: `fs.write_file: ${(err as Error).message}`, isError: true };
       }
@@ -365,7 +366,10 @@ function deleteFileTool(root: string): LocalToolHandler {
       try {
         const s = await stat(real.abs);
         if (s.isDirectory()) {
-          return { content: `fs.delete_file: refusing to delete directory: ${path}`, isError: true };
+          return {
+            content: `fs.delete_file: refusing to delete directory: ${path}`,
+            isError: true,
+          };
         }
         await rm(real.abs);
         return { content: `fs.delete_file: deleted ${path}` };

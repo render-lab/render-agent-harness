@@ -53,13 +53,13 @@ async function main(): Promise<void> {
     );
   }
 
-  const gallery = await resolveGallery(
-    harnessRoot ? { liveSourceRoot: harnessRoot } : {},
-  ).catch((err) => {
-    stderr.write(`failed to load gallery: ${describeError(err)}\n`);
-    exit(2);
-    throw err; // unreachable, but appeases TS
-  });
+  const gallery = await resolveGallery(harnessRoot ? { liveSourceRoot: harnessRoot } : {}).catch(
+    (err) => {
+      stderr.write(`failed to load gallery: ${describeError(err)}\n`);
+      exit(2);
+      throw err; // unreachable, but appeases TS
+    },
+  );
 
   let answers: Answers;
   try {

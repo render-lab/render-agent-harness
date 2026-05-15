@@ -41,7 +41,15 @@ export type { RunAgentArgs, RunAgentDeps } from "./loop.js";
 export { runAgent } from "./loop.js";
 export type { McpToolHandle } from "./mcp.js";
 export { connectMcpServers, exposedToolName, parseExposedToolName } from "./mcp.js";
+export { dispatchScheduledNotifications } from "./notifications/index.js";
 export { assembleSystemPrompt } from "./prompt.js";
+export {
+  isRecord,
+  nextCronFire,
+  normalizeCron,
+  normalizeNotifications,
+  normalizeTimezone,
+} from "./schedules.js";
 export type { ShutdownOpts } from "./shutdown.js";
 export { installShutdownHandlers } from "./shutdown.js";
 export {
@@ -61,8 +69,10 @@ export type {
   ListConversationsPage,
   ListRunsFilter,
   ListRunsPage,
+  ListSchedulesFilter,
   NotifyPayload,
   ToolCallWithResult,
+  UpdateSchedulePatch,
   UsageRollupRow,
 } from "./state/repo.js";
 export {
@@ -71,28 +81,41 @@ export {
   countRunMessages,
   createConversation,
   createRun,
+  createSchedule,
+  deleteSchedule,
   ensureInitialMessage,
   ensureRun,
   findActiveRunForConversation,
   findExistingToolCall,
+  getSchedule,
   listConversations,
+  listEnabledSchedules,
+  listInboxItems,
   listMessages,
   listRuns,
+  listScheduleRuns,
+  listSchedules,
   listToolCalls,
   loadConversation,
   loadConversationForUser,
   loadConversationMessages,
+  loadLastAssistantText,
   loadMessage,
   loadRun,
   loadRunForUser,
   loadToolResult,
+  recordNotificationDelivery,
+  recordScheduleRun,
   recordToolCall,
   recordToolResult,
   rollupConversation,
+  SCHEDULE_NOTIFY_CHANNEL,
   STREAM_NOTIFY_CHANNEL,
   setRunStatus,
+  setScheduleEnabled,
   setToolCallStatus,
   updateRunCursor,
+  updateSchedule,
 } from "./state/repo.js";
 export { applyMigrations } from "./state/schema.js";
 export {
@@ -115,6 +138,9 @@ export type {
   MessageId,
   MessageRole,
   ModelSpec,
+  NotificationConfig,
+  NotificationDelivery,
+  NotificationKind,
   Permissions,
   RunCursor,
   RunId,
@@ -122,6 +148,9 @@ export type {
   RunStepResult,
   RuntimeHooks,
   SamplingParams,
+  Schedule,
+  ScheduleId,
+  ScheduleRun,
   SerializedError,
   SkillMetadata,
   TextBlock,

@@ -23,7 +23,7 @@ export function UiToggle({
         onNext={onNext}
         onPrev={onPrev}
       >
-        <p className="label">// skipped</p>
+        <p className="label">{"// skipped"}</p>
       </StepShell>
     );
   }

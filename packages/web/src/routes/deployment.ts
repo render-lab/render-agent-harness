@@ -1,9 +1,9 @@
-import type { AgentDefinition, UserId } from "@render-harness/core";
 import type {
   DeploymentAgentInfo,
   DeploymentAgentRuntime,
   DeploymentInfo,
 } from "@render-harness/contracts";
+import type { AgentDefinition, UserId } from "@render-harness/core";
 import type { Hono } from "hono";
 
 export interface DeploymentRouteContext {
@@ -19,10 +19,7 @@ export interface DeploymentRouteContext {
   deployment?: DeploymentInfo;
 }
 
-export function registerDeploymentRoutes(
-  app: Hono,
-  ctx: DeploymentRouteContext,
-): void {
+export function registerDeploymentRoutes(app: Hono, ctx: DeploymentRouteContext): void {
   const { auth, agents, pathPrefix, deployment } = ctx;
   const r = (path: string) => `${pathPrefix}${path}`;
 
@@ -39,12 +36,9 @@ export function registerDeploymentRoutes(
  * name (or "agents" for multi), each agent listed without runtimes
  * (we can't know the trigger topology from the AgentDefinition alone).
  */
-function fallbackDeployment(
-  agents: Record<string, AgentDefinition>,
-): DeploymentInfo {
+function fallbackDeployment(agents: Record<string, AgentDefinition>): DeploymentInfo {
   const values = Object.values(agents);
-  const name =
-    values.length === 1 && values[0] ? values[0].name : "agents";
+  const name = values.length === 1 && values[0] ? values[0].name : "agents";
   const list: DeploymentAgentInfo[] = values.map((a) => ({
     id: a.name,
     name: a.name,

@@ -29,7 +29,7 @@ const MIGRATION_LOCK_ID = 7374737831n;
  * every `IF NOT EXISTS` a no-op.
  */
 export async function applyMigrations(pool: Pool): Promise<string[]> {
-  const migrations = ["0001_init.sql", "0002_conversations.sql"];
+  const migrations = ["0001_init.sql", "0002_conversations.sql", "0003_schedules.sql"];
   const applied: string[] = [];
 
   const client = await pool.connect();
@@ -57,9 +57,7 @@ export async function applyMigrations(pool: Pool): Promise<string[]> {
         applied.push(name);
       }
     } finally {
-      await client.query("SELECT pg_advisory_unlock($1::bigint)", [
-        MIGRATION_LOCK_ID.toString(),
-      ]);
+      await client.query("SELECT pg_advisory_unlock($1::bigint)", [MIGRATION_LOCK_ID.toString()]);
     }
   } finally {
     client.release();

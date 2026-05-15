@@ -365,6 +365,9 @@ importers:
       '@render-harness/contracts':
         specifier: workspace:*
         version: link:../contracts
+      cron-parser:
+        specifier: ^5.5.0
+        version: 5.5.0
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1

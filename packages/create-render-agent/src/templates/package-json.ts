@@ -20,8 +20,7 @@ import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
 export function packageJson(answers: Answers): string {
   const multi = isMultiRuntime(answers);
   const runtimeKinds = answers.runtimes.map((r) => r.kind);
-  const harnessDep = (pkgName: string): string =>
-    harnessDepVersion(pkgName, answers.harnessRoot);
+  const harnessDep = (pkgName: string): string => harnessDepVersion(pkgName, answers.harnessRoot);
 
   const scripts: Record<string, string> = {
     build: "render-harness-build && tsup",

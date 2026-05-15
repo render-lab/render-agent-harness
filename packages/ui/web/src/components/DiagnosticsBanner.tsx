@@ -54,14 +54,10 @@ export function DiagnosticsBanner() {
         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs"
       >
         <div className="flex items-center gap-2">
-          <span className="label !text-current">
-            {hasErrors ? "// setup error" : "// warning"}
-          </span>
+          <span className="label !text-current">{hasErrors ? "// setup error" : "// warning"}</span>
           <span>{headlineCheck.title}</span>
           {errors.length + warnings.length > 1 && (
-            <span className="text-muted">
-              · {errors.length + warnings.length - 1} more
-            </span>
+            <span className="text-muted">· {errors.length + warnings.length - 1} more</span>
           )}
         </div>
         <span className="text-muted">{open ? "[-]" : "[+]"}</span>

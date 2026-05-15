@@ -155,4 +155,3 @@ export function parseExposedToolName(exposed: string): { server: string; name: s
 function sanitize(s: string): string {
   return s.replace(/[^A-Za-z0-9_]/g, "_");
 }
-

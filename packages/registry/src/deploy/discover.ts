@@ -54,7 +54,10 @@ export async function discoverContext(opts: DiscoverOpts): Promise<DiscoveredCon
 
 function readGitRemote(cwd: string, remoteName: string): string | null {
   try {
-    return execSync(`git remote get-url ${remoteName}`, { cwd, stdio: ["ignore", "pipe", "ignore"] })
+    return execSync(`git remote get-url ${remoteName}`, {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
       .toString()
       .trim();
   } catch {

@@ -1,12 +1,6 @@
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { useEffect, useState } from "react";
-import {
-  type AgentSummary,
-  ApiError,
-  type HealthInfo,
-  getHealth,
-  listAgents,
-} from "../../api.js";
+import { type AgentSummary, ApiError, getHealth, type HealthInfo, listAgents } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
 import { useDeploymentName } from "../../deployment-context.js";
 import { CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
@@ -51,13 +45,15 @@ export function CustomizingSection() {
         <>
           <Markdown text={PROSE_INTRO} />
           <div className="border border-line p-3 text-xs">
-            <div className="label mb-2">// the reload loop</div>
+            <div className="label mb-2">{"// the reload loop"}</div>
             <div className="space-y-1">
               <div>
-                1. edit <code className="bg-code-bg px-1">render-harness.yaml</code> (or the agent's <code className="bg-code-bg px-1">src/*.ts</code>)
+                1. edit <code className="bg-code-bg px-1">render-harness.yaml</code> (or the agent's{" "}
+                <code className="bg-code-bg px-1">src/*.ts</code>)
               </div>
               <div>
-                2. restart <CmdBadge cmd={RELOAD_CMD} /> (or let <code className="bg-code-bg px-1">tsx</code> reload it for you)
+                2. restart <CmdBadge cmd={RELOAD_CMD} /> (or let{" "}
+                <code className="bg-code-bg px-1">tsx</code> reload it for you)
               </div>
               <div>3. refresh the chat tab; the new behavior is live</div>
             </div>
@@ -65,7 +61,7 @@ export function CustomizingSection() {
 
           <Markdown text={PROSE_PROMPT} />
           <CodeBlock language="excerpt — render-harness.yaml">
-{`agents:
+            {`agents:
   - id: ${name}
     agent:
       kind: builtin
@@ -79,7 +75,7 @@ export function CustomizingSection() {
 
           <Markdown text={PROSE_MODEL} />
           <CodeBlock language="excerpt — render-harness.yaml">
-{`shared:
+            {`shared:
   model:
     provider: openai-compat
     model: anthropic/claude-sonnet-4
@@ -93,7 +89,7 @@ export function CustomizingSection() {
 
           <Markdown text={PROSE_MCP} />
           <CodeBlock language="excerpt — render-harness.yaml">
-{`agents:
+            {`agents:
   - id: ${name}
     mcpServers:
       - name: render
@@ -108,8 +104,9 @@ export function CustomizingSection() {
         - render__delete_keyvalue`}
           </CodeBlock>
           <p className="text-xs text-muted">
-            Set <code className="bg-code-bg px-1">RENDER_API_KEY</code> in <code className="bg-code-bg px-1">.env</code>{" "}
-            (read-only is the default behavior; the explicit deny list above hardens it).
+            Set <code className="bg-code-bg px-1">RENDER_API_KEY</code> in{" "}
+            <code className="bg-code-bg px-1">.env</code> (read-only is the default behavior; the
+            explicit deny list above hardens it).
           </p>
 
           <Markdown text={PROSE_CLOSE} />
@@ -165,7 +162,10 @@ function CustomizingLivePanel() {
             v={formatDistanceToNowStrict(parseISO(health.bootedAt), { addSuffix: true })}
           />
           <KV k="version" v={agents[0]?.version ?? "—"} />
-          <KV k="model" v={agents[0] ? `${agents[0].model.provider}/${agents[0].model.model}` : "—"} />
+          <KV
+            k="model"
+            v={agents[0] ? `${agents[0].model.provider}/${agents[0].model.model}` : "—"}
+          />
           <KV k="mcp servers" v={String(agents[0]?.mcpServers.length ?? 0)} />
           <div className="hairline-top mt-3 border-t border-line pt-3 text-[11px] text-muted">
             Edit <code className="bg-code-bg px-1">agent.ts</code>, run{" "}

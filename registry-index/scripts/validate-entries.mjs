@@ -13,8 +13,8 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseHarnessConfigYaml, parseIndexJson } from "@render-harness/registry";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

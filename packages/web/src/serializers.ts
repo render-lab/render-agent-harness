@@ -1,5 +1,17 @@
-import type { ConversationSummary, MessageRecord, RunSummary } from "@render-harness/contracts";
-import type { AgentConversation, AgentRun, Message } from "@render-harness/core";
+import type {
+  ConversationSummary,
+  InboxItem,
+  MessageRecord,
+  RunSummary,
+  ScheduleSummary,
+} from "@render-harness/contracts";
+import type {
+  AgentConversation,
+  AgentRun,
+  Message,
+  NotificationDelivery,
+  Schedule,
+} from "@render-harness/core";
 
 export function serializeMessage(m: Message): MessageRecord {
   return {
@@ -41,5 +53,38 @@ export function serializeConversation(c: AgentConversation): ConversationSummary
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
     lastActiveAt: c.lastActiveAt.toISOString(),
+  };
+}
+
+export function serializeSchedule(s: Schedule): ScheduleSummary {
+  return {
+    id: s.id,
+    userId: s.userId,
+    agentName: s.agentName,
+    input: s.input,
+    metadata: s.metadata,
+    cronExpr: s.cronExpr,
+    timezone: s.timezone,
+    notifications: s.notifications,
+    enabled: s.enabled,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+    lastFiredAt: s.lastFiredAt?.toISOString() ?? null,
+    nextFireAt: s.nextFireAt?.toISOString() ?? null,
+  };
+}
+
+export function serializeInboxItem(item: NotificationDelivery): InboxItem {
+  return {
+    id: item.id,
+    runId: item.runId,
+    scheduleId: item.scheduleId,
+    userId: item.userId,
+    kind: item.kind,
+    target: item.target,
+    summary: item.summary,
+    status: item.status,
+    error: item.error,
+    createdAt: item.createdAt.toISOString(),
   };
 }

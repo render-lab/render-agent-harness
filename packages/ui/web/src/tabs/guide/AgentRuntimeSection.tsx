@@ -55,7 +55,7 @@ export function AgentRuntimeSection() {
         <>
           <Markdown text={PROSE_AGENT} />
           <CodeBlock language="src/agent.ts">
-{`import { type AgentDefinition, defineAgent } from "@render-harness/core";
+            {`import { type AgentDefinition, defineAgent } from "@render-harness/core";
 
 const SYSTEM_PROMPT = \`\\
 You are a helpful agent. Read the latest user message in context with
@@ -81,7 +81,7 @@ export function buildAgent(): AgentDefinition {
           {hasWorker ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <CodeBlock language="src/web.ts">
-{`import { serveWeb } from "@render-harness/web";
+                {`import { serveWeb } from "@render-harness/web";
 import { buildAgent } from "./agent.js";
 
 await serveWeb({
@@ -91,7 +91,7 @@ await serveWeb({
 });`}
               </CodeBlock>
               <CodeBlock language="src/worker.ts">
-{`import { startWorkerAndWait } from "@render-harness/runtime-worker";
+                {`import { startWorkerAndWait } from "@render-harness/runtime-worker";
 import { buildAgent } from "./agent.js";
 
 await startWorkerAndWait({
@@ -102,7 +102,7 @@ await startWorkerAndWait({
             </div>
           ) : (
             <CodeBlock language="src/web.ts">
-{`import { serveAgent } from "@render-harness/runtime-web";
+              {`import { serveAgent } from "@render-harness/runtime-web";
 import { buildAgent } from "./agent.js";
 
 await serveAgent({ agent: buildAgent() });`}
@@ -113,10 +113,15 @@ await serveAgent({ agent: buildAgent() });`}
             <>
               <h3 className="label mt-6">why two processes?</h3>
               <p>
-                Splitting the public API from the agent loop lets you scale them independently and put the worker on the private network in production. The web service stays cheap, predictable, and answerable to load balancers; the worker can be CPU-heavy and run for hours without breaking the request budget.
+                Splitting the public API from the agent loop lets you scale them independently and
+                put the worker on the private network in production. The web service stays cheap,
+                predictable, and answerable to load balancers; the worker can be CPU-heavy and run
+                for hours without breaking the request budget.
               </p>
               <p>
-                Locally they share the same image — Compose just runs <code className="bg-code-bg px-1">node dist/web.js</code> for one and <code className="bg-code-bg px-1">node dist/worker.js</code> for the other.
+                Locally they share the same image — Compose just runs{" "}
+                <code className="bg-code-bg px-1">node dist/web.js</code> for one and{" "}
+                <code className="bg-code-bg px-1">node dist/worker.js</code> for the other.
               </p>
             </>
           )}

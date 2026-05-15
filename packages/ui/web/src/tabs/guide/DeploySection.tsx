@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, getBlueprint } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
 import { useDeployment, useDeploymentName } from "../../deployment-context.js";
-import { CTA, CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
+import { CmdBadge, CodeBlock, CTA, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 function buildIntro(name: string): string {
   return `
@@ -89,7 +89,7 @@ export function DeploySection() {
           <Markdown text={buildIntro(name)} />
           {services.length > 0 && (
             <div className="border border-line p-3 text-xs">
-              <div className="label mb-2">// services this bundle deploys</div>
+              <div className="label mb-2">{"// services this bundle deploys"}</div>
               <ul className="space-y-1 font-mono">
                 {services.map((s) => (
                   <li key={s.label}>
@@ -103,8 +103,8 @@ export function DeploySection() {
 
           <p className="text-xs text-muted">
             Want to see the generated yaml inline? The live panel on the right has a "fetch
-            blueprint" button — it returns a starter file based on the agent and queue this
-            instance is configured with.
+            blueprint" button — it returns a starter file based on the agent and queue this instance
+            is configured with.
           </p>
 
           <Markdown text={PROSE_ENV} />

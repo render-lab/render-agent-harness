@@ -33,7 +33,8 @@ type Provider = { kind: "openai"; apiKey: string } | { kind: "fal"; apiKey: stri
 
 function pickProvider(env: NodeJS.ProcessEnv): Provider | null {
   const forced = (env.HARNESS_IMAGE_PROVIDER ?? "").toLowerCase().trim();
-  if (forced === "openai" && env.OPENAI_API_KEY) return { kind: "openai", apiKey: env.OPENAI_API_KEY };
+  if (forced === "openai" && env.OPENAI_API_KEY)
+    return { kind: "openai", apiKey: env.OPENAI_API_KEY };
   if (forced === "fal" && env.FAL_KEY) return { kind: "fal", apiKey: env.FAL_KEY };
   if (forced) return null;
   if (env.OPENAI_API_KEY) return { kind: "openai", apiKey: env.OPENAI_API_KEY };
@@ -59,7 +60,11 @@ function buildHandler(provider: Provider, env: NodeJS.ProcessEnv): LocalToolHand
         type: "object",
         additionalProperties: false,
         properties: {
-          prompt: { type: "string", description: "Description of the desired image.", minLength: 1 },
+          prompt: {
+            type: "string",
+            description: "Description of the desired image.",
+            minLength: 1,
+          },
           size: {
             type: "string",
             description: "Image size. Defaults to 1024x1024.",
@@ -84,7 +89,8 @@ function buildHandler(provider: Provider, env: NodeJS.ProcessEnv): LocalToolHand
 
       try {
         const urls = await runProvider(provider, prompt, size, n, signal, env);
-        if (urls.length === 0) return { content: "image_generate: provider returned no images", isError: true };
+        if (urls.length === 0)
+          return { content: "image_generate: provider returned no images", isError: true };
         return { content: urls.map((u, i) => `${i + 1}. ${u}`).join("\n") };
       } catch (err) {
         return {

@@ -59,8 +59,7 @@ function buildHandler(ctx: BuiltinContext, workflowSlug: string): LocalToolHandl
         properties: {
           agent: {
             type: "string",
-            description:
-              "Bundle agent id to invoke (must be a workflowTask agent in this bundle).",
+            description: "Bundle agent id to invoke (must be a workflowTask agent in this bundle).",
             minLength: 1,
           },
           input: {

@@ -168,7 +168,9 @@ describe("fetch_url response handling", () => {
     );
     const out = await call({ url: "https://example.com/img.png" });
     expect(out.isError).toBeFalsy();
-    expect(out.content).toMatch(/<binary url="https:\/\/example\.com\/img\.png" status=200 content_type="image\/png" size=4>/);
+    expect(out.content).toMatch(
+      /<binary url="https:\/\/example\.com\/img\.png" status=200 content_type="image\/png" size=4>/,
+    );
   });
 
   it("truncates body at HARNESS_FETCH_URL_MAX_BYTES", async () => {

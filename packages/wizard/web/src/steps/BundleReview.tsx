@@ -23,7 +23,7 @@ export function BundleReview({
     <div className="space-y-5">
       <div>
         <div className="hr-section">
-          <span>// SEALED BUNDLE</span>
+          <span>{"// SEALED BUNDLE"}</span>
         </div>
         <p className="mt-3 text-sm text-muted">
           This template ships {bundle.manifest.agents.length} agents that share one harness
@@ -46,7 +46,7 @@ export function BundleReview({
 
       <div className="space-y-3">
         <label className="block">
-          <span className="label">// PROJECT NAME</span>
+          <span className="label">{"// PROJECT NAME"}</span>
           <input
             type="text"
             value={agentName}
@@ -61,7 +61,7 @@ export function BundleReview({
         </label>
 
         <label className="block">
-          <span className="label">// DESCRIPTION</span>
+          <span className="label">{"// DESCRIPTION"}</span>
           <input
             type="text"
             value={description}

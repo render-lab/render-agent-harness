@@ -18,7 +18,7 @@ export function Template({
     <div className="space-y-5">
       <div>
         <div className="hr-section">
-          <span>// PICK A STARTING POINT</span>
+          <span>{"// PICK A STARTING POINT"}</span>
         </div>
         <p className="mt-3 text-sm text-muted">
           Templates pre-fill the wizard with sensible defaults. Override any value in the next
@@ -32,7 +32,7 @@ export function Template({
           onClick={() => onPick(null)}
           className="block w-full border border-line bg-canvas p-4 text-left hover:border-accent hover:text-accent"
         >
-          <div className="label">// BLANK</div>
+          <div className="label">{"// BLANK"}</div>
           <div className="mt-1 text-sm">Fill everything in yourself.</div>
         </button>
         {gallery.agents.map((t) => (

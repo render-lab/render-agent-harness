@@ -91,7 +91,9 @@ export async function executePlan(opts: ExecutorOpts): Promise<ExecutorResult> {
     lock = await recordResource(opts.projectRoot, lock, {
       name: resource.name,
       kind:
-        resource.kind === "service" ? resource.subkind : (resource.kind as DeployLock["resources"][string]["kind"]),
+        resource.kind === "service"
+          ? resource.subkind
+          : (resource.kind as DeployLock["resources"][string]["kind"]),
       id,
     });
     created.push(resource.name);

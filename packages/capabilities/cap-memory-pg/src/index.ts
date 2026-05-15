@@ -24,7 +24,7 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type LocalToolHandler, type SkillMetadata, getPool } from "@render-harness/core";
+import { getPool, type LocalToolHandler, type SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -177,7 +177,9 @@ const pack = definePack({
           [namespace, args.query, args.tags ?? null, limit],
         );
         if (rows.rows.length === 0) {
-          return { content: `memory.search: no matches for "${args.query}" in namespace "${namespace}"` };
+          return {
+            content: `memory.search: no matches for "${args.query}" in namespace "${namespace}"`,
+          };
         }
         const lines = rows.rows.map(
           (r, i) =>

@@ -4,11 +4,12 @@ import { DeploymentProvider, useDeploymentName } from "./deployment-context.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
 import { ConfigTab } from "./tabs/ConfigTab.js";
-import { GuideTab, type GuideSectionId, isGuideSectionId } from "./tabs/GuideTab.js";
+import { type GuideSectionId, GuideTab, isGuideSectionId } from "./tabs/GuideTab.js";
 import { RunsTab } from "./tabs/RunsTab.js";
+import { ScheduledTab } from "./tabs/ScheduledTab.js";
 import { UsageTab } from "./tabs/UsageTab.js";
 
-type TabId = "chat" | "runs" | "agents" | "config" | "usage" | "guide";
+type TabId = "chat" | "runs" | "agents" | "scheduled" | "config" | "usage" | "guide";
 
 interface Route {
   tab: TabId;
@@ -28,12 +29,13 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "chat", label: "CHAT" },
   { id: "runs", label: "RUNS" },
   { id: "agents", label: "AGENTS" },
+  { id: "scheduled", label: "SCHEDULED" },
   { id: "config", label: "CONFIG" },
   { id: "usage", label: "USAGE" },
   { id: "guide", label: "GUIDE" },
 ];
 
-const TAB_IDS = new Set<TabId>(["chat", "runs", "agents", "config", "usage", "guide"]);
+const TAB_IDS = new Set<TabId>(["chat", "runs", "agents", "scheduled", "config", "usage", "guide"]);
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
@@ -41,8 +43,7 @@ function parseHash(): Route {
   const tab: TabId = head && TAB_IDS.has(head as TabId) ? (head as TabId) : "chat";
   const runId = tab === "runs" && id ? decodeURIComponent(id) : null;
   const conversationId = tab === "chat" && id ? decodeURIComponent(id) : null;
-  const guideSection =
-    tab === "guide" && id && isGuideSectionId(id) ? id : null;
+  const guideSection = tab === "guide" && id && isGuideSectionId(id) ? id : null;
   return { tab, runId, conversationId, guideSection };
 }
 
@@ -85,9 +86,7 @@ function AppInner() {
   const onChatConversationChange = useCallback(
     (conversationId: string | null) => {
       if (route.tab !== "chat") return;
-      const target = conversationId
-        ? `#/chat/${encodeURIComponent(conversationId)}`
-        : `#/chat`;
+      const target = conversationId ? `#/chat/${encodeURIComponent(conversationId)}` : `#/chat`;
       if (window.location.hash === target) return;
       window.history.replaceState(null, "", target);
       setRoute({ tab: "chat", runId: null, conversationId, guideSection: null });
@@ -157,6 +156,7 @@ function AppInner() {
           />
         )}
         {route.tab === "agents" && <AgentsTab />}
+        {route.tab === "scheduled" && <ScheduledTab />}
         {route.tab === "config" && <ConfigTab />}
         {route.tab === "usage" && <UsageTab />}
         {route.tab === "guide" && (

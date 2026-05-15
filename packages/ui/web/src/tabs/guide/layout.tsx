@@ -18,29 +18,16 @@ interface GuideSectionShellProps {
   livePanel?: ReactNode;
 }
 
-export function GuideSectionShell({
-  title,
-  lede,
-  body,
-  livePanel,
-}: GuideSectionShellProps) {
+export function GuideSectionShell({ title, lede, body, livePanel }: GuideSectionShellProps) {
   return (
     <article className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-base font-bold uppercase tracking-wider">// {title}</h1>
+        <h1 className="text-base font-bold uppercase tracking-wider">{`// ${title}`}</h1>
         <p className="text-xs text-muted">{lede}</p>
       </header>
-      <div
-        className={
-          livePanel
-            ? "grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]"
-            : "max-w-3xl"
-        }
-      >
+      <div className={livePanel ? "grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]" : "max-w-3xl"}>
         <div className="min-w-0 space-y-4 text-sm leading-relaxed">{body}</div>
-        {livePanel && (
-          <aside className="lg:sticky lg:top-4 lg:self-start">{livePanel}</aside>
-        )}
+        {livePanel && <aside className="lg:sticky lg:top-4 lg:self-start">{livePanel}</aside>}
       </div>
     </article>
   );
@@ -53,13 +40,7 @@ export function GuideSectionShell({
  * doubles as the panel label — pass something like `"src/web.ts"` or
  * `"yaml"` to title the block.
  */
-export function CodeBlock({
-  children,
-  language,
-}: {
-  children: string;
-  language?: string;
-}) {
+export function CodeBlock({ children, language }: { children: string; language?: string }) {
   // Strip arbitrary file-path prefixes from the language hint when
   // mapping to a shiki language. e.g. "src/web.ts" -> "ts".
   const shikiLang = language ? extractLangFromHint(language) : undefined;
@@ -97,16 +78,10 @@ export function CmdBadge({ cmd }: { cmd: string }) {
 }
 
 /** Live-panel container with consistent header styling. */
-export function LivePanel({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+export function LivePanel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="border border-line p-3">
-      <div className="label mb-3">// live · {title}</div>
+      <div className="label mb-3">{`// live · ${title}`}</div>
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );

@@ -32,13 +32,9 @@
  * default export against {@link CapabilityPackSchema}.
  */
 
+import type { LocalToolHandler, McpServerConfig, SkillMetadata } from "@render-harness/core";
 import { z } from "zod";
-import type {
-  LocalToolHandler,
-  McpServerConfig,
-  SkillMetadata,
-} from "@render-harness/core";
-import { EnvVarSpecSchema, type EnvVarSpec } from "./schema.js";
+import { type EnvVarSpec, EnvVarSpecSchema } from "./schema.js";
 
 // ----------------------------------------------------------------------
 // Render service contributions

@@ -57,10 +57,13 @@ export function CapabilitiesSection() {
             </li>
             <li>
               <p>
-                Reference it in <code className="bg-code-bg px-1">render-harness.yaml</code> under <code className="bg-code-bg px-1">capabilities</code>. The harness materializes the pack at boot, wires its MCP servers into each agent, and the live panel below reads the pack list to show what's installed:
+                Reference it in <code className="bg-code-bg px-1">render-harness.yaml</code> under{" "}
+                <code className="bg-code-bg px-1">capabilities</code>. The harness materializes the
+                pack at boot, wires its MCP servers into each agent, and the live panel below reads
+                the pack list to show what's installed:
               </p>
               <CodeBlock language="excerpt — render-harness.yaml">
-{`capabilities:
+                {`capabilities:
   - pack: "@render-harness/cap-search-exa"
     config:
       defaultMaxResults: 10`}
@@ -74,7 +77,8 @@ export function CapabilitiesSection() {
             </li>
             <li>
               <p>
-                Restart <CmdBadge cmd="pnpm dev" />. Now ask the chat agent to "search the web for…" and watch the new tool fire.
+                Restart <CmdBadge cmd="pnpm dev" />. Now ask the chat agent to "search the web for…"
+                and watch the new tool fire.
               </p>
             </li>
           </ol>
@@ -137,8 +141,9 @@ function CapabilitiesLivePanel() {
             </ul>
           ) : (
             <div className="text-[11px] text-muted">
-              // none yet. Follow the recipe on the left and the pack name
-              will show up here after restart.
+              {
+                "// none yet. Follow the recipe on the left and the pack name will show up here after restart."
+              }
             </div>
           )}
           {agents[0] && (

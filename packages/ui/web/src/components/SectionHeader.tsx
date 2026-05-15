@@ -9,7 +9,7 @@
 export function SectionHeader({ title }: { title: string }) {
   return (
     <h2 className="hr-section">
-      <span>// {title}</span>
+      <span>{`// ${title}`}</span>
     </h2>
   );
 }
