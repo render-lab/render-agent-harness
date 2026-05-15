@@ -72,7 +72,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
       name: "web-chat-db",
       property: "connectionString",
     });
-    expect(web?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.sync).toBe(false);
+    expect(web?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.value).toBe("");
   });
 
   it("emits a cron service for an agent with [cron] runtime", async () => {
@@ -128,7 +128,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
       property: "connectionString",
     });
     const worker = services.find((s) => s.type === "pserv");
-    expect(worker?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.sync).toBe(false);
+    expect(worker?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.value).toBe("");
     expect(worker?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe(
       "support-agent-runs",
     );
@@ -284,7 +284,7 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       if (svc.type === "keyvalue") continue;
       const calendar = svc.envVars?.filter((e) => e.key === "CALENDAR_ICS_URL");
       expect(calendar).toHaveLength(1);
-      expect(calendar?.[0]?.sync).toBe(false);
+      expect(calendar?.[0]?.value).toBe("");
     }
   });
 
@@ -425,9 +425,9 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     );
     // RENDER_API_KEY is shared through the environment group in serialized project YAML.
     expect(projectTrigger?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(
-      false,
-    );
+    expect(
+      blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.value,
+    ).toBe("");
 
     // Trigger services have no model env — they don't run inference.
     expect(trigger?.envVars?.some((e) => e.key === "LLM_MODEL")).toBe(false);
@@ -474,9 +474,9 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       "delegator-workflows",
     );
     expect(projectWorker?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.sync).toBe(
-      false,
-    );
+    expect(
+      blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.value,
+    ).toBe("");
   });
 
   it("does NOT wire workflow env when the bundle has no workflow-task agents", async () => {

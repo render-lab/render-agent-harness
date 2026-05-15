@@ -50,6 +50,8 @@ export interface CreateScaffoldedRepoOpts {
    * avoid collisions; the actual created name is returned.
    */
   desiredName: string;
+  /** Exact repo name to create. When omitted, desiredName + random suffix is used. */
+  repoName?: string;
   description: string;
   files: Map<string, string>;
   /**
@@ -78,7 +80,7 @@ export interface CreateScaffoldedRepoResult {
 export async function createScaffoldedRepo(
   opts: CreateScaffoldedRepoOpts,
 ): Promise<CreateScaffoldedRepoResult> {
-  const repoName = `${opts.desiredName}-${randomSuffix()}`;
+  const repoName = opts.repoName ?? buildScaffoldRepoName(opts.desiredName);
 
   const { data: repo } = await opts.octokit.repos.createInOrg({
     org: opts.org,
@@ -130,6 +132,10 @@ export async function createScaffoldedRepo(
     repoUrl: repo.html_url,
     commitSha,
   };
+}
+
+export function buildScaffoldRepoName(desiredName: string): string {
+  return `${desiredName}-${randomSuffix()}`;
 }
 
 function randomSuffix(): string {

@@ -92,7 +92,10 @@ describe("POST /api/scaffold", () => {
     expect(done?.result?.repoSlug).toBe("my-agent-aaaa");
     expect(createScaffoldedRepo).toHaveBeenCalledTimes(1);
     expect(createScaffoldedRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ desiredName: "RAH-my-agent" }),
+      expect.objectContaining({
+        desiredName: "RAH-my-agent",
+        repoName: expect.stringMatching(/^RAH-my-agent-[0-9a-f]{4}$/),
+      }),
     );
 
     // Confirm the file map contains the expected files.
@@ -102,6 +105,8 @@ describe("POST /api/scaffold", () => {
     expect(call.files.has("package.json")).toBe(true);
     expect(call.files.has("src/main.ts")).toBe(true);
     expect(call.files.get("render.yaml")).toContain("services:");
+    expect(call.files.get("render-harness.yaml")).toMatch(/name: RAH-my-agent-[0-9a-f]{4}/);
+    expect(call.files.get("render.yaml")).toMatch(/name: RAH-my-agent-[0-9a-f]{4}/);
   });
 
   it("returns 503 when GitHub App credentials are missing", async () => {

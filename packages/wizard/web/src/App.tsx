@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
 import { fetchGallery, postBundleScaffold, postScaffold, watchScaffoldJob } from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
 import type {
@@ -47,6 +47,9 @@ export function App() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [galleryError, setGalleryError] = useState<string | null>(null);
+  const goHome = useCallback(() => {
+    setPhase({ kind: "ready", step: 0, state: DEFAULT_STATE });
+  }, []);
 
   useEffect(() => {
     fetchGallery()
@@ -58,25 +61,37 @@ export function App() {
   }, []);
 
   if (galleryError) {
-    return <ErrorScreen message={`Could not load gallery: ${galleryError}`} />;
+    return <ErrorScreen message={`Could not load gallery: ${galleryError}`} onHome={goHome} />;
   }
   if (!gallery || phase.kind === "loading") {
-    return <CenteredMessage>Loading…</CenteredMessage>;
+    return <CenteredMessage onHome={goHome}>Loading…</CenteredMessage>;
   }
 
   if (phase.kind === "submitting") {
-    return <SubmittingScreen state={phase.state} jobId={phase.jobId} events={phase.events} />;
+    return (
+      <SubmittingScreen
+        state={phase.state}
+        jobId={phase.jobId}
+        events={phase.events}
+        onHome={goHome}
+      />
+    );
   }
   if (phase.kind === "error") {
     return (
       <ErrorScreen
         message={phase.message}
         onRetry={() => setPhase({ kind: "ready", step: 7, state: phase.state })}
+        onHome={goHome}
       />
     );
   }
   if (phase.kind === "success") {
-    return <Success state={phase.state} result={phase.result} />;
+    return (
+      <Shell currentStep={STEP_TITLES.length - 1} stepTitle="Success" onHome={goHome}>
+        <Success state={phase.state} result={phase.result} />
+      </Shell>
+    );
   }
   if (phase.kind === "bundle-review") {
     const submitBundle = async (args: { agentName: string; description: string }) => {
@@ -112,7 +127,7 @@ export function App() {
       }
     };
     return (
-      <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review">
+      <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review" onHome={goHome}>
         <BundleReview
           bundle={phase.bundle}
           onSubmit={submitBundle}
@@ -149,7 +164,7 @@ export function App() {
   };
 
   return (
-    <Shell currentStep={step}>
+    <Shell currentStep={step} onHome={goHome}>
       {step === 0 && (
         <Template
           gallery={gallery}
@@ -204,67 +219,20 @@ function Shell({
   currentStep,
   totalSteps,
   stepTitle,
+  onHome,
   children,
 }: {
   currentStep: number;
   totalSteps?: number;
   stepTitle?: string;
+  onHome: () => void;
   children: React.ReactNode;
 }) {
   const total = totalSteps ?? STEP_TITLES.length;
-  const title = stepTitle ?? STEP_TITLES[currentStep];
-  const navItems =
-    total === STEP_TITLES.length
-      ? STEP_TITLES.map((label) => ({ id: label, label }))
-      : [
-          { id: "template", label: "Template" },
-          { id: "bundle-review", label: title },
-        ];
+  const title = stepTitle ?? STEP_TITLES[currentStep] ?? "Wizard";
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div>
-            <div className="text-sm font-bold uppercase leading-none tracking-widest">
-              <div>Render</div>
-              <div>Harness Wizard</div>
-            </div>
-            <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
-              managed repo scaffold
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
-            <span>
-              step {currentStep + 1}/{total}
-            </span>
-            <span>/</span>
-            <span className="text-ink">{title}</span>
-          </div>
-        </div>
-        <div className="border-t border-line px-5 py-2">
-          <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto pb-1">
-            {navItems.map((item, idx) => {
-              const isActive = idx === currentStep;
-              const isDone = idx < currentStep;
-              return (
-                <div
-                  key={item.id}
-                  className={`flex shrink-0 items-center gap-2 border px-3 py-1.5 text-[10px] uppercase tracking-wider ${
-                    isActive
-                      ? "border-accent bg-accent text-canvas"
-                      : isDone
-                        ? "border-line bg-surface text-ink"
-                        : "border-line bg-canvas text-muted"
-                  }`}
-                >
-                  <span className="font-mono">{String(idx + 1).padStart(2, "0")}</span>
-                  <span>{item.label}</span>
-                </div>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
+      <WizardHeader currentStep={currentStep} total={total} title={title} onHome={onHome} />
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
         <section className="panel p-6">{children}</section>
         <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
@@ -287,6 +255,76 @@ function Shell({
   );
 }
 
+function WizardHeader({
+  currentStep,
+  total,
+  title,
+  onHome,
+}: {
+  currentStep: number;
+  total: number;
+  title: string;
+  onHome: () => void;
+}) {
+  const navItems =
+    total === STEP_TITLES.length
+      ? STEP_TITLES.map((label) => ({ id: label, label }))
+      : [
+          { id: "template", label: "Template" },
+          { id: "current", label: title },
+        ];
+  return (
+    <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+        <button type="button" className="text-left" onClick={onHome} title="Return to wizard home">
+          <div className="text-sm font-bold uppercase leading-none tracking-widest">
+            <div>Render</div>
+            <div>Harness Wizard</div>
+          </div>
+          <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
+            managed repo scaffold
+          </div>
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
+            <span>
+              step {currentStep + 1}/{total}
+            </span>
+            <span>/</span>
+            <span className="text-ink">{title}</span>
+          </div>
+          <button type="button" className="btn" onClick={onHome}>
+            Home
+          </button>
+        </div>
+      </div>
+      <div className="border-t border-line px-5 py-2">
+        <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto pb-1">
+          {navItems.map((item, idx) => {
+            const isActive = idx === currentStep;
+            const isDone = idx < currentStep;
+            return (
+              <div
+                key={item.id}
+                className={`flex shrink-0 items-center gap-2 border px-3 py-1.5 text-[10px] uppercase tracking-wider ${
+                  isActive
+                    ? "border-accent bg-accent text-canvas"
+                    : isDone
+                      ? "border-line bg-surface text-ink"
+                      : "border-line bg-canvas text-muted"
+                }`}
+              >
+                <span className="font-mono">{String(idx + 1).padStart(2, "0")}</span>
+                <span>{item.label}</span>
+              </div>
+            );
+          })}
+        </nav>
+      </div>
+    </header>
+  );
+}
+
 function Progress({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex gap-1">
@@ -306,10 +344,12 @@ function SubmittingScreen({
   state,
   jobId,
   events,
+  onHome,
 }: {
   state: WizardState;
   jobId: string | null;
   events: ScaffoldProgressEvent[];
+  onHome: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -349,94 +389,122 @@ function SubmittingScreen({
       : Math.min(95, Math.round((displayEvents.length / 7) * 100));
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="panel flex max-h-[calc(100vh-5rem)] w-full max-w-2xl flex-col p-6">
-        <div className="hr-section">
-          <span>{"// CREATING REPOSITORY"}</span>
-        </div>
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-line p-3">
-          <div>
-            <div className="text-sm font-bold">{state.agentName}</div>
-            <div className="mt-1 text-xs text-muted">
-              {jobId ? `Job ${jobId.slice(0, 8)} is running.` : "Starting job…"}
+    <div className="min-h-screen">
+      <WizardHeader
+        currentStep={STEP_TITLES.length - 1}
+        total={STEP_TITLES.length}
+        title="Creating repository"
+        onHome={onHome}
+      />
+      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-6 py-10">
+        <div className="panel flex max-h-[calc(100vh-10rem)] w-full max-w-2xl flex-col p-6">
+          <div className="hr-section">
+            <span>{"// CREATING REPOSITORY"}</span>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-line p-3">
+            <div>
+              <div className="text-sm font-bold">{state.agentName}</div>
+              <div className="mt-1 text-xs text-muted">
+                {jobId ? `Job ${jobId.slice(0, 8)} is running.` : "Starting job…"}
+              </div>
+            </div>
+            <div className="font-mono text-xs text-muted">{elapsed}s elapsed</div>
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted">
+              <span>progress</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-2 border border-line bg-canvas">
+              <div
+                className="h-full bg-accent transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
             </div>
           </div>
-          <div className="font-mono text-xs text-muted">{elapsed}s elapsed</div>
-        </div>
 
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted">
-            <span>progress</span>
-            <span>{progressPercent}%</span>
-          </div>
-          <div className="h-2 border border-line bg-canvas">
-            <div
-              className="h-full bg-accent transition-all"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </div>
-
-        <ol className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 text-xs">
-          {displayEvents.map((event) => {
-            const active =
-              event === displayEvents[displayEvents.length - 1] && event.type === "progress";
-            const done = event !== displayEvents[displayEvents.length - 1] || event.type === "done";
-            return (
-              <li
-                key={`${event.at}-${event.type}-${event.phase}`}
-                className={`flex items-center justify-between border border-line p-3 ${
-                  active ? "bg-surface-hover text-ink" : "text-muted"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <span className={active ? "text-accent" : ""}>
-                    {event.type === "error" ? "!" : done ? "✓" : active ? "▊" : "·"}
+          <ol className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 text-xs">
+            {displayEvents.map((event) => {
+              const active =
+                event === displayEvents[displayEvents.length - 1] && event.type === "progress";
+              const done =
+                event !== displayEvents[displayEvents.length - 1] || event.type === "done";
+              return (
+                <li
+                  key={`${event.at}-${event.type}-${event.phase}`}
+                  className={`flex items-center justify-between border border-line p-3 ${
+                    active ? "bg-surface-hover text-ink" : "text-muted"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={active ? "text-accent" : ""}>
+                      {event.type === "error" ? "!" : done ? "✓" : active ? "▊" : "·"}
+                    </span>
+                    <span>
+                      {event.message}
+                      {event.type === "progress" && event.total ? (
+                        <span className="ml-2 text-muted">
+                          {event.index ?? 0}/{event.total}
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
-                  <span>
-                    {event.message}
-                    {event.type === "progress" && event.total ? (
-                      <span className="ml-2 text-muted">
-                        {event.index ?? 0}/{event.total}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-                {active && <span className="cli-dots" aria-hidden="true" />}
-              </li>
-            );
-          })}
-        </ol>
+                  {active && <span className="cli-dots" aria-hidden="true" />}
+                </li>
+              );
+            })}
+          </ol>
 
-        <p className="mt-5 text-xs text-muted">
-          Keep this tab open. If GitHub rejects the request, the wizard returns an actionable error
-          instead of leaving this screen.
-        </p>
-      </div>
+          <p className="mt-5 text-xs text-muted">
+            Keep this tab open. If GitHub rejects the request, the wizard returns an actionable
+            error instead of leaving this screen.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }
 
-function CenteredMessage({ children }: { children: React.ReactNode }) {
+function CenteredMessage({ children, onHome }: { children: React.ReactNode; onHome: () => void }) {
   return (
-    <div className="flex min-h-screen items-center justify-center text-muted">
-      <span className="label">{children}</span>
+    <div className="min-h-screen">
+      <WizardHeader currentStep={0} total={STEP_TITLES.length} title="Loading" onHome={onHome} />
+      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center text-muted">
+        <span className="label">{children}</span>
+      </main>
     </div>
   );
 }
 
-function ErrorScreen({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function ErrorScreen({
+  message,
+  onRetry,
+  onHome,
+}: {
+  message: string;
+  onRetry?: () => void;
+  onHome: () => void;
+}) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-6">
-      <div className="panel max-w-md border-err p-6">
-        <h2 className="label text-err">{"// SOMETHING WENT WRONG"}</h2>
-        <p className="mt-3 text-sm">{message}</p>
-        {onRetry && (
-          <button type="button" onClick={onRetry} className="btn btn-danger mt-4">
-            Back to review
-          </button>
-        )}
-      </div>
+    <div className="min-h-screen">
+      <WizardHeader currentStep={0} total={STEP_TITLES.length} title="Error" onHome={onHome} />
+      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-6">
+        <div className="panel max-w-md border-err p-6">
+          <h2 className="label text-err">{"// SOMETHING WENT WRONG"}</h2>
+          <p className="mt-3 text-sm">{message}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {onRetry && (
+              <button type="button" onClick={onRetry} className="btn btn-danger">
+                Back to review
+              </button>
+            )}
+            <button type="button" onClick={onHome} className="btn">
+              Wizard home
+            </button>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

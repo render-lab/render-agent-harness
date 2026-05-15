@@ -2,6 +2,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { emitBlueprint } from "@render-harness/registry/emitter";
 import { parseHarnessConfigYaml } from "@render-harness/registry/schema";
+import { stringify as stringifyYaml } from "yaml";
 import { agentIndex } from "./templates/agent-index.js";
 import {
   bundleCronAgents,
@@ -88,11 +89,23 @@ export function buildFileMap(answers: Answers): Map<string, string> {
 export async function addBlueprintFilesToMap(
   files: Map<string, string>,
   packageName: string,
+  opts: { deploymentName?: string } = {},
 ): Promise<void> {
   const manifest = files.get("render-harness.yaml");
   if (!manifest) throw new Error("generated file map missing render-harness.yaml");
-  const config = parseHarnessConfigYaml(manifest);
-  const emitted = await emitBlueprint({ config, packageName });
+  const baseConfig = parseHarnessConfigYaml(manifest);
+  const config = opts.deploymentName ? { ...baseConfig, name: opts.deploymentName } : baseConfig;
+  if (opts.deploymentName) {
+    files.set(
+      "render-harness.yaml",
+      stringifyYaml(config, {
+        lineWidth: 100,
+        minContentWidth: 40,
+        aliasDuplicateObjects: false,
+      }),
+    );
+  }
+  const emitted = await emitBlueprint({ config, packageName, entrypointStyle: "repo" });
   files.set("render.yaml", emitted.yaml);
   if (emitted.dashboardSteps.length > 0) {
     files.set(

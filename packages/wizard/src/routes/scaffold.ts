@@ -4,6 +4,7 @@ import { addBlueprintFilesToMap, buildFileMap } from "create-render-agent";
 import type { Hono } from "hono";
 import {
   buildDeployUrl,
+  buildScaffoldRepoName,
   createOctokit,
   createScaffoldedRepo,
   type GithubAppCreds,
@@ -200,18 +201,19 @@ async function runScaffoldJob(args: {
   const { job, body, answers, opts, deps } = args;
   try {
     emitProgress(job, "building_file_map", "Preparing the scaffolded file tree");
+    const desiredName = applyRepoPrefix(opts.repoPrefix, body.agentName);
+    const repoName = opts.mockScaffold ? `${desiredName}-mock` : buildScaffoldRepoName(desiredName);
     const fileMap = buildFileMap(answers);
 
     emitProgress(job, "generating_blueprint", "Generating render.yaml Blueprint");
-    await addBlueprintFilesToMap(fileMap, body.agentName);
+    await addBlueprintFilesToMap(fileMap, body.agentName, { deploymentName: repoName });
 
     if (opts.mockScaffold || !opts.github) {
-      const mockSlug = applyRepoPrefix(opts.repoPrefix, `${body.agentName}-mock`);
-      const mockUrl = `https://example.com/${opts.org}/${mockSlug}`;
+      const mockUrl = `https://example.com/${opts.org}/${repoName}`;
       emitDone(job, {
         repoUrl: mockUrl,
         deployUrl: buildDeployUrl(mockUrl),
-        repoSlug: mockSlug,
+        repoSlug: repoName,
       });
       return;
     }
@@ -225,7 +227,8 @@ async function runScaffoldJob(args: {
     const result = await deps.createScaffoldedRepo({
       octokit,
       org: opts.org,
-      desiredName: applyRepoPrefix(opts.repoPrefix, body.agentName),
+      desiredName,
+      repoName,
       description: body.description,
       files: fileMap,
       onProgress: (event) =>

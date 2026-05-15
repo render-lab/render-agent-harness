@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 import { describe, expect, it, vi } from "vitest";
-import { buildDeployUrl, createScaffoldedRepo } from "./github-app.js";
+import { buildDeployUrl, buildScaffoldRepoName, createScaffoldedRepo } from "./github-app.js";
 
 describe("createScaffoldedRepo", () => {
   it("seeds empty repositories through the Contents API", async () => {
@@ -44,6 +44,32 @@ describe("createScaffoldedRepo", () => {
     );
     expect(result.repoUrl).toBe("https://github.com/render-lab/RAH-my-agent-abcd");
     expect(result.commitSha).toBe("sha-.render-harness/agent.json");
+  });
+
+  it("uses an exact repoName when supplied", async () => {
+    const createInOrg = vi.fn(async () => ({
+      data: { html_url: "https://github.com/render-lab/RAH-exact" },
+    }));
+    const createOrUpdateFileContents = vi.fn(async () => ({
+      data: { commit: { sha: "sha" } },
+    }));
+
+    await createScaffoldedRepo({
+      octokit: { repos: { createInOrg, createOrUpdateFileContents } } as unknown as Octokit,
+      org: "render-lab",
+      desiredName: "ignored",
+      repoName: "RAH-exact",
+      description: "Exact repo",
+      files: new Map([["README.md", "# hi\n"]]),
+    });
+
+    expect(createInOrg).toHaveBeenCalledWith(expect.objectContaining({ name: "RAH-exact" }));
+  });
+});
+
+describe("buildScaffoldRepoName", () => {
+  it("appends a four-character hex suffix", () => {
+    expect(buildScaffoldRepoName("RAH-agent")).toMatch(/^RAH-agent-[0-9a-f]{4}$/);
   });
 });
 

@@ -94,6 +94,11 @@ export interface EmitOpts {
    *     IAP-fronted entrypoints.
    */
   mode?: "default" | "hardened";
+  /**
+   * Generated starter repos run from their package root (`dist/web.js`).
+   * Monorepo examples run through `examples/<name>/dist/...`.
+   */
+  entrypointStyle?: "monorepo" | "repo";
 }
 
 export interface EmitResult {
@@ -113,6 +118,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   const env = opts.env ?? process.env;
   const region = opts.region ?? "oregon";
   const mode = opts.mode ?? "default";
+  const entrypointStyle = opts.entrypointStyle ?? "monorepo";
   const cfg = opts.config;
   const packageName = opts.packageName ?? `@render-harness/example-${cfg.name}`;
   const warnings: string[] = [];
@@ -128,7 +134,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   const buckets = bucketByKind(cfg);
   const isMultiTenantWeb = buckets.web.length > 0 && buckets.worker.length > 0;
   const needsKv = buckets.worker.length > 0 || (opts.packs ?? []).some((p) => packNeedsKv(p));
-  const naming = buildNaming(cfg);
+  const naming = buildNaming(cfg, entrypointStyle);
 
   // -------------- databases + key value --------------------------------
   const databases: BlueprintDatabase[] = [
@@ -262,8 +268,12 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   const wfAgents = workflowTaskAgents(cfg);
   if (wfAgents.length > 0) {
     const taskList = wfAgents.map((a) => `\`${a.id}\``).join(", ");
+    const workflowStart =
+      entrypointStyle === "repo"
+        ? "node dist/workflows.js"
+        : `node examples/${cfg.name}/dist/workflows.js`;
     dashboardSteps.push(
-      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`pnpm install --frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`node examples/${cfg.name}/dist/workflows.js\`. It will host these tasks: ${taskList}.`,
+      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`pnpm install --frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`${workflowStart}\`. It will host these tasks: ${taskList}.`,
     );
     warnings.push(
       "Render Workflows aren't yet supported in render.yaml. The emitted Blueprint omits the Workflow service; create it from the Render Dashboard following the checklist step above.",
@@ -367,7 +377,7 @@ interface Naming {
   cronTriggerStartCommand(): string;
 }
 
-function buildNaming(cfg: HarnessConfig): Naming {
+function buildNaming(cfg: HarnessConfig, style: "monorepo" | "repo"): Naming {
   const singleAgent = cfg.agents.length === 1 && cfg.agents[0]?.id === cfg.name;
   return {
     singleAgent,
@@ -382,22 +392,27 @@ function buildNaming(cfg: HarnessConfig): Naming {
       return `${cfg.name}-cron-trigger-${agentId}`;
     },
     syncWebStartCommand() {
+      if (style === "repo") return "node dist/main.js";
       return `node packages/${cfg.name}/dist/main.js`;
     },
     webShellStartCommand() {
+      if (style === "repo") return "node dist/web.js";
       return `node examples/${cfg.name}/dist/web.js`;
     },
     workerStartCommand() {
+      if (style === "repo") return "node dist/worker.js";
       return `node examples/${cfg.name}/dist/worker.js`;
     },
     cronStartCommand(_agentId) {
       // Single-agent bundles still ship a `dist/main.js` entrypoint
       // (existing convention). Multi-agent bundles ship `dist/cron.js`
       // that selects the agent via HARNESS_AGENT_ID.
+      if (style === "repo") return singleAgent ? "node dist/main.js" : "node dist/cron.js";
       if (singleAgent) return `node examples/${cfg.name}/dist/main.js`;
       return `node examples/${cfg.name}/dist/cron.js`;
     },
     cronTriggerStartCommand() {
+      if (style === "repo") return "node dist/cron-trigger.js";
       return `node examples/${cfg.name}/dist/cron-trigger.js`;
     },
   };
@@ -683,23 +698,23 @@ function buildEnvVarGroups(cfg: HarnessConfig): BlueprintEnvVarGroup[] {
   add({ key: "LOG_LEVEL", value: "info" });
 
   for (const model of collectModels(cfg)) {
-    if (model.provider === "anthropic") add({ key: "ANTHROPIC_API_KEY", sync: false });
+    if (model.provider === "anthropic") add({ key: "ANTHROPIC_API_KEY", value: "" });
     if (model.provider === "openai-compat") {
-      add({ key: "OPENAI_API_KEY", sync: false });
+      add({ key: "OPENAI_API_KEY", value: "" });
     }
   }
   if (workflowTaskAgents(cfg).length > 0) {
-    add({ key: "RENDER_API_KEY", sync: false });
+    add({ key: "RENDER_API_KEY", value: "" });
   }
 
   for (const spec of cfg.envSchema ?? []) {
     const envVar: BlueprintEnvVar = { key: spec.name };
     if (spec.secret) {
-      envVar.sync = false;
+      envVar.value = "";
     } else if (spec.default !== undefined) {
       envVar.value = spec.default;
     } else {
-      envVar.sync = false;
+      envVar.value = "";
     }
     add(envVar);
   }
