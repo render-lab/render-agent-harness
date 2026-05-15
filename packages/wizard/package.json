@@ -1,7 +1,7 @@
 {
   "name": "@render-harness/wizard",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Browser wizard that scaffolds a Render agent project, creates a managed GitHub repo, and returns a Deploy-to-Render link. Phase 3 of the onboarding direction.",
   "type": "module",
   "license": "MIT",
@@ -9,6 +9,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "pnpm run build:server && pnpm run build:web",
     "build:server": "tsup",

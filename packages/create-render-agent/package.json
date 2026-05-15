@@ -19,6 +19,9 @@
     "dist",
     "bundled-gallery"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prebuild": "tsx scripts/bundle-gallery.ts",
     "build": "tsup",
