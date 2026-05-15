@@ -283,7 +283,24 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   // -------------- effective envSchema --------------------------------
   const effectiveEnvSchema = mergeEnvSchemas(cfg, opts.packs ?? []);
 
-  const blueprint: Blueprint = { databases, services };
+  const envVarGroups = buildEnvVarGroups(cfg);
+  const blueprint: Blueprint = {
+    databases,
+    services: expandSharedEnvGroup(services, envVarGroups),
+    projects: [
+      {
+        name: cfg.name,
+        environments: [
+          {
+            name: "production",
+            databases,
+            services: attachSharedEnvGroup(services, envVarGroups),
+            ...(envVarGroups.length > 0 ? { envVarGroups } : {}),
+          },
+        ],
+      },
+    ],
+  };
   const yaml = serializeBlueprint(blueprint);
 
   return { yaml, blueprint, dashboardSteps, effectiveEnvSchema, warnings };
@@ -626,8 +643,6 @@ function toBlueprintEnvVar(
 
 function sharedRuntimeEnv(cfg: HarnessConfig): BlueprintEnvVar[] {
   return [
-    { key: "NODE_ENV", value: "production" },
-    { key: "LOG_LEVEL", value: "info" },
     {
       key: "DATABASE_URL",
       fromDatabase: { name: dbName(cfg), property: "connectionString" },
@@ -637,10 +652,7 @@ function sharedRuntimeEnv(cfg: HarnessConfig): BlueprintEnvVar[] {
 
 function modelEnv(model: ModelSpecInput): BlueprintEnvVar[] {
   const out: BlueprintEnvVar[] = [{ key: "LLM_MODEL", value: model.model }];
-  if (model.provider === "anthropic") {
-    out.push({ key: "ANTHROPIC_API_KEY", sync: false });
-  } else if (model.provider === "openai-compat") {
-    out.push({ key: "OPENAI_API_KEY", sync: false });
+  if (model.provider === "openai-compat") {
     if (model.baseURL) {
       out.push({ key: "OPENAI_BASE_URL", value: model.baseURL });
     }
@@ -662,8 +674,27 @@ function kvFromService(cfg: HarnessConfig): BlueprintEnvVar[] {
 }
 
 function explicitEntryEnv(cfg: HarnessConfig): BlueprintEnvVar[] {
-  if (!cfg.envSchema?.length) return [];
-  return cfg.envSchema.map((spec) => {
+  void cfg;
+  return [];
+}
+
+function buildEnvVarGroups(cfg: HarnessConfig): BlueprintEnvVarGroup[] {
+  const vars = new Map<string, BlueprintEnvVar>();
+  const add = (envVar: BlueprintEnvVar) => {
+    if (canLiveInEnvGroup(envVar) && envVar.key) vars.set(envVar.key, envVar);
+  };
+
+  add({ key: "NODE_ENV", value: "production" });
+  add({ key: "LOG_LEVEL", value: "info" });
+
+  for (const model of collectModels(cfg)) {
+    if (model.provider === "anthropic") add({ key: "ANTHROPIC_API_KEY", sync: false });
+    if (model.provider === "openai-compat") {
+      add({ key: "OPENAI_API_KEY", sync: false });
+    }
+  }
+
+  for (const spec of cfg.envSchema ?? []) {
     const envVar: BlueprintEnvVar = { key: spec.name };
     if (spec.secret) {
       envVar.sync = false;
@@ -672,7 +703,41 @@ function explicitEntryEnv(cfg: HarnessConfig): BlueprintEnvVar[] {
     } else {
       envVar.sync = false;
     }
-    return envVar;
+    add(envVar);
+  }
+
+  return vars.size > 0 ? [{ name: envGroupName(cfg), envVars: [...vars.values()] }] : [];
+}
+
+function canLiveInEnvGroup(envVar: BlueprintEnvVar): boolean {
+  return !envVar.fromDatabase && !envVar.fromService && !envVar.fromGroup;
+}
+
+function attachSharedEnvGroup(
+  services: BlueprintService[],
+  envVarGroups: BlueprintEnvVarGroup[],
+): BlueprintService[] {
+  if (envVarGroups.length === 0) return services;
+  const group = envVarGroups[0];
+  if (!group) return services;
+  return services.map((service) => ({
+    ...service,
+    envVars: [{ fromGroup: group.name }, ...(service.envVars ?? [])],
+  }));
+}
+
+function expandSharedEnvGroup(
+  services: BlueprintService[],
+  envVarGroups: BlueprintEnvVarGroup[],
+): BlueprintService[] {
+  const groupVars = envVarGroups.flatMap((group) => group.envVars);
+  if (groupVars.length === 0) return services;
+  return services.map((service) => {
+    if (service.type === "keyvalue") return service;
+    return {
+      ...service,
+      envVars: [...(service.envVars ?? []), ...groupVars],
+    };
   });
 }
 
@@ -717,6 +782,15 @@ function collectProviders(cfg: HarnessConfig): Set<ModelSpecInput["provider"]> {
     if (a.model) set.add(a.model.provider);
   }
   return set;
+}
+
+function collectModels(cfg: HarnessConfig): ModelSpecInput[] {
+  const out: ModelSpecInput[] = [];
+  if (cfg.shared?.model) out.push(cfg.shared.model);
+  for (const a of cfg.agents) {
+    if (a.model) out.push(a.model);
+  }
+  return out;
 }
 
 function packNeedsKv(loaded: LoadedPack): boolean {
@@ -764,6 +838,10 @@ function workerQueue(cfg: HarnessConfig): string {
   return `${cfg.name}-runs`;
 }
 
+function envGroupName(cfg: HarnessConfig): string {
+  return `${cfg.name}-env`;
+}
+
 function defaultBuildCommand(packageName: string): string {
   return `corepack enable && pnpm install --frozen-lockfile && pnpm --filter ${packageName} build`;
 }
@@ -775,6 +853,8 @@ function defaultBuildCommand(packageName: string): string {
 export interface Blueprint {
   databases?: BlueprintDatabase[];
   services?: BlueprintService[];
+  projects?: BlueprintProject[];
+  envVarGroups?: BlueprintEnvVarGroup[];
 }
 
 export interface BlueprintDatabase {
@@ -785,11 +865,29 @@ export interface BlueprintDatabase {
 }
 
 export interface BlueprintEnvVar {
-  key: string;
+  key?: string;
   value?: string;
   sync?: false;
   fromDatabase?: { name: string; property: string };
   fromService?: { name: string; type: string; property: string };
+  fromGroup?: string;
+}
+
+export interface BlueprintEnvVarGroup {
+  name: string;
+  envVars: BlueprintEnvVar[];
+}
+
+export interface BlueprintProject {
+  name: string;
+  environments: BlueprintEnvironment[];
+}
+
+export interface BlueprintEnvironment {
+  name: string;
+  databases?: BlueprintDatabase[];
+  services?: BlueprintService[];
+  envVarGroups?: BlueprintEnvVarGroup[];
 }
 
 export interface BlueprintService {
@@ -820,7 +918,9 @@ const HEADER = `# yaml-language-server: $schema=https://render.com/schema/render
 `;
 
 function serializeBlueprint(bp: Blueprint): string {
-  const body = stringifyYaml(bp, {
+  const bodyShape: Blueprint =
+    bp.projects && bp.projects.length > 0 ? { projects: bp.projects } : bp;
+  const body = stringifyYaml(bodyShape, {
     lineWidth: 100,
     minContentWidth: 40,
     aliasDuplicateObjects: false,

@@ -1,5 +1,7 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { emitBlueprint } from "@render-harness/registry/emitter";
+import { parseHarnessConfigYaml } from "@render-harness/registry/schema";
 import { agentIndex } from "./templates/agent-index.js";
 import {
   bundleCronAgents,
@@ -81,6 +83,30 @@ export function buildFileMap(answers: Answers): Map<string, string> {
   }
 
   return files;
+}
+
+export async function addBlueprintFilesToMap(
+  files: Map<string, string>,
+  packageName: string,
+): Promise<void> {
+  const manifest = files.get("render-harness.yaml");
+  if (!manifest) throw new Error("generated file map missing render-harness.yaml");
+  const config = parseHarnessConfigYaml(manifest);
+  const emitted = await emitBlueprint({ config, packageName });
+  files.set("render.yaml", emitted.yaml);
+  if (emitted.dashboardSteps.length > 0) {
+    files.set(
+      ".render-harness/dashboard-steps.md",
+      [
+        "# Dashboard-only setup steps",
+        "",
+        "Some resources are not fully Blueprintable yet. Complete these after deploying the committed `render.yaml`.",
+        "",
+        ...emitted.dashboardSteps.map((step) => `- ${step}`),
+        "",
+      ].join("\n"),
+    );
+  }
 }
 
 function buildBundleFileMap(answers: Answers, bundle: BundlePick): Map<string, string> {
@@ -172,6 +198,7 @@ export async function generate(answers: Answers): Promise<GenerateResult> {
   await ensureTargetDirIsEmpty(targetDir);
 
   const files = buildFileMap(answers);
+  await addBlueprintFilesToMap(files, answers.agentName);
 
   await mkdir(targetDir, { recursive: true });
   for (const [relPath, contents] of files) {

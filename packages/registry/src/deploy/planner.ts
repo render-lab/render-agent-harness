@@ -161,7 +161,7 @@ interface BuildServiceArgs {
 function buildServiceBody(args: BuildServiceArgs): CreateServiceBody {
   const { svc, subkind, ownerId, repoUrl, branch, region } = args;
   const env = (svc.runtime as ServiceDetails["env"] | undefined) ?? "node";
-  const envVars = (svc.envVars ?? []).map(toApiEnvVar);
+  const envVars = (svc.envVars ?? []).flatMap(toApiEnvVar);
 
   let serviceDetails: ServiceDetails;
   if (subkind === "web_service") {
@@ -215,28 +215,33 @@ function buildServiceBody(args: BuildServiceArgs): CreateServiceBody {
   };
 }
 
-function toApiEnvVar(v: BlueprintEnvVar): CreateServiceEnvVar {
+function toApiEnvVar(v: BlueprintEnvVar): CreateServiceEnvVar[] {
+  if (!v.key) return [];
   if (v.fromDatabase) {
     // Render's services API doesn't accept fromDatabase the way Blueprint
     // YAML does. The executor resolves these refs after creating the
     // database — we emit a sentinel value here that the executor
     // replaces with the actual connection string.
-    return {
-      key: v.key,
-      value: `__RESOLVE_FROM_DATABASE:${v.fromDatabase.name}:${v.fromDatabase.property}__`,
-    };
+    return [
+      {
+        key: v.key,
+        value: `__RESOLVE_FROM_DATABASE:${v.fromDatabase.name}:${v.fromDatabase.property}__`,
+      },
+    ];
   }
   if (v.fromService) {
-    return {
-      key: v.key,
-      value: `__RESOLVE_FROM_SERVICE:${v.fromService.name}:${v.fromService.property}__`,
-    };
+    return [
+      {
+        key: v.key,
+        value: `__RESOLVE_FROM_SERVICE:${v.fromService.name}:${v.fromService.property}__`,
+      },
+    ];
   }
-  if (v.value !== undefined) return { key: v.key, value: v.value };
+  if (v.value !== undefined) return [{ key: v.key, value: v.value }];
   // sync: false → user fills in via dashboard. Render's API just needs
   // the key to be declared (any subsequent env edit replaces the empty
   // value). Mark it sensitive.
-  return { key: v.key, isSensitive: true };
+  return [{ key: v.key, isSensitive: true }];
 }
 
 /**

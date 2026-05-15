@@ -1,8 +1,6 @@
-import { emitBlueprint } from "@render-harness/registry/emitter";
 import type { ResolvedGallery } from "@render-harness/registry/gallery";
-import { parseHarnessConfigYaml } from "@render-harness/registry/schema";
 import type { Answers } from "create-render-agent";
-import { buildFileMap } from "create-render-agent";
+import { addBlueprintFilesToMap, buildFileMap } from "create-render-agent";
 import type { Hono } from "hono";
 import {
   buildDeployUrl,
@@ -151,7 +149,7 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
             installDeps: false,
           };
       fileMap = buildFileMap(answers);
-      await addBlueprintFiles(fileMap, body.agentName);
+      await addBlueprintFilesToMap(fileMap, body.agentName);
     } catch (err) {
       return c.json<ErrorResponse>(
         {
@@ -222,27 +220,6 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
       );
     }
   });
-}
-
-async function addBlueprintFiles(fileMap: Map<string, string>, packageName: string): Promise<void> {
-  const manifest = fileMap.get("render-harness.yaml");
-  if (!manifest) throw new Error("generated file map missing render-harness.yaml");
-  const config = parseHarnessConfigYaml(manifest);
-  const emitted = await emitBlueprint({ config, packageName });
-  fileMap.set("render.yaml", emitted.yaml);
-  if (emitted.dashboardSteps.length > 0) {
-    fileMap.set(
-      ".render-harness/dashboard-steps.md",
-      [
-        "# Dashboard-only setup steps",
-        "",
-        "Some resources are not fully Blueprintable yet. Complete these after deploying the committed `render.yaml`.",
-        "",
-        ...emitted.dashboardSteps.map((step) => `- ${step}`),
-        "",
-      ].join("\n"),
-    );
-  }
 }
 
 function applyRepoPrefix(prefix: string, name: string): string {

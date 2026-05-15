@@ -43,10 +43,15 @@ describe("emitBlueprint — runtime shape mapping", () => {
         runtimes: [{ kind: "web", plan: "starter" }],
       }),
     );
-    const { blueprint } = await emitBlueprint({
+    const { blueprint, yaml } = await emitBlueprint({
       config,
       packageName: "@render-harness/example-web-chat",
     });
+    expect(blueprint.projects?.[0]?.name).toBe("web-chat");
+    expect(blueprint.projects?.[0]?.environments[0]?.name).toBe("production");
+    expect(yaml).toContain("projects:");
+    expect(yaml).toContain("envVarGroups:");
+    expect(yaml).not.toMatch(/^services:/m);
     expect(blueprint.databases).toEqual([
       {
         name: "web-chat-db",

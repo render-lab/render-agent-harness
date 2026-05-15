@@ -417,6 +417,7 @@ describe("generate", () => {
         "docker-compose.yml",
         "package.json",
         "render-harness.yaml",
+        "render.yaml",
         "src",
         "tsconfig.json",
         "tsup.config.ts",
@@ -425,6 +426,8 @@ describe("generate", () => {
     expect((await stat(join(directory, "agent", "index.ts"))).isFile()).toBe(true);
     expect((await stat(join(directory, "src", "main.ts"))).isFile()).toBe(true);
     expect((await stat(join(directory, ".render-harness", "agent.json"))).isFile()).toBe(true);
+    const blueprint = await readFile(join(directory, "render.yaml"), "utf8");
+    expect(blueprint).toContain("services:");
   });
 
   it("emits per-runtime entries for multi-runtime layouts", async () => {
