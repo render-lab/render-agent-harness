@@ -670,7 +670,7 @@ Render Workflows aren't yet Blueprintable. After the first deploy lands, create 
 
 - **Name**: \`${opts.bundle.slug}-workflows\`
 - **Repo**: link to this repo
-- **Build**: \`pnpm install --frozen-lockfile && pnpm --filter ${opts.agentName} build\`
+- **Build**: \`pnpm install --no-frozen-lockfile && pnpm --filter ${opts.agentName} build\`
 - **Start**: \`node dist/workflows.js\`
 
 It will host every workflow-mode agent in this bundle as one Workflow task. Tasks auto-register on service boot, so adding agents later is just a push.

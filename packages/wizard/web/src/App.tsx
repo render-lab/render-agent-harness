@@ -1,4 +1,11 @@
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { fetchGallery, postBundleScaffold, postScaffold, watchScaffoldJob } from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
 import type {
@@ -352,6 +359,7 @@ function SubmittingScreen({
   onHome: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
+  const eventListRef = useRef<HTMLOListElement | null>(null);
 
   useEffect(() => {
     const started = Date.now();
@@ -360,6 +368,12 @@ function SubmittingScreen({
     }, 500);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const list = eventListRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+  });
 
   const displayEvents =
     events.length > 0
@@ -396,8 +410,8 @@ function SubmittingScreen({
         title="Creating repository"
         onHome={onHome}
       />
-      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-6 py-10">
-        <div className="panel flex max-h-[calc(100vh-10rem)] w-full max-w-2xl flex-col p-6">
+      <main className="flex h-[calc(100vh-7rem)] min-h-0 items-center justify-center px-6 py-8">
+        <div className="panel flex h-full min-h-0 w-full max-w-2xl flex-col p-6">
           <div className="hr-section">
             <span>{"// CREATING REPOSITORY"}</span>
           </div>
@@ -424,7 +438,10 @@ function SubmittingScreen({
             </div>
           </div>
 
-          <ol className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 text-xs">
+          <ol
+            ref={eventListRef}
+            className="mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 text-xs"
+          >
             {displayEvents.map((event) => {
               const active =
                 event === displayEvents[displayEvents.length - 1] && event.type === "progress";

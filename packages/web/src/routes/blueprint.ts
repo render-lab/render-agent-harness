@@ -70,7 +70,7 @@ services:
     region: oregon
     plan: starter
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-${slug} build
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @render-harness/example-${slug} build
     startCommand: node examples/${slug}/dist/web.js
     healthCheckPath: /healthz
     envVars:
@@ -100,7 +100,7 @@ services:
     region: oregon
     plan: starter
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @render-harness/example-${slug} build
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @render-harness/example-${slug} build
     startCommand: node examples/${slug}/dist/worker.js
     envVars:
       - key: NODE_ENV

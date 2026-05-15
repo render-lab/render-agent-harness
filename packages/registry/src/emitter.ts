@@ -273,7 +273,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
         ? "node dist/workflows.js"
         : `node examples/${cfg.name}/dist/workflows.js`;
     dashboardSteps.push(
-      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`pnpm install --frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`${workflowStart}\`. It will host these tasks: ${taskList}.`,
+      `Create one Render Workflow service named \`${workflowSlug}\`, link this repo, set the build command to \`pnpm install --no-frozen-lockfile && pnpm --filter ${packageName} build\` and the start command to \`${workflowStart}\`. It will host these tasks: ${taskList}.`,
     );
     warnings.push(
       "Render Workflows aren't yet supported in render.yaml. The emitted Blueprint omits the Workflow service; create it from the Render Dashboard following the checklist step above.",
@@ -863,7 +863,7 @@ function envGroupName(cfg: HarnessConfig): string {
 }
 
 function defaultBuildCommand(packageName: string): string {
-  return `pnpm install --frozen-lockfile && pnpm --filter ${packageName} build`;
+  return `pnpm install --no-frozen-lockfile && pnpm --filter ${packageName} build`;
 }
 
 // ----------------------------------------------------------------------
