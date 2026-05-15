@@ -11,7 +11,7 @@ import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
  *
  * Harness deps:
  *   - When `answers.harnessRoot` is null (default), `@render-harness/*` deps
- *     are pinned to `^0.1` — the published version range.
+ *     are pinned to `^0.1.1` — the published version range.
  *   - When `answers.harnessRoot` is set, the deps become `link:` references
  *     pointing into that checkout, so `pnpm install` works against the
  *     local source today.
@@ -108,7 +108,7 @@ export function packageJson(answers: Answers): string {
  * else under `packages/<name>`.
  */
 function harnessDepVersion(pkgName: string, harnessRoot: string | null): string {
-  if (!harnessRoot) return "^0.1";
+  if (!harnessRoot) return "^0.1.1";
   const tail = pkgName.replace(/^@render-harness\//, "");
   const subdir = tail.startsWith("cap-") ? `capabilities/${tail}` : tail;
   // Always emit a POSIX-style path. `link:` accepts absolute paths.

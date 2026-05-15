@@ -317,8 +317,8 @@ describe("buildFileMap", () => {
     const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
       dependencies: Record<string, string>;
     };
-    expect(pkg.dependencies["@render-harness/core"]).toBe("^0.1");
-    expect(pkg.dependencies["@render-harness/registry"]).toBe("^0.1");
+    expect(pkg.dependencies["@render-harness/core"]).toBe("^0.1.1");
+    expect(pkg.dependencies["@render-harness/registry"]).toBe("^0.1.1");
     expect(map.get("README.md")).toContain("published npm packages");
   });
 

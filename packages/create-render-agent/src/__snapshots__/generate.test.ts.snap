@@ -234,9 +234,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-cron": "^0.1.1",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -583,9 +583,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1"
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-web": "^0.1.1"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
@@ -912,10 +912,10 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,cron npm:dev:web npm:dev:cron"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-web": "^0.1.1",
+    "@render-harness/runtime-cron": "^0.1.1",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -1282,10 +1282,10 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,worker npm:dev:web npm:dev:worker"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-web": "^0.1.1",
+    "@render-harness/runtime-worker": "^0.1.1",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -1656,11 +1656,11 @@ volumes:
     "dev": "concurrently --kill-others-on-fail --names web,worker,cron npm:dev:web npm:dev:worker npm:dev:cron"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-web": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
-    "@render-harness/runtime-cron": "^0.1",
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-web": "^0.1.1",
+    "@render-harness/runtime-worker": "^0.1.1",
+    "@render-harness/runtime-cron": "^0.1.1",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
@@ -2060,9 +2060,9 @@ volumes:
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@render-harness/core": "^0.1",
-    "@render-harness/registry": "^0.1",
-    "@render-harness/runtime-worker": "^0.1",
+    "@render-harness/core": "^0.1.1",
+    "@render-harness/registry": "^0.1.1",
+    "@render-harness/runtime-worker": "^0.1.1",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {

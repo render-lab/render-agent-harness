@@ -445,13 +445,13 @@ export function bundlePackageJson(opts: BundlePackageJsonOpts): string {
 
 function linkSpec(pkgShortName: string, harnessRoot: string | null): string {
   if (harnessRoot) return `link:${harnessRoot}/packages/${pkgShortName}`;
-  return "^0.1.0";
+  return "^0.1.1";
 }
 
 function linkForCapability(pkgName: string, harnessRoot: string | null): string {
   const tail = pkgName.split("/").pop();
-  if (!harnessRoot) return "^0.1.0";
-  if (!tail) return "^0.1.0";
+  if (!harnessRoot) return "^0.1.1";
+  if (!tail) return "^0.1.1";
   // Cap packs live under packages/capabilities/.
   return `link:${harnessRoot}/packages/capabilities/${tail}`;
 }
