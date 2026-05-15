@@ -7,7 +7,7 @@
  *
  *   2. `createScaffoldedRepo()` — given an authed Octokit, a file map,
  *      and a target name, create a repo in the managed org and push the
- *      initial commit. Returns `{ repoUrl, repoName }`.
+ *      initial files. Returns `{ repoUrl, repoName }`.
  *
  * The functions take their dependencies as parameters (no global env
  * read, no module-level singletons) so unit tests can swap Octokit for
@@ -85,46 +85,31 @@ export async function createScaffoldedRepo(
     has_wiki: false,
   });
 
-  // Build a single tree from the file map, then create a root commit and
-  // point refs/heads/main at it. Doing it in one tree+commit (rather
-  // than one commit per file) keeps the history clean and the API call
-  // count low.
+  // GitHub rejects Git tree creation in truly empty repositories with
+  // "Git Repository is empty." The Contents API can create the first
+  // commit in an empty repo, so use it for initial seeding.
   const files = new Map(opts.files);
   if (opts.beforeCommit) {
     for (const [path, content] of opts.beforeCommit({ org: opts.org, repoName })) {
       files.set(path, content);
     }
   }
-  const { data: tree } = await opts.octokit.git.createTree({
-    owner: opts.org,
-    repo: repoName,
-    tree: [...files.entries()].map(([path, content]) => ({
+  let commitSha = "";
+  for (const [path, content] of files) {
+    const { data } = await opts.octokit.repos.createOrUpdateFileContents({
+      owner: opts.org,
+      repo: repoName,
       path,
-      mode: "100644",
-      type: "blob",
-      content,
-    })),
-  });
-
-  const { data: commit } = await opts.octokit.git.createCommit({
-    owner: opts.org,
-    repo: repoName,
-    message: "Initial scaffold via create-render-agent wizard",
-    tree: tree.sha,
-    parents: [],
-  });
-
-  await opts.octokit.git.createRef({
-    owner: opts.org,
-    repo: repoName,
-    ref: "refs/heads/main",
-    sha: commit.sha,
-  });
+      message: `Initial scaffold: ${path}`,
+      content: Buffer.from(content, "utf8").toString("base64"),
+    });
+    commitSha = data.commit.sha ?? commitSha;
+  }
 
   return {
     repoName,
     repoUrl: repo.html_url,
-    commitSha: commit.sha,
+    commitSha,
   };
 }
 
