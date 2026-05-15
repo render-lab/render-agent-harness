@@ -32,6 +32,8 @@ export default defineConfig({
       // to a harness web service running locally on :8080.
       "/runs": "http://127.0.0.1:8080",
       "/agents": "http://127.0.0.1:8080",
+      "/schedules": "http://127.0.0.1:8080",
+      "/inbox": "http://127.0.0.1:8080",
       "/usage": "http://127.0.0.1:8080",
       "/ui/login": "http://127.0.0.1:8080",
       "/ui/logout": "http://127.0.0.1:8080",

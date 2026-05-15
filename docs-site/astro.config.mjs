@@ -6,7 +6,7 @@ export default defineConfig({
   integrations: [
     react(),
     starlight({
-      title: "Render Harness",
+      title: "Render Harness Docs",
       description: "Interactive architecture docs for the Render agent harness.",
       customCss: ["./src/styles/theme.css"],
       expressiveCode: {

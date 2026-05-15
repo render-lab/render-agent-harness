@@ -15,6 +15,9 @@
   --sl-color-gray-3: #8a8a8a;
   --sl-color-gray-2: #d0d0d0;
   --sl-color-white: #fff;
+  --sl-color-accent-low: #2e1065;
+  --sl-color-accent: #a855f7;
+  --sl-color-accent-high: #c084fc;
 }
 
 html,
@@ -41,10 +44,10 @@ body,
 .sl-markdown-content td > code,
 .sl-markdown-content th > code {
   padding: 0.08rem 0.28rem;
-  border: 1px solid #254b7a;
+  border: 1px solid #6b21a8;
   border-radius: 0;
-  background: #07111f;
-  color: #9cc3ff;
+  background: #1f0b35;
+  color: #c084fc;
 }
 
 button,

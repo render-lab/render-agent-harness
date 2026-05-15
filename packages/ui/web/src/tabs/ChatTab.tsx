@@ -106,41 +106,55 @@ function ChatBody({
   const activeAgent = agents.find((a) => a.name === selectedAgent) ?? null;
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] flex-col gap-3">
-      <ChatToolbar
-        agents={agents}
-        selectedAgent={selectedAgent}
-        onSelectAgent={onSelectAgent}
-        conversationId={session.conversationId}
-        status={session.status}
-        onNewChat={onNewChat}
-      />
-
-      {session.error && (
-        <div className="border border-err p-2 text-xs text-err">
-          <span className="label text-err!">error:</span> {session.error.message}
+    <div className="mx-auto flex h-[calc(100vh-3rem)] max-w-5xl flex-col">
+      <div className="panel flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line px-3 py-2">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted">
+            <span className="text-accent">●</span>
+            <span>terminal</span>
+            <span>/</span>
+            <span>chat</span>
+          </div>
+          <div className="font-mono text-[10px] text-muted">{session.conversationId ?? "new"}</div>
         </div>
-      )}
 
-      <AssistantRuntimeProvider runtime={session.runtime}>
-        <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-          <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto py-4">
-            <ThreadPrimitive.Empty>
-              <EmptyState agent={activeAgent} hydrating={session.hydrating} />
-            </ThreadPrimitive.Empty>
+        <div className="border-b border-line px-3 py-2">
+          <ChatToolbar
+            agents={agents}
+            selectedAgent={selectedAgent}
+            onSelectAgent={onSelectAgent}
+            conversationId={session.conversationId}
+            status={session.status}
+            onNewChat={onNewChat}
+          />
+        </div>
 
-            <ThreadPrimitive.Messages
-              components={{
-                UserMessage: UserBubble,
-                AssistantMessage: AssistantBubble,
-                SystemMessage: SystemBubble,
-              }}
-            />
-          </ThreadPrimitive.Viewport>
+        {session.error && (
+          <div className="border-b border-err p-2 text-xs text-err">
+            <span className="label text-err!">error:</span> {session.error.message}
+          </div>
+        )}
 
-          <Composer />
-        </ThreadPrimitive.Root>
-      </AssistantRuntimeProvider>
+        <AssistantRuntimeProvider runtime={session.runtime}>
+          <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col px-4">
+            <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto py-4">
+              <ThreadPrimitive.Empty>
+                <EmptyState agent={activeAgent} hydrating={session.hydrating} />
+              </ThreadPrimitive.Empty>
+
+              <ThreadPrimitive.Messages
+                components={{
+                  UserMessage: UserBubble,
+                  AssistantMessage: AssistantBubble,
+                  SystemMessage: SystemBubble,
+                }}
+              />
+            </ThreadPrimitive.Viewport>
+
+            <Composer />
+          </ThreadPrimitive.Root>
+        </AssistantRuntimeProvider>
+      </div>
     </div>
   );
 }
@@ -185,13 +199,6 @@ function ChatToolbar({
             </option>
           ))}
         </select>
-      )}
-
-      <span className="label ml-3">conversation:</span>
-      {conversationId ? (
-        <span className="font-mono">{conversationId.slice(0, 16)}…</span>
-      ) : (
-        <span className="text-muted">{"// new chat"}</span>
       )}
 
       {status && (

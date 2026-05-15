@@ -4,12 +4,13 @@ import { DeploymentProvider, useDeploymentName } from "./deployment-context.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
 import { ConfigTab } from "./tabs/ConfigTab.js";
+import { DocsTab } from "./tabs/DocsTab.js";
 import { type GuideSectionId, GuideTab, isGuideSectionId } from "./tabs/GuideTab.js";
 import { RunsTab } from "./tabs/RunsTab.js";
 import { ScheduledTab } from "./tabs/ScheduledTab.js";
 import { UsageTab } from "./tabs/UsageTab.js";
 
-type TabId = "chat" | "runs" | "agents" | "scheduled" | "config" | "usage" | "guide";
+type TabId = "chat" | "runs" | "agents" | "scheduled" | "config" | "usage" | "guide" | "docs";
 
 interface Route {
   tab: TabId;
@@ -25,17 +26,33 @@ interface Route {
   guideSection: GuideSectionId | null;
 }
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "chat", label: "CHAT" },
-  { id: "runs", label: "RUNS" },
-  { id: "agents", label: "AGENTS" },
-  { id: "scheduled", label: "SCHEDULED" },
-  { id: "config", label: "CONFIG" },
-  { id: "usage", label: "USAGE" },
-  { id: "guide", label: "GUIDE" },
+const NAV_SECTIONS: {
+  label: string | null;
+  items: { id: TabId; label: string; mark: string }[];
+}[] = [
+  {
+    label: null,
+    items: [
+      { id: "chat", label: "Chat", mark: ">" },
+      { id: "runs", label: "Runs", mark: "[]" },
+      { id: "scheduled", label: "Cron", mark: "()" },
+      { id: "agents", label: "Agents", mark: "{}" },
+      { id: "usage", label: "Usage", mark: "%%" },
+      { id: "config", label: "Config", mark: "##" },
+    ],
+  },
+  {
+    label: "Learn",
+    items: [
+      { id: "guide", label: "Guide", mark: "?" },
+      { id: "docs", label: "Documentation", mark: "::" },
+    ],
+  },
 ];
 
-const TAB_IDS = new Set<TabId>(["chat", "runs", "agents", "scheduled", "config", "usage", "guide"]);
+const TAB_IDS = new Set<TabId>(
+  NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.id)),
+);
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
@@ -110,57 +127,90 @@ function AppInner() {
   }, []);
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="border-b border-line">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-6">
-            <div className="text-xs uppercase tracking-widest">
-              <span className="text-muted">render-harness</span>
-              <span className="mx-2 text-muted">/</span>
-              <span>{deploymentName}</span>
-            </div>
-            <nav className="flex items-center gap-2">
-              {TABS.map((t) => (
+    <div className="min-h-full lg:flex">
+      <aside className="border-b border-line bg-canvas lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0">
+        <div className="border-b border-line p-4">
+          <div className="text-base font-bold uppercase leading-none tracking-widest">
+            <div>Render</div>
+            <div>Harness</div>
+          </div>
+          <div className="mt-3 text-[10px] uppercase tracking-wider text-muted">
+            {deploymentName}
+          </div>
+        </div>
+
+        <nav className="flex flex-wrap gap-0 lg:block lg:flex-1 lg:overflow-y-auto">
+          {NAV_SECTIONS.map((section, idx) => (
+            <div key={section.label ?? "main"} className={idx > 0 ? "border-t border-line" : ""}>
+              {section.label && (
+                <div className="px-4 pt-4 pb-2 text-[10px] uppercase tracking-widest text-muted">
+                  {section.label}
+                </div>
+              )}
+              {section.items.map((item) => (
                 <button
-                  key={t.id}
+                  key={item.id}
                   type="button"
-                  className={`btn ${route.tab === t.id ? "btn-active" : ""}`}
-                  onClick={() => navigate(t.id)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left text-xs uppercase tracking-[0.18em] transition ${
+                    route.tab === item.id
+                      ? "bg-accent text-canvas"
+                      : "text-muted hover:bg-code-bg hover:text-ink"
+                  }`}
+                  onClick={() => navigate(item.id)}
                 >
-                  {t.label}
+                  <span className="w-6 font-mono text-[10px]">{item.mark}</span>
+                  <span>{item.label}</span>
                 </button>
               ))}
-            </nav>
-          </div>
-          <form method="post" action="/ui/logout">
-            <button type="submit" className="btn">
+            </div>
+          ))}
+        </nav>
+
+        <div className="border-t border-line p-4 text-[10px] uppercase tracking-wider text-muted">
+          <div>System</div>
+          <div className="mt-2">gateway status: running</div>
+          <form method="post" action="/ui/logout" className="mt-4">
+            <button type="submit" className="btn w-full">
               Sign out
             </button>
           </form>
         </div>
-      </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
-        <DiagnosticsBanner />
-        {route.tab === "chat" && (
-          <ChatTab
-            conversationId={route.conversationId}
-            onConversationChange={onChatConversationChange}
-          />
-        )}
-        {route.tab === "runs" && (
-          <RunsTab
-            runId={route.runId}
-            onSelectRun={(id) => navigate("runs", id)}
-            onBackToList={() => navigate("runs")}
-            onOpenInChat={(conversationId) => navigate("chat", conversationId)}
-          />
-        )}
-        {route.tab === "agents" && <AgentsTab />}
-        {route.tab === "scheduled" && <ScheduledTab />}
-        {route.tab === "config" && <ConfigTab />}
-        {route.tab === "usage" && <UsageTab />}
-        {route.tab === "guide" && (
-          <GuideTab section={route.guideSection} onSectionChange={onGuideSectionChange} />
+      </aside>
+
+      <main
+        className={
+          route.tab === "docs"
+            ? "min-w-0 flex-1 lg:h-screen lg:overflow-hidden"
+            : "min-w-0 flex-1 px-4 py-6 lg:max-h-screen lg:overflow-y-auto"
+        }
+      >
+        {route.tab === "docs" ? (
+          <DocsTab />
+        ) : (
+          <div className="mx-auto w-full max-w-6xl">
+            <DiagnosticsBanner />
+            {route.tab === "chat" && (
+              <ChatTab
+                conversationId={route.conversationId}
+                onConversationChange={onChatConversationChange}
+              />
+            )}
+            {route.tab === "runs" && (
+              <RunsTab
+                runId={route.runId}
+                onSelectRun={(id) => navigate("runs", id)}
+                onBackToList={() => navigate("runs")}
+                onOpenInChat={(conversationId) => navigate("chat", conversationId)}
+              />
+            )}
+            {route.tab === "agents" && <AgentsTab />}
+            {route.tab === "scheduled" && <ScheduledTab />}
+            {route.tab === "config" && <ConfigTab />}
+            {route.tab === "usage" && <UsageTab />}
+            {route.tab === "guide" && (
+              <GuideTab section={route.guideSection} onSectionChange={onGuideSectionChange} />
+            )}
+          </div>
         )}
       </main>
     </div>

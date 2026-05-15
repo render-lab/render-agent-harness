@@ -25,6 +25,8 @@
   --color-ink: #000000;
   --color-muted: #555555;
   --color-line: #000000;
+  --color-surface: #f8f8f8;
+  --color-surface-hover: #eeeeee;
   /* Tailwind purple-500 / purple-400 — terminal-ish accent that pops on
    * both light and dark canvases. */
   --color-accent: #a855f7;
@@ -43,8 +45,10 @@
     :root {
       --color-canvas: #000000;
       --color-ink: #ffffff;
-      --color-muted: #999999;
-      --color-line: #ffffff;
+      --color-muted: #8a8a8a;
+      --color-line: #2a2a2a;
+      --color-surface: #050505;
+      --color-surface-hover: #101010;
       --color-accent: #c084fc; /* purple-400, brighter for dark canvas */
       --color-err: #ff5555;
       --color-code-bg: #27272a; /* zinc-800 */
@@ -102,7 +106,7 @@
   textarea,
   select {
     border: 1px solid var(--color-line);
-    background: var(--color-canvas);
+    background: var(--color-surface);
     padding: 0.35rem 0.55rem;
     caret-color: var(--color-accent);
   }
@@ -166,7 +170,7 @@
 
 @layer components {
   .panel {
-    @apply bg-canvas border border-line;
+    @apply bg-surface border border-line;
   }
 
   .label {
@@ -187,26 +191,26 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center bg-canvas text-ink border border-line uppercase;
+    @apply inline-flex items-center justify-center bg-surface text-ink border border-line uppercase;
     padding: 0.35rem 0.7rem;
     font-size: 0.78rem;
     letter-spacing: 0.06em;
     transition: background 80ms linear, color 80ms linear, border-color 80ms linear;
   }
   .btn:hover:not(:disabled) {
-    @apply text-accent border-accent;
+    @apply bg-surface-hover text-accent border-accent;
   }
   .btn-active {
     @apply bg-accent text-canvas border-accent;
   }
   .btn-active:hover:not(:disabled) {
-    @apply bg-canvas text-accent border-accent;
+    @apply bg-surface text-accent border-accent;
   }
   .btn-primary {
     @apply bg-accent text-canvas border-accent;
   }
   .btn-primary:hover:not(:disabled) {
-    @apply bg-canvas text-accent;
+    @apply bg-surface text-accent;
   }
   .btn-danger {
     @apply text-err border-err;
@@ -218,7 +222,7 @@
     @apply bg-err text-canvas border-err;
   }
   .btn-danger-solid:hover:not(:disabled) {
-    @apply bg-canvas text-err;
+    @apply bg-surface text-err;
   }
 
   .badge {
@@ -247,6 +251,25 @@
     min-width: 3ch;
     color: var(--color-accent);
     animation: rh-cli-dots 1.2s steps(4, end) infinite;
+  }
+
+  .mermaid-host svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid-host .node rect,
+  .mermaid-host .node polygon,
+  .mermaid-host .node circle,
+  .mermaid-host .node ellipse {
+    stroke: var(--color-line) !important;
+  }
+  .mermaid-host .edgePath path,
+  .mermaid-host .flowchart-link {
+    stroke: var(--color-accent) !important;
+  }
+  .mermaid-host text {
+    fill: var(--color-ink) !important;
+    font-family: var(--font-mono) !important;
   }
 
   @keyframes rh-cli-dots {

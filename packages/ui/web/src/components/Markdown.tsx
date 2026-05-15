@@ -1,6 +1,7 @@
 import { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MermaidDiagram } from "./MermaidDiagram.js";
 import { ShikiBlock } from "./ShikiBlock.js";
 
 /**
@@ -70,6 +71,7 @@ const components: Components = {
     }
     const match = /language-([\w-]+)/.exec(className ?? "");
     const code = String(children).replace(/\n$/, "");
+    if (match?.[1] === "mermaid") return <MermaidDiagram chart={code} />;
     return match?.[1] ? <ShikiBlock code={code} language={match[1]} /> : <ShikiBlock code={code} />;
   },
   // Disable the default <pre> wrapper around fenced code — ShikiBlock

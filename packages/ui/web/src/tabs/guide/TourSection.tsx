@@ -9,6 +9,7 @@ import {
   listAgents,
 } from "../../api.js";
 import { Markdown } from "../../components/Markdown.js";
+import { MermaidDiagram } from "../../components/MermaidDiagram.js";
 import { useDeployment, useDeploymentName } from "../../deployment-context.js";
 import { CmdBadge, CTA, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
@@ -133,23 +134,18 @@ function summariseChecks(checks: DiagnosticCheck[]): string {
 }
 
 /**
- * Topology diagram — rendered as a <pre> for monospace alignment.
- * Reads the deployment info to draw the actual service set: web/worker
- * if present, one row per inline cron, one row per cron-trigger, and a
- * Workflows row when the bundle has workflow-task agents.
+ * Topology diagram. Reads deployment info to draw the actual service set:
+ * web/worker if present, one node per inline cron, one node per cron-trigger,
+ * and a Workflows node when the bundle has workflow-task agents.
  *
  * If deployment info isn't loaded yet, falls back to the canonical
  * web+worker layout — better than a blank box while the fetch resolves.
  */
 function Diagram({ name, deployment }: { name: string; deployment: DeploymentInfo | null }) {
-  const lines = deployment
-    ? buildTopologyLines(name, deployment)
-    : buildTopologyLines(name, fallbackDeployment(name));
-  return (
-    <pre className="my-3 overflow-x-auto border border-line p-3 text-[11px] leading-relaxed">
-      {lines.join("\n")}
-    </pre>
-  );
+  const chart = deployment
+    ? buildTopologyMermaid(name, deployment)
+    : buildTopologyMermaid(name, fallbackDeployment(name));
+  return <MermaidDiagram chart={chart} />;
 }
 
 function fallbackDeployment(name: string): DeploymentInfo {
@@ -166,9 +162,7 @@ function fallbackDeployment(name: string): DeploymentInfo {
   };
 }
 
-const BOX_WIDTH = 28;
-
-function buildTopologyLines(name: string, deployment: DeploymentInfo): string[] {
+function buildTopologyMermaid(name: string, deployment: DeploymentInfo): string {
   const kinds = new Set<string>();
   const inlineCrons: DeploymentAgentInfo[] = [];
   const cronTriggers: DeploymentAgentInfo[] = [];
@@ -187,58 +181,43 @@ function buildTopologyLines(name: string, deployment: DeploymentInfo): string[] 
   const hasWorker = kinds.has("worker");
   const hasWorkflows = workflowTasks.length > 0;
 
-  const out: string[] = [];
+  const out: string[] = ["flowchart TD"];
   if (hasWeb) {
-    out.push(...drawBox(`${name}-web`, "serves /ui, /runs, SSE"));
-    if (hasWorker) out.push(...arrow("enqueue job  (pg-boss)"));
+    out.push(`  web["${escapeMermaid(`${name}-web`)}<br/>serves /ui, /runs, SSE"]`);
+    out.push('  web -->|"enqueue job (pg-boss)"| postgres');
   }
-  out.push(...drawBox("postgres", "agent_runs · agent_messages · pgboss.job"));
+  out.push('  postgres["postgres<br/>agent_runs, agent_messages, pgboss.job"]');
   if (hasWorker) {
-    out.push(...arrow("pull job  (LISTEN/NOTIFY)"));
-    out.push(...drawBox(`${name}-worker`, "startWorkerAndWait → model / MCP"));
+    out.push(`  postgres -->|"pull job + NOTIFY"| worker`);
+    out.push(`  worker["${escapeMermaid(`${name}-worker`)}<br/>model + MCP loop"]`);
   }
-  out.push(...arrow("cancel signal (TTL)"));
-  out.push(...drawBox("valkey (KV)", "cancel:<runId>"));
+  out.push('  valkey["valkey (KV)<br/>cancel:runId"]');
+  if (hasWeb) out.push('  web -. "cancel signal (TTL)" .-> valkey');
+  if (hasWorker) out.push("  worker -. check cancel .-> valkey");
 
   for (const agent of inlineCrons) {
-    out.push("");
-    out.push(...drawBox(`${name}-cron-${agent.id}`, "inline agent loop"));
-    out.push(`     ${gutter()}── runs ${agent.id} on its schedule`);
+    const id = nodeId("cron", agent.id);
+    out.push(`  ${id}["${escapeMermaid(`${name}-cron-${agent.id}`)}<br/>inline agent loop"]`);
+    out.push(`  ${id} -->|"runs ${escapeMermaid(agent.id)} on schedule"| postgres`);
   }
   for (const agent of cronTriggers) {
-    out.push("");
-    out.push(...drawBox(`${name}-cron-trigger-${agent.id}`, "calls render.workflows.runTask"));
-    out.push(`     ${gutter()}── starts ${agent.id} workflow task`);
+    const id = nodeId("cronTrigger", agent.id);
+    out.push(`  ${id}["${escapeMermaid(`${name}-cron-trigger-${agent.id}`)}<br/>runTask trigger"]`);
+    out.push(`  ${id} -->|"starts ${escapeMermaid(agent.id)} task"| workflows`);
   }
   if (hasWorkflows) {
-    out.push("");
     out.push(
-      ...drawBox(
-        `${name}-workflows`,
-        `Render Workflows · ${workflowTasks.length} task${workflowTasks.length === 1 ? "" : "s"}`,
-      ),
+      `  workflows["${escapeMermaid(`${name}-workflows`)}<br/>Render Workflows: ${workflowTasks.length} task${workflowTasks.length === 1 ? "" : "s"}"]`,
     );
-    out.push(`     ${gutter()}── tasks: ${workflowTasks.map((a) => a.id).join(", ")}`);
+    out.push(`  workflows -->|"writes state"| postgres`);
   }
-  return out;
+  return out.join("\n");
 }
 
-function drawBox(title: string, sub: string): string[] {
-  const top = `     ┌${"─".repeat(BOX_WIDTH)}┐`;
-  const titleLine = `     │ ${pad(title, BOX_WIDTH - 2)} │  ${sub}`;
-  const bottom = `     └${"─".repeat(BOX_WIDTH)}┘`;
-  return [top, titleLine, bottom];
+function nodeId(prefix: string, id: string): string {
+  return `${prefix}_${id.replaceAll(/[^a-zA-Z0-9_]/g, "_")}`;
 }
 
-function arrow(label: string): string[] {
-  return [`     ${gutter()}`, `     ${gutter()}  ${label}`, `     ${gutter()}`];
-}
-
-function gutter(): string {
-  return `${" ".repeat(Math.floor(BOX_WIDTH / 2))}│`;
-}
-
-function pad(s: string, width: number): string {
-  if (s.length >= width) return `${s.slice(0, width - 1)}…`;
-  return s.padEnd(width, " ");
+function escapeMermaid(value: string): string {
+  return value.replaceAll('"', '\\"');
 }
