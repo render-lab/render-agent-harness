@@ -565,11 +565,11 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2(hono@4.12.18)
       '@render-harness/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+        specifier: ^0.1.1
+        version: 0.1.1
       '@render-harness/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^0.1.1
+        version: 0.1.1
       hono:
         specifier: ^4.12.18
         version: 4.12.18
