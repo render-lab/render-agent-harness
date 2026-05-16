@@ -255,7 +255,7 @@ Each deferral is intentional. Listed so the gap is explicit:
 2. **MCP server discovery.** Adding *new* MCP servers from the UI (rather than toggling existing ones) requires schema-level YAML editing and is deferred. Same for adding new capability packs.
 3. **Multi-admin roles.** Today, one API key = one admin. Per-user RBAC (read-only operator, full admin, etc.) is out.
 4. **Edit conflict detection.** Two admins simultaneously editing the prompt last-writer-wins. Acceptable v1 behavior; revisit if a customer complains.
-5. **Live model swap mid-conversation.** Switching the model takes effect on the *next run*, not on a paused chat-shape run that's mid-turn. The plan does not add a "re-run with new model" affordance; users start a new conversation.
+5. **Live model swap mid-conversation.** Switching the model takes effect on the next run in the conversation. The plan does not add a "re-run with new model" affordance; users start a new conversation if they want a clean break.
 6. **Cron-runtime schedule live edit.** Editing the YAML `runtimes[].schedule` from the UI needs a redeploy to take effect, since the Render Cron service has the cron expression baked in. v1 surfaces it read-only; ad-hoc scheduling via `agent_schedules` is the live path.
 7. **Audit UI.** `agent_config_edits` is written but only queryable via psql or `GET /admin/agents/:name/edits`; no dedicated UI tab in v1.
 8. **Skill content editing.** Skills can be toggled but not rewritten from the UI. Content lives on disk / in capability packs.

@@ -104,7 +104,7 @@ Single change: `packages/runtime-cron/src/index.ts`. Currently takes one `AgentD
 ├── README.md
 ├── render-harness.yaml             # V2, 3 agents, shared cap-memory-pg
 └── src/
-    ├── chat.ts                     # defineAgent({ shape: "chat", ... })
+    ├── chat.ts                     # conversation-backed chat agent
     ├── meeting-prep.ts             # cron, reads CALENDAR_ICS_URL via fetch_url
     └── weekly-recap.ts             # cron, summarises week from memory + sources
 ```

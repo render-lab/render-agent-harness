@@ -1,10 +1,10 @@
 # Plan: first-class conversations, drop chat-shape overload
 
+Status: implemented. The migration, repo helpers, loop changes, web routes, streaming, and UI chat wiring have landed. This document remains as design history and a follow-up backlog.
+
 This document captures the plan to evolve the current chat mechanism — *one chat = one long-lived run, each turn pauses* — into a proper `conversations` model where many runs belong to one conversation. The trigger is the load-bearing-but-fragile design noted in [`ui-guide.md`](ui-guide.md): the `paused` state is doing two unrelated jobs (HITL approval + chat-turn-end), and there's no first-class home for list-of-sessions, per-conversation cost rollups, or branching.
 
-Nothing is live yet, so this is one breaking change, not a deprecation cycle.
-
-## Today, in one paragraph
+## Previous state, in one paragraph
 
 A chat-shape agent (`shape: "chat"` in `defineAgent()`) ends each turn in `paused` with `metadata.pauseReason = "chat_turn_end"` instead of `completed`. The Chat tab keeps the same `runId` across page refreshes. New user messages go through `POST /runs/:id/input`, which sets the run back to `pending` and re-enqueues it. The next iteration loads full history from `agent_messages WHERE run_id = ?` and feeds it to the model. There is no `conversations` table; one chat session is exactly one row in `agent_runs`.
 
@@ -102,7 +102,7 @@ createConversation(pool, { id?, userId?, agentName, agentVersion, title?, metada
 loadConversation(pool, id): Promise<AgentConversation | null>
 listConversations(pool, filter): Promise<ListConversationsPage>     // keyset on last_active_at
 loadConversationMessages(pool, conversationId): Promise<Message[]>  // ORDER BY created_at, seq
-hasActiveRun(pool, conversationId): Promise<boolean>                // for the 409 guard
+findActiveRunForConversation(pool, conversationId): Promise<AgentRun | null> // for the 409 guard
 rollupConversation(pool, conversationId, deltaCostUsd): Promise<void>
 ```
 

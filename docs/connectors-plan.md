@@ -6,21 +6,21 @@ The harness has zero inbound trigger surface today — every run starts via `POS
 
 User-confirmed v1 shape:
 - **Scope:** `cap-slack` + `cap-webhook-generic`. Discord/Socket Mode deferred.
-- **Slack threading:** thread = continued run, via the in-flight `agent_conversations` model. A new Slack thread creates a conversation; replies in that thread enqueue new runs with the same `conversation_id`.
+- **Slack threading:** thread = continued conversation, via the landed `agent_conversations` model. A new Slack thread creates a conversation; replies in that thread enqueue new runs with the same `conversation_id`.
 - **Reply:** tool-only. Agents call `slack.send_message` etc. explicitly. No `onJobResult` auto-post.
 
 Consequence: with no auto-reply hook and no websocket listeners, **`@render-harness/runtime-worker` needs zero changes for v1**. All inbound plumbing lives in `web` + new capability packages.
 
-## Dependency: conversations work must land first
+## Dependency: conversations model
 
-This plan rides on the conversations milestone described in `docs/conversations-plan.md` and migration `packages/core/sql/0002_conversations.sql` (both in-flight, uncommitted as of writing). Specifically, it requires:
+This plan rides on the conversations milestone described in `docs/conversations-plan.md` and migration `packages/core/sql/0002_conversations.sql`, which has now landed. Specifically, connector threading can rely on:
 
-- `agent_conversations` table and `conversation_id` FK on `agent_runs` / `agent_messages` (migration 0002 — already drafted).
+- `agent_conversations` table and `conversation_id` FK on `agent_runs` / `agent_messages`.
 - `createConversation(pool, { id?, userId?, agentName, agentVersion, metadata? })` and `loadConversation(pool, id)` in `packages/core/src/state/repo.ts`.
 - `enqueueRun(...)` in `@render-harness/runtime-worker` accepts a new optional `conversationId` and forwards it to `createRun`.
-- `hasActiveRun(pool, conversationId)` for the sequential-only 409 guard.
+- `findActiveRunForConversation(pool, conversationId)` for the sequential-only 409 guard.
 
-Connector implementation starts **after** conversations is merged. If timing slips, the connector plan still works without conversations — Slack threading degrades to "every message = new run" — but the user explicitly chose threaded continuation.
+Connector implementation no longer needs to block on the conversations model. A small `enqueueIntoConversation(...)` convenience helper is still useful for connector code, but the underlying primitives are present.
 
 ## Architecture
 
@@ -199,7 +199,7 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 - `assertCapabilityPack` and the dynamic-import loader — `packages/registry/src/capability.ts:188`; connector mount reuses both.
 - `mountUiIfAvailable` pattern — `packages/web/src/ui-mount.ts`; `connector-mount.ts` mirrors it exactly.
 - `installShutdownHandlers` — `packages/runtime-worker/src/index.ts`; relevant if v2 adds Socket Mode listeners.
-- Conversations repo (`createConversation`, `loadConversation`, `hasActiveRun`) — landing in the conversations work this plan rides on.
+- Conversations repo (`createConversation`, `loadConversation`, `findActiveRunForConversation`) — landed with the conversations work this plan rides on.
 
 ## Verification
 
@@ -236,7 +236,7 @@ pnpm build
 
 ## Execution order
 
-1. **Block on conversations.** Confirm `docs/conversations-plan.md` lands first; this plan is meaningless without `conversation_id` on runs.
+1. **Confirm the conversation helper shape.** The underlying conversation model has landed; decide whether connectors call the primitives directly or use a small `enqueueIntoConversation(...)` wrapper.
 2. **Registry contract.** Add `ConnectorContribution` to `packages/registry/src/capability.ts`. One commit. No callers yet.
 3. **Web mount.** Add `connector-mount.ts`, `routes/connectors.ts`, wire into `serveWeb`. Tests with a fake pack.
 4. **`cap-webhook-generic`.** Simpler of the two — no threading, no outbound tools. Validates the contract end-to-end.

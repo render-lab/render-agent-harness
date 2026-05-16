@@ -127,24 +127,32 @@ export function mountUi(opts: MountUiOpts): void {
     return c.html(html);
   };
 
+  const serveAsset = async (c: Context, rel: string) => {
+    const buf = await readBundleAsset(staticDir, join("assets", rel));
+    if (!buf) return c.notFound();
+    // Hono's typed body() wants `Uint8Array<ArrayBuffer>`, not Node's
+    // `Buffer<ArrayBufferLike>`. Copy into a fresh ArrayBuffer-backed
+    // view so the type matches without resorting to `any`.
+    const bytes = new Uint8Array(new ArrayBuffer(buf.byteLength));
+    bytes.set(buf);
+    return c.body(bytes, 200, {
+      "content-type": guessContentType(rel),
+      // Vite emits hash-named asset files; safe to cache aggressively.
+      "cache-control": "public, max-age=31536000, immutable",
+    });
+  };
+
+  if (path === "") {
+    opts.app.get("/assets/*", async (c) => serveAsset(c, c.req.path.replace(/^\/assets\//, "")));
+  }
+
   opts.app.get(path || "/", serveSpaShell);
   opts.app.get(`${path}/`, serveSpaShell);
   opts.app.get(`${path}/*`, async (c, next) => {
     const sub = c.req.path.slice(path.length);
     if (sub.startsWith("/assets/")) {
       const rel = sub.replace(/^\/assets\//, "");
-      const buf = await readBundleAsset(staticDir, join("assets", rel));
-      if (!buf) return c.notFound();
-      // Hono's typed body() wants `Uint8Array<ArrayBuffer>`, not Node's
-      // `Buffer<ArrayBufferLike>`. Copy into a fresh ArrayBuffer-backed
-      // view so the type matches without resorting to `any`.
-      const bytes = new Uint8Array(new ArrayBuffer(buf.byteLength));
-      bytes.set(buf);
-      return c.body(bytes, 200, {
-        "content-type": guessContentType(rel),
-        // Vite emits hash-named asset files; safe to cache aggressively.
-        "cache-control": "public, max-age=31536000, immutable",
-      });
+      return serveAsset(c, rel);
     }
     if (sub === "/login" || sub.startsWith("/login?")) {
       return next();

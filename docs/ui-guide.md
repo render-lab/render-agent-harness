@@ -147,7 +147,7 @@ All JSON+SSE endpoints live on `@render-harness/web` and are available whether o
 | GET    | `/runs/:id/tool-calls`     | Tool calls joined to results for the run timeline.    |
 | GET    | `/runs/:id/stream`         | SSE stream of messages and status updates.            |
 | POST   | `/runs/:id/cancel`         | Cooperative cancel via KV flag.                       |
-| POST   | `/runs/:id/input`          | Inject input into a paused run (HITL or chat-shape next turn). |
+| POST   | `/runs/:id/input`          | Inject input into a paused HITL run.                  |
 | GET    | `/agents`                  | Summary of agents loaded into this web service.       |
 | GET    | `/usage`                   | Daily/per-agent rollups (`?from=`, `?to=`, `?allUsers=1`). |
 | GET    | `/healthz`                 | Liveness probe.                                       |
