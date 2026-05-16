@@ -76,6 +76,7 @@ export function useConversationSession(
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [hydrating, setHydrating] = useState<boolean>(initialConversationId !== null);
+  const [loadingTick, setLoadingTick] = useState(0);
 
   const onConversationIdChangeRef = useRef(opts.onConversationIdChange);
   onConversationIdChangeRef.current = opts.onConversationIdChange;
@@ -93,6 +94,15 @@ export function useConversationSession(
   // another turn until /runs/:id/input resolves it, so showing the stop
   // button rather than send is the honest affordance.
   const isRunning = status !== null && ACTIVE_STATUSES.has(status);
+
+  useEffect(() => {
+    if (!isRunning) {
+      setLoadingTick(0);
+      return;
+    }
+    const id = window.setInterval(() => setLoadingTick((tick) => tick + 1), 1800);
+    return () => window.clearInterval(id);
+  }, [isRunning]);
 
   // Hydrate when the URL conversationId changes (mount, back/forward,
   // explicit reset to a different one).
@@ -217,8 +227,8 @@ export function useConversationSession(
   }, [activeRunId]);
 
   const displayMessages = useMemo(
-    () => withThinkingPlaceholder(messages, isRunning),
-    [messages, isRunning],
+    () => withThinkingPlaceholder(messages, isRunning, loadingTick),
+    [messages, isRunning, loadingTick],
   );
 
   const runtime = useExternalStoreRuntime<MessageRecord>({
@@ -259,16 +269,30 @@ export function isChatSession(run: Pick<RunSummary, "conversationId">): boolean 
   return run.conversationId !== null;
 }
 
-function withThinkingPlaceholder(messages: MessageRecord[], isRunning: boolean): MessageRecord[] {
+const LOADING_MESSAGES = [
+  "checking memory",
+  "queueing the run",
+  "warming tools",
+  "reading context",
+  "waiting on the model",
+  "streaming soon",
+] as const;
+
+function withThinkingPlaceholder(
+  messages: MessageRecord[],
+  isRunning: boolean,
+  loadingTick: number,
+): MessageRecord[] {
   if (!isRunning || messages.length === 0) return messages;
   const last = messages[messages.length - 1];
   if (!last || last.role === "assistant") return messages;
+  const text = LOADING_MESSAGES[loadingTick % LOADING_MESSAGES.length] ?? "thinking";
   return [
     ...messages,
     {
       id: `local-thinking-${last.id}`,
       role: "assistant",
-      content: [{ type: "text", text: "thinking" }],
+      content: [{ type: "text", text }],
       createdAt: new Date().toISOString(),
     },
   ];

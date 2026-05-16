@@ -315,7 +315,7 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
     }
   };
 
-  await boss.work<RunJob>(queue, { batchSize: concurrency, pollingIntervalSeconds: 2 }, handler);
+  await boss.work<RunJob>(queue, { batchSize: concurrency, pollingIntervalSeconds: 0.5 }, handler);
   await boss.work<ScheduledRunJob>(
     SCHEDULE_QUEUE,
     { batchSize: 1, pollingIntervalSeconds: 5 },

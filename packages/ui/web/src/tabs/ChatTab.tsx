@@ -313,14 +313,25 @@ function SystemBubble() {
 }
 
 function PlainText(props: TextMessagePartProps) {
-  if (props.text === "thinking") return <ThinkingText />;
+  if (isLoadingText(props.text)) return <ThinkingText text={props.text} />;
   return <Markdown text={props.text} />;
 }
 
-function ThinkingText() {
+function isLoadingText(text: string): boolean {
+  return [
+    "checking memory",
+    "queueing the run",
+    "warming tools",
+    "reading context",
+    "waiting on the model",
+    "streaming soon",
+  ].includes(text);
+}
+
+function ThinkingText({ text }: { text: string }) {
   return (
     <span className="text-muted">
-      thinking
+      {text}
       <span className="cli-dots" aria-hidden="true" />
       <span className="sr-only">...</span>
     </span>
