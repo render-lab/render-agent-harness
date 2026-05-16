@@ -5,6 +5,7 @@ export {
   buildFileMap,
   type GenerateResult,
   generate,
+  removeLocalEnvFile,
 } from "./generate.js";
 export { runWizard } from "./prompts.js";
 export type {

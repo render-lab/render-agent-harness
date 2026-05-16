@@ -6,7 +6,7 @@ import { CmdBadge, CodeBlock, CTA, GuideSectionShell, KV, LivePanel } from "./la
 
 function buildIntro(name: string): string {
   return `
-The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render service: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`${name}-web\` becomes a public web service, \`${name}-worker\` becomes a private service. The harness uses the same image and same code; only the runtime layout changes.
+The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render resource: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`${name}-web\` becomes a public web service, and \`${name}-worker\` becomes a background worker. The harness uses the same image and same code; only the runtime layout changes.
 `;
 }
 
@@ -18,9 +18,9 @@ A starter \`render.yaml\` that matches your loaded agent is just one HTTP call a
 - a managed Postgres for state + queue
 - Render Key Value for cancel signals
 - a public \`type: web\` for the agent console / JSON API
-- a private \`type: pserv\` for the worker
+- a background \`type: worker\` for the queue consumer
 
-Why private for the worker? It runs the agent loop, which means it talks to model providers and (sometimes) third-party MCP servers. Putting it on the private network keeps DB and KV traffic off the public internet — the only outbound is to the model and any MCP endpoints.
+Why a background worker? It runs the agent loop, drains jobs from the queue, and doesn't accept inbound HTTP traffic.
 `;
 
 const PROSE_ENV = `
@@ -177,7 +177,7 @@ function deriveServiceList(
     const webIdx = rows.findIndex((r) => r.label === `${bundleName}-web`);
     rows.splice(webIdx + 1, 0, {
       label: `${bundleName}-worker`,
-      role: "private pserv — pulls jobs from the pg-boss queue",
+      role: "background worker — pulls jobs from the pg-boss queue",
     });
   }
   if (hasWorkflowTask) {

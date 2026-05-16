@@ -1,6 +1,6 @@
 import type { ResolvedGallery } from "@render-harness/registry/gallery";
 import type { Answers } from "create-render-agent";
-import { addBlueprintFilesToMap, buildFileMap } from "create-render-agent";
+import { addBlueprintFilesToMap, buildFileMap, removeLocalEnvFile } from "create-render-agent";
 import type { Hono } from "hono";
 import {
   buildDeployUrl,
@@ -205,6 +205,7 @@ async function runScaffoldJob(args: {
     const repoName = opts.mockScaffold ? `${desiredName}-mock` : buildScaffoldRepoName(desiredName);
     const deploymentName = toHarnessSlug(repoName);
     const fileMap = buildFileMap(answers);
+    removeLocalEnvFile(fileMap);
 
     emitProgress(job, "generating_blueprint", "Generating render.yaml Blueprint");
     await addBlueprintFilesToMap(fileMap, body.agentName, { deploymentName });

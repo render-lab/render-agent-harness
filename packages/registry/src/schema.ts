@@ -201,7 +201,7 @@ export type AgentBlockInput = z.infer<typeof AgentBlockSchema>;
 //
 // Each entry can declare 1..N runtimes. The Blueprint emitter inspects the
 // combination to decide whether to emit `runtime-web` (single-process) or
-// `packages/web` + `runtime-worker` pserv (multi-tenant).
+// `packages/web` + `runtime-worker` background worker (multi-tenant).
 // ----------------------------------------------------------------------
 
 const planSchema = z

@@ -81,6 +81,8 @@ describe("planFromBlueprint", () => {
       ],
     });
     const names = plan.resources.map((r) => r.name).sort();
+    const worker = plan.resources.find((r) => r.name === "chief-of-staff-worker");
+    expect(worker).toMatchObject({ kind: "service", subkind: "background_worker" });
     expect(names).toEqual([
       "chief-of-staff-cron-meeting-prep",
       "chief-of-staff-cron-trigger-interview-prep",

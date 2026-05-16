@@ -95,7 +95,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
     expect(services[0]?.startCommand).toContain("examples/citations-monitor/dist/main.js");
   });
 
-  it("emits public web + worker pserv + KV for an agent with [web,worker] runtimes", async () => {
+  it("emits public web + background worker + KV for an agent with [web,worker] runtimes", async () => {
     const config = HarnessConfigSchema.parse(
       singleAgent({
         name: "support-agent",
@@ -116,9 +116,9 @@ describe("emitBlueprint — runtime shape mapping", () => {
       packageName: "@render-harness/example-support-agent",
     });
     const services = blueprint.services ?? [];
-    expect(services.map((s) => s.type)).toEqual(["keyvalue", "web", "pserv"]);
+    expect(services.map((s) => s.type)).toEqual(["keyvalue", "web", "worker"]);
     expect(services.find((s) => s.type === "web")?.name).toBe("support-agent-web");
-    expect(services.find((s) => s.type === "pserv")?.name).toBe("support-agent-worker");
+    expect(services.find((s) => s.type === "worker")?.name).toBe("support-agent-worker");
     expect(services.find((s) => s.type === "keyvalue")?.name).toBe("support-agent-kv");
     expect(services.find((s) => s.type === "keyvalue")?.plan).toBe("starter");
     const web = services.find((s) => s.type === "web");
@@ -127,7 +127,7 @@ describe("emitBlueprint — runtime shape mapping", () => {
       type: "keyvalue",
       property: "connectionString",
     });
-    const worker = services.find((s) => s.type === "pserv");
+    const worker = services.find((s) => s.type === "worker");
     expect(worker?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.value).toBe("");
     expect(worker?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe(
       "support-agent-runs",
@@ -273,6 +273,13 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       type: "keyvalue",
       property: "connectionString",
     });
+    expect(web?.envVars?.find((e) => e.key === "WEB_API_KEY")?.sync).toBe(false);
+    expect(web?.envVars?.find((e) => e.key === "UI_COOKIE_SECRET")?.generateValue).toBe(true);
+    expect(
+      blueprint.envVarGroups?.[0]?.envVars.some(
+        (e) => e.key === "WEB_API_KEY" || e.key === "UI_COOKIE_SECRET",
+      ),
+    ).toBe(false);
   });
 
   it("propagates per-agent envSchema entries across all services once", async () => {
@@ -343,7 +350,7 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     });
     expect(warnings.some((w) => /divergent queue names/.test(w))).toBe(true);
     // Still emits exactly ONE worker — coalesced.
-    expect(blueprint.services?.filter((s) => s.type === "pserv")).toHaveLength(1);
+    expect(blueprint.services?.filter((s) => s.type === "worker")).toHaveLength(1);
   });
 
   it("records one consolidated Dashboard step listing every workflow-task agent in the bundle", async () => {
@@ -464,10 +471,10 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       packageName: "@render-harness/example-delegator",
     });
     const web = blueprint.services?.find((s) => s.type === "web");
-    const worker = blueprint.services?.find((s) => s.type === "pserv");
+    const worker = blueprint.services?.find((s) => s.type === "worker");
     const projectServices = blueprint.projects?.[0]?.environments[0]?.services ?? [];
     const projectWeb = projectServices.find((s) => s.type === "web");
-    const projectWorker = projectServices.find((s) => s.type === "pserv");
+    const projectWorker = projectServices.find((s) => s.type === "worker");
     expect(web?.envVars?.find((e) => e.key === "WORKFLOW_SLUG")?.value).toBe("delegator-workflows");
     expect(projectWeb?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
     expect(worker?.envVars?.find((e) => e.key === "WORKFLOW_SLUG")?.value).toBe(

@@ -147,7 +147,7 @@ export type ServiceDetails =
       envSpecificDetails?: { buildCommand?: string; startCommand?: string };
     }
   | {
-      // private_service (worker pserv) + background_worker
+      // private_service + background_worker
       env: "node" | "docker" | "image";
       plan?: string;
       region?: string;

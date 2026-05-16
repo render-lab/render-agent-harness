@@ -104,6 +104,8 @@ describe("POST /api/scaffold", () => {
     expect(call.files.has("render.yaml")).toBe(true);
     expect(call.files.has("package.json")).toBe(true);
     expect(call.files.has("src/main.ts")).toBe(true);
+    expect(call.files.has(".env")).toBe(false);
+    expect(call.files.has(".env.example")).toBe(true);
     expect(call.files.get("render.yaml")).toContain("services:");
     expect(call.files.get("render-harness.yaml")).toMatch(/name: rah-my-agent-[0-9a-f]{4}/);
     expect(call.files.get("render.yaml")).toMatch(/name: rah-my-agent-[0-9a-f]{4}/);

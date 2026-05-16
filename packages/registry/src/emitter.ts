@@ -11,7 +11,7 @@
  *
  *   blueprints/render.demo.yaml       -> single web service + Postgres
  *   blueprints/render.demo-cron.yaml  -> single cron + Postgres
- *   blueprints/render.private.yaml    -> public web + worker pserv +
+ *   blueprints/render.private.yaml    -> public web + background worker +
  *                                        Postgres + Key Value
  *
  * Auto-derivation rule (V2 multi-agent — V1 manifests are normalized
@@ -21,12 +21,12 @@
  *                                                 also has kind:worker
  *                                                 anywhere in the bundle,
  *                                                 emit the multi-tenant
- *                                                 web shell + worker pserv
+ *                                                 web shell + background worker
  *                                                 + Key Value shape;
  *                                                 otherwise emit a single
  *                                                 sync web (runtime-web).
- *   - all agents with kind:worker               → coalesce into ONE worker
- *                                                 pserv. Implies Key Value.
+ *   - all agents with kind:worker               → coalesce into ONE background
+ *                                                 worker. Implies Key Value.
  *   - each kind:cron runtime entry across all   → ONE Render Cron service
  *     agents                                      per entry, named
  *                                                 `<bundle>-cron-<agentId>`
@@ -204,7 +204,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
     }
   }
 
-  // -------------- coalesced worker pserv ------------------------------
+  // -------------- coalesced background worker -------------------------
   if (buckets.worker.length > 0) {
     const primary = buckets.worker[0];
     if (!primary) throw new Error("unreachable: worker bucket non-empty");
@@ -476,6 +476,7 @@ function syncWebService(args: SyncWebArgs): BlueprintService {
     envVars: [
       ...sharedRuntimeEnv(cfg),
       ...modelEnv(effectiveModel(cfg, agent)),
+      ...uiEnvIfNeeded(cfg),
       ...workflowEnvIfNeeded(cfg),
       ...explicitEntryEnv(cfg),
     ],
@@ -498,6 +499,7 @@ function webShellService(args: WebShellArgs): BlueprintService {
       { key: "WORKER_QUEUE", value: workerQueue(cfg) },
       ...sharedRuntimeEnv(cfg),
       ...kvFromService(cfg),
+      ...uiEnvIfNeeded(cfg),
       ...workflowEnvIfNeeded(cfg),
       ...explicitEntryEnv(cfg),
     ],
@@ -507,7 +509,7 @@ function webShellService(args: WebShellArgs): BlueprintService {
 function workerService(args: WorkerArgs): BlueprintService {
   const { cfg, rt, packageName, region, naming } = args;
   return {
-    type: "pserv",
+    type: "worker",
     name: `${cfg.name}-worker`,
     runtime: "node",
     region: rt.region ?? region,
@@ -537,6 +539,14 @@ function workerService(args: WorkerArgs): BlueprintService {
 function workflowEnvIfNeeded(cfg: HarnessConfig): BlueprintEnvVar[] {
   if (workflowTaskAgents(cfg).length === 0) return [];
   return [{ key: "WORKFLOW_SLUG", value: workflowServiceSlug(cfg) }];
+}
+
+function uiEnvIfNeeded(cfg: HarnessConfig): BlueprintEnvVar[] {
+  if (cfg.shared?.ui !== true) return [];
+  return [
+    { key: "WEB_API_KEY", sync: false },
+    { key: "UI_COOKIE_SECRET", generateValue: true },
+  ];
 }
 
 function cronService(args: CronArgs): BlueprintService {
@@ -887,6 +897,7 @@ export interface BlueprintDatabase {
 export interface BlueprintEnvVar {
   key?: string;
   value?: string;
+  generateValue?: boolean;
   sync?: false;
   fromDatabase?: { name: string; property: string };
   fromService?: { name: string; type: string; property: string };

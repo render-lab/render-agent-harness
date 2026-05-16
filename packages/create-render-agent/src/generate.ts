@@ -86,6 +86,10 @@ export function buildFileMap(answers: Answers): Map<string, string> {
   return files;
 }
 
+export function removeLocalEnvFile(files: Map<string, string>): void {
+  files.delete(".env");
+}
+
 export async function addBlueprintFilesToMap(
   files: Map<string, string>,
   packageName: string,
