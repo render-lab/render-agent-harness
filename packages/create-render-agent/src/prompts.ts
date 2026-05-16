@@ -103,7 +103,7 @@ export async function runWizard(options: {
   let ui = false;
   if (runtimeKinds.includes("web")) {
     ui = await promptConfirm({
-      message: "Mount the operator chat UI at /ui? (recommended)",
+      message: "Mount the operator chat UI at /? (recommended)",
       initialValue: true,
     });
     if (ui && !runtimeKinds.includes("worker")) {

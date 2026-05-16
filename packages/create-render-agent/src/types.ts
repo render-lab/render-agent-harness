@@ -43,7 +43,7 @@ export interface Answers {
   bundle: BundlePick | null;
   /**
    * When web is selected, mount the operator UI from `@render-harness/ui`
-   * via `serveWeb({ ui: true })`. Implies a worker runtime, which is added
+   * via `serveWeb({ ui: { path: "/" } })`. Implies a worker runtime, which is added
    * automatically if not already selected (UI-issued runs are enqueued on
    * a pg-boss queue and need a worker to drain).
    */

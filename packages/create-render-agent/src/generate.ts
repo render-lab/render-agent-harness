@@ -139,7 +139,7 @@ function buildBundleFileMap(answers: Answers, bundle: BundlePick): Map<string, s
   files.set("tsconfig.json", tsconfig());
   files.set(".gitignore", gitignore());
   files.set("docker-compose.yml", bundleDockerCompose(answers));
-  // hasUi: when shared.ui is true the operator UI mounts at /ui, which
+  // hasUi: when shared.ui is true the operator UI mounts at /, which
   // needs WEB_API_KEY (bearer auth) + UI_COOKIE_SECRET (session sign).
   const hasUi =
     typeof bundle.manifest === "object" &&

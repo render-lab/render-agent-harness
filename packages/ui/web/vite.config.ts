@@ -6,9 +6,8 @@ import { defineConfig } from "vite";
 const here = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  // The web service mounts the SPA under /ui by default. Building with
-  // base: "/ui/" rewrites all asset URLs so they resolve under that path.
-  base: "/ui/",
+  // Relative asset URLs work whether the UI is mounted at "/" or "/ui".
+  base: "./",
   root: here,
   plugins: [react(), tailwindcss()],
   build: {
@@ -35,6 +34,8 @@ export default defineConfig({
       "/schedules": "http://127.0.0.1:8080",
       "/inbox": "http://127.0.0.1:8080",
       "/usage": "http://127.0.0.1:8080",
+      "/login": "http://127.0.0.1:8080",
+      "/logout": "http://127.0.0.1:8080",
       "/ui/login": "http://127.0.0.1:8080",
       "/ui/logout": "http://127.0.0.1:8080",
     },

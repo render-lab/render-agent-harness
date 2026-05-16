@@ -3,18 +3,18 @@
  *
  * The UI package owns the *browser-facing* surface only:
  *
- *   GET  /ui/                  serves the SPA shell (HTML)
- *   GET  /ui/assets/*          serves the SPA's static bundle (JS/CSS/etc.)
- *   GET  /ui/login             login form (HTML)
- *   POST /ui/login             validate API key, set session cookie, redirect
- *   POST /ui/logout            clear the session cookie
+ *   GET  <path>/               serves the SPA shell (HTML)
+ *   GET  <path>/assets/*       serves the SPA's static bundle (JS/CSS/etc.)
+ *   GET  <path>/login          login form (HTML)
+ *   POST <path>/login          validate API key, set session cookie, redirect
+ *   POST <path>/logout         clear the session cookie
  *
  * Every JSON+SSE endpoint the SPA talks to (`/runs`, `/runs/:id`,
  * `/runs/:id/tool-calls`, `/runs/:id/stream`, `/runs/:id/cancel`,
  * `/runs/:id/input`, `/agents`, `/usage`) is owned by `@render-harness/web`.
  * This package doesn't redefine any of them.
  *
- * The session cookie set by `/ui/login` is honoured by web's auth resolver
+ * The session cookie set by the login route is honoured by web's auth resolver
  * because `serveWeb({ ui: true })` wraps `auth()` with {@link wrapWithSession}.
  */
 
@@ -72,7 +72,7 @@ const FALLBACK_STATIC_DIR = resolve(HERE, "static");
 const SPA_INDEX = "index.html";
 
 export function mountUi(opts: MountUiOpts): void {
-  const path = (opts.path ?? "/ui").replace(/\/+$/, "");
+  const path = normalizeMountPath(opts.path ?? "/ui");
   const cookie = buildCookieConfig({
     ...(opts.cookieName !== undefined ? { cookieName: opts.cookieName } : {}),
     ...(opts.cookieSecret !== undefined ? { secret: opts.cookieSecret } : {}),
@@ -122,12 +122,12 @@ export function mountUi(opts: MountUiOpts): void {
     // The SPA shell is tiny and references hash-named asset bundles. We
     // don't want stale cached HTML pointing at deleted asset hashes, so
     // browsers must revalidate every load. Asset files (under
-    // /ui/assets/*) are content-addressed and stay cacheable.
+    // <path>/assets/*) are content-addressed and stay cacheable.
     c.header("cache-control", "no-cache, must-revalidate");
     return c.html(html);
   };
 
-  opts.app.get(path, serveSpaShell);
+  opts.app.get(path || "/", serveSpaShell);
   opts.app.get(`${path}/`, serveSpaShell);
   opts.app.get(`${path}/*`, async (c, next) => {
     const sub = c.req.path.slice(path.length);
@@ -151,6 +151,12 @@ export function mountUi(opts: MountUiOpts): void {
     }
     return serveSpaShell(c);
   });
+}
+
+function normalizeMountPath(raw: string): string {
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const trimmed = withSlash.replace(/\/+$/, "");
+  return trimmed === "" ? "" : trimmed;
 }
 
 // --------------------------------------------------------------------

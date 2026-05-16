@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiagnosticsBanner } from "./components/DiagnosticsBanner.js";
 import { DeploymentProvider, useDeploymentName } from "./deployment-context.js";
+import { uiPath } from "./lib/mount.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
 import { ConfigTab } from "./tabs/ConfigTab.js";
@@ -169,7 +170,7 @@ function AppInner() {
         <div className="border-t border-line p-4 text-[10px] uppercase tracking-wider text-muted">
           <div>System</div>
           <div className="mt-2">gateway status: running</div>
-          <form method="post" action="/ui/logout" className="mt-4">
+          <form method="post" action={uiPath("/logout")} className="mt-4">
             <button type="submit" className="btn w-full">
               Sign out
             </button>

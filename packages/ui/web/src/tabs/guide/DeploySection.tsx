@@ -40,7 +40,7 @@ const PROSE_DEPLOY = `
 1. Push the repo (with your edited \`agent.ts\`) to GitHub.
 2. In the Render Dashboard, **New → Blueprint**, point it at your repo's \`render.yaml\`.
 3. Render reads the file, prompts for the \`sync: false\` env vars, and provisions all four services together.
-4. Once the build finishes, the agent console is at the assigned \`*.onrender.com\` URL plus \`/ui\`.
+4. Once the build finishes, the agent console is at the assigned \`*.onrender.com\` URL.
 
 For zero-downtime rolling deploys, keep each conversation turn idempotent (state lives in \`agent_conversations\` + \`agent_runs\`, not in process memory) and let Render's rolling deploy handle the rest. Worker jobs in flight finish before the old container exits — the worker has a SIGTERM handler that waits up to 30s for in-flight runs.
 `;

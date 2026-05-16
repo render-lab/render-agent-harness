@@ -129,7 +129,7 @@ describe("buildFileMap", () => {
 
     const webEntry = map.get("src/web.ts") ?? "";
     expect(webEntry).toContain("serveWeb");
-    expect(webEntry).toContain("ui: true");
+    expect(webEntry).toContain('ui: { path: "/" }');
 
     const env = map.get(".env.example") ?? "";
     expect(env).toContain("WEB_API_KEY");

@@ -125,7 +125,7 @@ const port = Number(process.env.PORT ?? 8080);
 await serveWeb({
   agents: agentsById,
   port,
-  ui: config.shared?.ui ?? false,
+  ui: config.shared?.ui ? { path: "/" } : false,
   deployment,
 });
 `;
@@ -499,7 +499,7 @@ export function bundleEnvExample(opts: BundleEnvExampleOpts): string {
   if (opts.hasUi) {
     lines.push(
       "",
-      "# Operator UI auth (browser at http://127.0.0.1:8080/ui).",
+      "# Operator UI auth (browser at http://127.0.0.1:8080/).",
       "# WEB_API_KEY is the bearer-token the API + UI login form check;",
       "# UI_COOKIE_SECRET signs the browser session cookie. Both should",
       "# be real secrets in production — these `demo`/`local-dev-...`",
@@ -624,7 +624,7 @@ curl -X POST http://127.0.0.1:8080/runs \\
   -d '{"agentName":"chat","input":"hello"}'
 \`\`\`
 
-   Or open \`http://127.0.0.1:8080/ui\` for the operator UI.
+   Or open \`http://127.0.0.1:8080/\` for the operator UI.
 
 ${
   opts.hasInlineCron && firstCronAgent

@@ -5,7 +5,7 @@ import type { Answers, RuntimeSelection } from "../types.js";
  * each runtime expects:
  *
  *   - web (no UI) → `serveAgent({ agent })` from `@render-harness/runtime-web`
- *   - web + UI    → `serveWeb({ agent, ui: true })` from `@render-harness/web`
+ *   - web + UI    → `serveWeb({ agent, ui: { path: "/" } })` from `@render-harness/web`
  *                   (drains via a paired worker runtime)
  *   - cron        → `runCronAndExit({ agent, logger })` from `@render-harness/runtime-cron`
  *   - worker      → `startWorkerAndWait({ agent, queue, logger })` from `@render-harness/runtime-worker`
@@ -45,13 +45,13 @@ function webEntryWithUi(answers: Answers): string {
   const worker = answers.runtimes.find((r) => r.kind === "worker");
   const defaultQueue = worker && worker.kind === "worker" ? worker.queue : "agent-runs";
   return `/**
- * Web runtime entrypoint with the operator UI mounted at /ui.
+ * Web runtime entrypoint with the operator UI mounted at /.
  *
  * serveWeb() pairs with a worker runtime: HTTP requests enqueue jobs on
  * the pg-boss queue, the worker drains them, and the UI streams progress
  * back via Server-Sent Events.
  *
- * Visit http://127.0.0.1:8080/ui/login and sign in with WEB_API_KEY.
+ * Visit http://127.0.0.1:8080/login and sign in with WEB_API_KEY.
  */
 
 import { serveWeb } from "@render-harness/web";
@@ -63,7 +63,7 @@ loadEnv({ quiet: true });
 await serveWeb({
   agent,
   queue: process.env.WORKER_QUEUE ?? ${JSON.stringify(defaultQueue)},
-  ui: true,
+  ui: { path: "/" },
   deployment,
 });
 `;

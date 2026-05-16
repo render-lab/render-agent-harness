@@ -183,7 +183,7 @@ function buildTopologyMermaid(name: string, deployment: DeploymentInfo): string 
 
   const out: string[] = ["flowchart TD"];
   if (hasWeb) {
-    out.push(`  web["${escapeMermaid(`${name}-web`)}<br/>serves /ui, /runs, SSE"]`);
+    out.push(`  web["${escapeMermaid(`${name}-web`)}<br/>serves UI, /runs, SSE"]`);
     out.push('  web -->|"enqueue job (pg-boss)"| postgres');
   }
   out.push('  postgres["postgres<br/>agent_runs, agent_messages, pgboss.job"]');

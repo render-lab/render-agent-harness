@@ -16,7 +16,7 @@ export function readme(answers: Answers): string {
   const runtimeKinds = answers.runtimes.map((r) => r.kind);
   const runtimeBlurb = runtimeKindsBlurb(runtimeKinds);
   const uiBlurb = answers.ui
-    ? "\n\nThe operator chat UI is mounted at <http://127.0.0.1:8080/ui/login>. Sign in with the value you set for `WEB_API_KEY`."
+    ? "\n\nThe operator chat UI is mounted at <http://127.0.0.1:8080/login>. Sign in with the value you set for `WEB_API_KEY`."
     : "";
   const multi = isMultiRuntime(answers);
   const devNote = multi
@@ -77,7 +77,7 @@ Add a second agent by appending another entry to \`agents:\` — the scaffolder 
 
 Edit the YAML, then restart the dev process to pick up changes. ${
     answers.ui
-      ? "The operator UI at `/ui` shows the resolved agents under the **Agents** tab (read-only — editing prompts at runtime is intentionally not supported; agents are built at boot via `defineFromConfig`)."
+      ? "The operator UI at `/` shows the resolved agents under the **Agents** tab (read-only — editing prompts at runtime is intentionally not supported; agents are built at boot via `defineFromConfig`)."
       : "Agents are built at boot via `defineFromConfig`, so edits take effect on restart."
   }
 

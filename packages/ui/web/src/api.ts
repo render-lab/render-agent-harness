@@ -1,7 +1,7 @@
 /**
  * Browser-side client for the harness web service.
  *
- * Uses cookies for auth (set by `/ui/login`); no bearer header is needed
+ * Uses cookies for auth (set by the UI login route); no bearer header is needed
  * from the browser. Errors are surfaced as `ApiError` so the UI can show
  * a coherent message.
  *
@@ -44,6 +44,7 @@ import type {
   ToolCallRecord,
   UsageRow,
 } from "@render-harness/contracts";
+import { uiPath } from "./lib/mount.js";
 
 export type {
   AgentModelSummary,
@@ -93,7 +94,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
     if (res.status === 401) {
       // Bounce the user to login. The redirect flag below is read by the
       // app shell to perform a full navigation.
-      window.location.href = `/ui/login?next=${encodeURIComponent(window.location.pathname)}`;
+      window.location.href = `${uiPath("/login")}?next=${encodeURIComponent(window.location.pathname)}`;
     }
     const message =
       parsed && typeof parsed === "object" && "error" in parsed
