@@ -203,10 +203,11 @@ async function runScaffoldJob(args: {
     emitProgress(job, "building_file_map", "Preparing the scaffolded file tree");
     const desiredName = applyRepoPrefix(opts.repoPrefix, body.agentName);
     const repoName = opts.mockScaffold ? `${desiredName}-mock` : buildScaffoldRepoName(desiredName);
+    const deploymentName = toHarnessSlug(repoName);
     const fileMap = buildFileMap(answers);
 
     emitProgress(job, "generating_blueprint", "Generating render.yaml Blueprint");
-    await addBlueprintFilesToMap(fileMap, body.agentName, { deploymentName: repoName });
+    await addBlueprintFilesToMap(fileMap, body.agentName, { deploymentName });
 
     if (opts.mockScaffold || !opts.github) {
       const mockUrl = `https://example.com/${opts.org}/${repoName}`;
@@ -360,6 +361,13 @@ function applyRepoPrefix(prefix: string, name: string): string {
   const cleanPrefix = prefix.trim();
   if (!cleanPrefix) return name;
   return name.startsWith(cleanPrefix) ? name : `${cleanPrefix}${name}`;
+}
+
+function toHarnessSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 function githubFailureDetails(
