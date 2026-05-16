@@ -215,19 +215,19 @@ function safeNextPath(next: string, uiPath: string): string {
 // outside the SPA bundle (login form, "build missing" fallback). Kept
 // here so server-only routes don't depend on the Tailwind output.
 //
-// Single accent: amber. Used for active states, focus, selection, and
+// Single accent: purple. Used for active states, focus, selection, and
 // the blinking input caret. Same palette as the SPA so the visual
 // transition into the dashboard is seamless.
 const INLINE_THEME_CSS = `
 :root {
   color-scheme: light dark;
   --bg: #fff; --fg: #000; --muted: #555; --line: #000;
-  --accent: #d97706; --err: #b40000;
+  --accent: #a855f7; --err: #b40000;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000; --fg: #fff; --muted: #999; --line: #fff;
-    --accent: #fbbf24; --err: #ff5555;
+    --bg: #000; --fg: #fff; --muted: #8a8a8a; --line: #2a2a2a;
+    --accent: #c084fc; --err: #ff5555;
   }
 }
 * { box-sizing: border-box; border-radius: 0 !important; }
