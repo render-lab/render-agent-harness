@@ -1,5 +1,11 @@
 # @render-harness/cap-github
 
+## 0.2.2
+
+### Patch Changes
+
+- 24b0971: Allow connector packs to boot without provider API tokens by skipping local tools until env vars are configured.
+
 ## 0.2.1
 
 ### Patch Changes
