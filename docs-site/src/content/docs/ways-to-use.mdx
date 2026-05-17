@@ -44,7 +44,7 @@ flowchart LR
 | --- | --- | --- |
 | CLI scaffolder | Create a new local project from a blank prompt or starter template. | `packages/create-render-agent` |
 | Public `/browse` | Browse official templates and community harness submissions. | `packages/wizard` |
-| Public `/new` | Create a managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
+| Public `/new` | Create a manual managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
 | Operator UI | Chat with deployed agents, inspect runs, view agents, edit config, and read in-product guides. | `packages/ui` mounted by `packages/web` |
 | HTTP API | Create runs, stream results, send conversation turns, cancel work, and inspect usage. | `packages/web` |
 | Template catalog | Store starter agents and bundles consumed by the CLI and wizard. | `gallery/` |
@@ -77,7 +77,7 @@ Use the CLI when:
 
 Use the public wizard site when you want to discover harnesses or create a managed repo and deploy path.
 
-The `/browse` route shows official templates from the template catalog alongside community registry submissions. The `/new` route starts the guided scaffolding flow.
+The `/browse` route shows official templates from the template catalog alongside community registry submissions. The `/new` route starts a manual scaffolding flow. Starting from an official browse entry opens `/new` with that template prefilled.
 
 The public site is the right surface when:
 

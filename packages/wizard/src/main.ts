@@ -66,14 +66,15 @@ async function main(): Promise<void> {
     publicUrl: env.publicUrl,
   });
 
+  app.get("/", (c) => c.redirect("/browse", 302));
+
   // Serve the SPA as static content. Any path not claimed by /api or
   // /healthz falls through here; SPA routing is client-side, so the
-  // root index.html serves every unknown path.
+  // Vite index.html serves every unknown path.
   app.use(
     "/*",
     serveStatic({
       root: STATIC_ROOT,
-      rewriteRequestPath: (path) => (path === "/" ? "/index.html" : path),
     }),
   );
 

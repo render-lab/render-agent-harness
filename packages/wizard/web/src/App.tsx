@@ -24,7 +24,6 @@ import { Review } from "./steps/Review.js";
 import { Runtimes } from "./steps/Runtimes.js";
 import { Success } from "./steps/Success.js";
 import { SystemPrompt } from "./steps/SystemPrompt.js";
-import { Template } from "./steps/Template.js";
 import { UiToggle } from "./steps/UiToggle.js";
 
 type Phase =
@@ -41,7 +40,6 @@ type Phase =
   | { kind: "error"; state: WizardState; message: string };
 
 const STEP_TITLES = [
-  "Template",
   "Basics",
   "System prompt",
   "Model",
@@ -61,10 +59,12 @@ function parseRoute(): PublicRoute {
 
 function initialNewPhase(gallery: Gallery): Phase {
   const templateSlug = new URLSearchParams(window.location.search).get("template");
-  const template = templateSlug ? gallery.agents.find((agent) => agent.slug === templateSlug) : null;
+  const template = templateSlug
+    ? gallery.agents.find((agent) => agent.slug === templateSlug)
+    : null;
   if (!template) return { kind: "ready", step: 0, state: DEFAULT_STATE };
   if (template.kind === "bundle") return { kind: "bundle-review", bundle: template };
-  return { kind: "ready", step: 1, state: seedFromTemplate(template) };
+  return { kind: "ready", step: 0, state: seedFromTemplate(template) };
 }
 
 export function App() {
@@ -143,7 +143,9 @@ export function App() {
     return (
       <ErrorScreen
         message={phase.message}
-        onRetry={() => setPhase({ kind: "ready", step: 7, state: phase.state })}
+        onRetry={() =>
+          setPhase({ kind: "ready", step: STEP_TITLES.length - 1, state: phase.state })
+        }
         onHome={goHome}
       />
     );
@@ -190,11 +192,7 @@ export function App() {
     };
     return (
       <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review" onHome={goHome}>
-        <BundleReview
-          bundle={phase.bundle}
-          onSubmit={submitBundle}
-          onPrev={() => setPhase({ kind: "ready", step: 0, state: DEFAULT_STATE })}
-        />
+        <BundleReview bundle={phase.bundle} onSubmit={submitBundle} onPrev={goHome} />
       </Shell>
     );
   }
@@ -227,32 +225,16 @@ export function App() {
 
   return (
     <Shell currentStep={step} onHome={goHome}>
-      {step === 0 && (
-        <Template
-          gallery={gallery}
-          state={state}
-          onPick={(t) => {
-            // Sealed bundles short-circuit the per-agent steps — they
-            // route to a dedicated review screen.
-            if (t?.kind === "bundle") {
-              setPhase({ kind: "bundle-review", bundle: t });
-              return;
-            }
-            const seeded = t ? seedFromTemplate(t) : DEFAULT_STATE;
-            setPhase({ kind: "ready", step: 1, state: seeded });
-          }}
-        />
-      )}
-      {step === 1 && <Basics state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
-      {step === 2 && (
+      {step === 0 && <Basics state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
+      {step === 1 && (
         <SystemPrompt state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />
       )}
-      {step === 3 && (
+      {step === 2 && (
         <ModelStep state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />
       )}
-      {step === 4 && <Runtimes state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
-      {step === 5 && <UiToggle state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
-      {step === 6 && (
+      {step === 3 && <Runtimes state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
+      {step === 4 && <UiToggle state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
+      {step === 5 && (
         <Capabilities
           state={state}
           gallery={gallery}
@@ -261,7 +243,7 @@ export function App() {
           onPrev={goPrev}
         />
       )}
-      {step === 7 && <Review state={state} onSubmit={submit} onPrev={goPrev} />}
+      {step === 6 && <Review state={state} onSubmit={submit} onPrev={goPrev} />}
     </Shell>
   );
 }

@@ -216,6 +216,9 @@
   .badge-fill {
     @apply bg-accent text-canvas border-accent;
   }
+  .badge-neutral {
+    @apply bg-code-bg text-ink border-code-bg;
+  }
 
   .cli-dots::after {
     content: "";

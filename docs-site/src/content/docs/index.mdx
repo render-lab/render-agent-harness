@@ -120,7 +120,7 @@ Render Harness is not only a runtime library. It has different surfaces for diff
 
 - Use the CLI scaffolder to create a local project.
 - Use `/browse` on the public wizard site to compare official templates and community harness submissions.
-- Use `/new` on the public wizard site to create a managed repo and deploy flow.
+- Use `/new` on the public wizard site to create a manual managed repo and deploy flow.
 - Use the template catalog to define what official starters are available.
 - Use each deployed harness's operator UI to chat, inspect runs, view agents, edit config, and read guides.
 - Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
@@ -163,7 +163,7 @@ flowchart TB
 | --- | --- |
 | CLI scaffolder | Creates a local project from a blank prompt or starter template. |
 | Public `/browse` | Lists official templates and community harness submissions. |
-| Public `/new` | Creates a guided repo/deploy flow from an official template or blank project. |
+| Public `/new` | Creates a manual guided repo/deploy flow. Browse entries can seed it with a template. |
 | Deployed operator UI | Operates one running harness deployment. Scaffolded projects mount it at the service root. |
 | HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
 
