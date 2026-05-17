@@ -9,22 +9,47 @@ import { type GenerateResult, generate } from "./generate.js";
 import { runWizard } from "./prompts.js";
 import { type Answers, type PackageManager, scriptRunner } from "./types.js";
 
-const USAGE = `Usage: create-render-agent [directory] [--harness-root <path>] [--capability-catalog <path>]
+const USAGE = `create-render-agent
 
-Scaffolds a new Render agent harness project. If [directory] is given, it
-is used as the target; otherwise the wizard prompts for it.
+Scaffold a new Render Harness project from a blank agent or an official
+starter template.
+
+Usage:
+  create-render-agent [directory] [options]
+
+Arguments:
+  directory                  Target directory. If omitted, the CLI prompts for it.
 
 Options:
-  -h, --help              Show this help and exit.
-  -v, --version           Show the package version and exit.
-  --harness-root <path>   Path to a local harness checkout. Enables
-                          local-link mode: the scaffolded project's
-                          @render-harness/* deps become \`link:\` paths
-                          into the checkout, and the wizard's gallery
-                          loads from the live repo instead of the
-                          bundled snapshot. Use this until the harness
-                          is published to npm.
-  --capability-catalog    Optional path to a capability catalog YAML/JSON file.
+  -h, --help                 Show this help and exit.
+  -v, --version              Show the package version and exit.
+  --harness-root <path>      Path to a local harness checkout. Loads the live
+                             gallery and writes link: dependencies to the
+                             scaffolded package.json. Requires pnpm.
+  --capability-catalog <path>
+                             Optional capability catalog YAML or JSON file.
+
+Examples:
+  pnpm dlx create-render-agent my-agent
+  create-render-agent my-agent --harness-root /path/to/render-harness
+  create-render-agent --capability-catalog ./capability-catalog/index.yaml
+
+Creates:
+  render-harness.yaml        Agent, runtime, model, env, and capability config.
+  render.yaml                Render Blueprint generated from the manifest.
+  src/                       Runtime entrypoints and agent code.
+  .env.example               Local env vars to copy into .env.
+
+After scaffold:
+  cd <directory>
+  cp .env.example .env
+  pnpm db:up
+  pnpm dev
+
+Links:
+  Docs: https://render-agent-harness.onrender.com/
+  Web wizard: use the public site's /new route.
+  Browse templates and community harnesses: use the public site's /browse route.
 `;
 
 async function main(): Promise<void> {
