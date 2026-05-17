@@ -65,11 +65,13 @@
   "dependencies": {
     "@render-harness/contracts": "workspace:*",
     "@render-harness/core": "workspace:*",
+    "semver": "^7.8.0",
     "yaml": "^2.7.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
+    "@types/semver": "^7.7.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"

@@ -15,6 +15,31 @@ describe("buildHarnessVersionInfo", () => {
     expect(info.messages).toEqual([]);
   });
 
+  it("reports incompatible when running version is outside declared range", () => {
+    const info = buildHarnessVersionInfo({
+      declaredRange: "^0.2",
+      packageNames: ["@render-harness/core", "@render-harness/web"],
+      versions: {
+        "@render-harness/core": "0.1.1",
+        "@render-harness/web": "0.1.1",
+      },
+    });
+    expect(info.status).toBe("incompatible");
+    expect(info.messages[0]).toMatch(/does not satisfy/);
+  });
+
+  it("warns for invalid declared ranges", () => {
+    const info = buildHarnessVersionInfo({
+      declaredRange: "definitely not semver",
+      packageNames: ["@render-harness/core"],
+      versions: {
+        "@render-harness/core": "0.1.1",
+      },
+    });
+    expect(info.status).toBe("warning");
+    expect(info.messages[0]).toMatch(/invalid harnessVersion/);
+  });
+
   it("warns for mixed first-party versions", () => {
     const info = buildHarnessVersionInfo({
       declaredRange: "^0.1",

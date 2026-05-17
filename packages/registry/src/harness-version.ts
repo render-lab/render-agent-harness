@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { HarnessVersionInfo } from "@render-harness/contracts";
+import { satisfies, valid, validRange } from "semver";
 
 const FIRST_PARTY_PREFIX = "@render-harness/";
 
@@ -29,7 +30,10 @@ export function buildHarnessVersionInfo(args: {
 
   const messages: string[] = [];
   const declaredRange = args.declaredRange ?? null;
+  const parsedRange = declaredRange ? validRange(declaredRange) : null;
   if (!declaredRange) messages.push("render-harness.yaml does not declare harnessVersion.");
+  else if (!parsedRange)
+    messages.push(`render-harness.yaml declares invalid harnessVersion "${declaredRange}".`);
   if (Object.keys(running).length === 0) {
     messages.push("No running @render-harness package versions could be detected.");
     return { declaredRange, running, status: "unknown", messages };
@@ -44,6 +48,21 @@ export function buildHarnessVersionInfo(args: {
       `First-party harness packages are running mixed versions: ${[...uniqueVersions].join(", ")}.`,
     );
     return { declaredRange, running, status: "warning", messages };
+  }
+
+  const runningVersion = [...uniqueVersions][0];
+  if (declaredRange && !parsedRange) {
+    return { declaredRange, running, status: "warning", messages };
+  }
+  if (runningVersion && !valid(runningVersion)) {
+    messages.push(`Running harness version "${runningVersion}" is not valid semver.`);
+    return { declaredRange, running, status: "warning", messages };
+  }
+  if (runningVersion && parsedRange && !satisfies(runningVersion, parsedRange)) {
+    messages.push(
+      `Running harness version ${runningVersion} does not satisfy declared range ${declaredRange}.`,
+    );
+    return { declaredRange, running, status: "incompatible", messages };
   }
 
   if (messages.length > 0) return { declaredRange, running, status: "warning", messages };
