@@ -37,7 +37,7 @@
     "docs:preview": "pnpm --filter @render-harness/docs-site preview",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm -r --filter='./packages/*' --filter='./packages/capabilities/*' run build && pnpm -r --filter='./packages/*' --filter='./packages/capabilities/*' publish --access public --no-git-checks",
+    "release": "pnpm -r --filter='./packages/*' --filter='./packages/capabilities/*' run build && node scripts/publish-unpublished.mjs",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write --unsafe .",
