@@ -7,6 +7,7 @@
  * Vite) and the /api routes the SPA talks to.
  */
 
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
@@ -16,6 +17,7 @@ import { Hono } from "hono";
 import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
+import { registerBrowseRoute } from "./routes/browse.js";
 import { registerGalleryRoute } from "./routes/gallery.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerInstallsRoute } from "./routes/installs.js";
@@ -25,6 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // `dist/main.js` lives next to `dist/static/`; the bundled SPA is one
 // directory away from the entry's resolved path.
 const STATIC_ROOT = resolve(HERE, "static");
+const DEFAULT_REGISTRY_INDEX_PATH = resolve(HERE, "..", "..", "..", "registry-index", "index.json");
 
 async function main(): Promise<void> {
   const env = parseEnv(process.env);
@@ -34,6 +37,10 @@ async function main(): Promise<void> {
 
   registerHealthRoute(app);
   registerGalleryRoute(app, gallery);
+  registerBrowseRoute(app, {
+    gallery,
+    communityIndexPath: env.registryIndexPath ?? DEFAULT_REGISTRY_INDEX_PATH,
+  });
   registerScaffoldRoute(app, {
     org: env.managedOrg,
     repoPrefix: env.managedRepoPrefix,
@@ -71,7 +78,7 @@ async function main(): Promise<void> {
   );
 
   // SPA fallback for client-side routing (deep links return index.html).
-  app.notFound((c) => c.html(indexHtml()));
+  app.notFound(async (c) => c.html(await indexHtml()));
 
   serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
     process.stdout.write(
@@ -80,11 +87,18 @@ async function main(): Promise<void> {
   });
 }
 
-// Cheap inline fallback so 404s on unknown paths still return the SPA.
-// In production, serveStatic should handle /index.html directly; this
-// is a safety net.
-function indexHtml(): string {
-  return `<!doctype html><meta charset="utf-8"><title>Create a Render agent</title><div id="root"></div><script type="module" src="/assets/main.js"></script>`;
+let cachedIndexHtml: string | null = null;
+
+// Return the real Vite entry so history-mode routes such as /new and
+// /browse work with hashed asset names in production.
+async function indexHtml(): Promise<string> {
+  if (cachedIndexHtml) return cachedIndexHtml;
+  try {
+    cachedIndexHtml = await readFile(resolve(STATIC_ROOT, "index.html"), "utf8");
+    return cachedIndexHtml;
+  } catch {
+    return '<!doctype html><meta charset="utf-8"><title>Create a Render agent</title><div id="root"></div>';
+  }
 }
 
 main().catch((err) => {

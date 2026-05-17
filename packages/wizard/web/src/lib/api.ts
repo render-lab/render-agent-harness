@@ -1,4 +1,5 @@
 import type {
+  BrowseResponse,
   Gallery,
   ScaffoldJobResponse,
   ScaffoldProgressEvent,
@@ -10,6 +11,12 @@ export async function fetchGallery(): Promise<Gallery> {
   const res = await fetch("/api/gallery");
   if (!res.ok) throw new Error(`gallery fetch failed: ${res.status}`);
   return (await res.json()) as Gallery;
+}
+
+export async function fetchBrowse(): Promise<BrowseResponse> {
+  const res = await fetch("/api/browse");
+  if (!res.ok) throw new Error(`browse fetch failed: ${res.status}`);
+  return (await res.json()) as BrowseResponse;
 }
 
 export async function postScaffold(args: {

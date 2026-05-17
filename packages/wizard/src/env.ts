@@ -40,6 +40,12 @@ export interface WizardEnv {
    * `/api/installs/start` returns 503.
    */
   githubAppName: string | null;
+  /**
+   * Path to the community registry `index.json`. Defaults to the
+   * monorepo's `registry-index/index.json`; override when the wizard is
+   * deployed from a packaged artifact or external index checkout.
+   */
+  registryIndexPath: string | null;
 }
 
 export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
@@ -67,6 +73,7 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
   const wizardSharedSecret = env.WIZARD_SHARED_SECRET ?? null;
   const stateSecret = env.WIZARD_STATE_SECRET ?? null;
   const githubAppName = env.GITHUB_APP_NAME ?? null;
+  const registryIndexPath = env.WIZARD_REGISTRY_INDEX_PATH ?? null;
 
   return {
     port,
@@ -79,5 +86,6 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
     wizardSharedSecret,
     stateSecret,
     githubAppName,
+    registryIndexPath,
   };
 }

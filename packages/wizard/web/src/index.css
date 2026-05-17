@@ -213,6 +213,9 @@
     font-size: 0.7rem;
     letter-spacing: 0.08em;
   }
+  .badge-fill {
+    @apply bg-accent text-canvas border-accent;
+  }
 
   .cli-dots::after {
     content: "";

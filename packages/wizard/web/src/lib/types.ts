@@ -84,6 +84,52 @@ export interface Gallery {
   capabilities: GalleryCapability[];
 }
 
+export type BrowseItem =
+  | {
+      source: "official";
+      id: string;
+      name: string;
+      description: string;
+      categories: string[];
+      runtimeKinds: string[];
+      capabilities: string[];
+      author: string | null;
+      templateSlug: string;
+      kind: GalleryEntryKind;
+      readme: string | null;
+    }
+  | {
+      source: "community";
+      id: string;
+      name: string;
+      description: string;
+      categories: string[];
+      runtimeKinds: string[];
+      capabilities: string[];
+      author: string | null;
+      repo: string;
+      ref: string;
+      deployUrl: string;
+    };
+
+export interface BrowseFacets {
+  sources: string[];
+  runtimeKinds: string[];
+  categories: string[];
+  capabilities: string[];
+  kinds: string[];
+}
+
+export interface BrowseResponse {
+  items: BrowseItem[];
+  facets: BrowseFacets;
+  community: {
+    indexConfigured: boolean;
+    entryCount: number;
+    error: string | null;
+  };
+}
+
 export interface ScaffoldResponse {
   repoUrl: string;
   deployUrl: string;

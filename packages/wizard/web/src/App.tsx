@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { BrowsePage } from "./BrowsePage.js";
 import { fetchGallery, postBundleScaffold, postScaffold, watchScaffoldJob } from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
 import type {
@@ -50,10 +51,48 @@ const STEP_TITLES = [
   "Review",
 ] as const;
 
+type PublicRoute = "browse" | "new";
+
+const DOCS_URL = "https://render-agent-harness.onrender.com/";
+
+function parseRoute(): PublicRoute {
+  return window.location.pathname === "/new" ? "new" : "browse";
+}
+
+function initialNewPhase(gallery: Gallery): Phase {
+  const templateSlug = new URLSearchParams(window.location.search).get("template");
+  const template = templateSlug ? gallery.agents.find((agent) => agent.slug === templateSlug) : null;
+  if (!template) return { kind: "ready", step: 0, state: DEFAULT_STATE };
+  if (template.kind === "bundle") return { kind: "bundle-review", bundle: template };
+  return { kind: "ready", step: 1, state: seedFromTemplate(template) };
+}
+
 export function App() {
+  const [route, setRoute] = useState<PublicRoute>(() => parseRoute());
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [galleryError, setGalleryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onPopState = () => setRoute(parseRoute());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (window.location.pathname === "/") {
+      window.history.replaceState(null, "", "/browse");
+    }
+  }, []);
+
+  const navigate = useCallback((next: PublicRoute) => {
+    const path = next === "new" ? "/new" : "/browse";
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+    setRoute(next);
+  }, []);
+
   const goHome = useCallback(() => {
     setPhase({ kind: "ready", step: 0, state: DEFAULT_STATE });
   }, []);
@@ -62,16 +101,32 @@ export function App() {
     fetchGallery()
       .then((g) => {
         setGallery(g);
-        setPhase({ kind: "ready", step: 0, state: DEFAULT_STATE });
+        setPhase(initialNewPhase(g));
       })
       .catch((err) => setGalleryError(err instanceof Error ? err.message : String(err)));
   }, []);
 
+  if (route === "browse") {
+    return (
+      <PublicShell route={route} onNavigate={navigate}>
+        <BrowsePage />
+      </PublicShell>
+    );
+  }
+
   if (galleryError) {
-    return <ErrorScreen message={`Could not load gallery: ${galleryError}`} onHome={goHome} />;
+    return (
+      <PublicShell route={route} onNavigate={navigate}>
+        <ErrorScreen message={`Could not load gallery: ${galleryError}`} onHome={goHome} />
+      </PublicShell>
+    );
   }
   if (!gallery || phase.kind === "loading") {
-    return <CenteredMessage onHome={goHome}>Loading…</CenteredMessage>;
+    return (
+      <PublicShell route={route} onNavigate={navigate}>
+        <CenteredMessage onHome={goHome}>Loading…</CenteredMessage>
+      </PublicShell>
+    );
   }
 
   if (phase.kind === "submitting") {
@@ -211,6 +266,59 @@ export function App() {
   );
 }
 
+function PublicShell({
+  route,
+  onNavigate,
+  children,
+}: {
+  route: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <button
+            type="button"
+            className="text-left"
+            onClick={() => onNavigate("browse")}
+            title="Browse harnesses"
+          >
+            <div className="text-sm font-bold uppercase leading-none tracking-widest">
+              <div>Render</div>
+              <div>Harness</div>
+            </div>
+            <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
+              public catalog
+            </div>
+          </button>
+          <nav className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`btn ${route === "browse" ? "btn-active" : ""}`}
+              onClick={() => onNavigate("browse")}
+            >
+              Browse
+            </button>
+            <button
+              type="button"
+              className={`btn ${route === "new" ? "btn-active" : ""}`}
+              onClick={() => onNavigate("new")}
+            >
+              New
+            </button>
+            <a className="btn" href={DOCS_URL}>
+              Docs
+            </a>
+          </nav>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
+    </div>
+  );
+}
+
 function appendScaffoldEvent(
   state: WizardState,
   event: ScaffoldProgressEvent,
@@ -300,8 +408,11 @@ function WizardHeader({
             <span>/</span>
             <span className="text-ink">{title}</span>
           </div>
+          <a className="btn" href="/browse">
+            Browse
+          </a>
           <button type="button" className="btn" onClick={onHome}>
-            Home
+            New
           </button>
         </div>
       </div>
