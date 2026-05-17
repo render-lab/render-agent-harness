@@ -1,0 +1,82 @@
+---
+title: Harness Versioning
+description: Understand lockstep harness package versions, compatibility checks, and release workflow.
+---
+
+Harness versioning keeps deployed agents, runtimes, and capability packs on a compatible first-party package family.
+
+## Version model
+
+First-party `@render-harness/*` packages release together. Do not bump one first-party package in isolation.
+
+Use semver:
+
+- **Patch:** bug fixes, documentation, tests, formatting, internal refactors, and non-breaking UI polish.
+- **Minor:** additive public APIs, new config fields, new routes, new runtime behavior, new capability hooks, new built-in tools, or new official capability packs.
+- **Major:** breaking changes to `render-harness.yaml`, public runtime APIs, database migrations that need manual action, tool names, tool schemas, package exports, or stable HTTP contracts.
+
+When in doubt, choose the higher bump.
+
+## Compatibility metadata
+
+Every deployment has a declared harness range in `render-harness.yaml`:
+
+```yaml
+harnessVersion: "^0.1"
+```
+
+Gallery entries and capability catalog entries can also declare the harness range they require:
+
+```yaml
+requiresHarness: "^0.1"
+```
+
+The web service exposes the running package versions through `GET /deployment`. The operator UI displays the compact harness version in the sidebar and the detailed package list in the Config tab.
+
+## Diagnostics states
+
+Diagnostics surface version problems alongside operational checks:
+
+- `ok`: first-party packages are running one coherent version that satisfies the declared range.
+- `warning`: package versions are mixed, missing, or the declared range is missing/invalid.
+- `incompatible`: the running version does not satisfy the declared `harnessVersion`.
+
+Treat `Harness mixed` as a release or install problem. A healthy deployment should normally report one coherent first-party version.
+
+## Author workflow
+
+Add a changeset for user-facing package changes:
+
+```sh
+pnpm changeset
+```
+
+Select the affected first-party packages and choose the bump type using the semver rules above. Commit the generated `.changeset/*.md` file with your PR.
+
+## Release workflow
+
+The release workflow runs checks on PRs and pushes to `main`. On pushes to `main`, Changesets opens or updates a Version Packages PR.
+
+The Version Packages PR runs:
+
+```sh
+pnpm version-packages
+```
+
+After that PR is merged, the release job runs:
+
+```sh
+pnpm release
+```
+
+That command builds first-party packages and publishes them to npm.
+
+## Required setup
+
+Before the first publish:
+
+- Create the `@render-harness` npm organization.
+- Configure npm trusted publishing or add an `NPM_TOKEN` secret.
+- Keep the default `GITHUB_TOKEN` permissions enabled for release PR creation.
+
+Prefer trusted publishing with provenance when available.

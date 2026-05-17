@@ -2,8 +2,10 @@
 import {
   FiActivity,
   FiAlertTriangle,
+  FiArchive,
   FiBookOpen,
   FiBox,
+  FiCode,
   FiCpu,
   FiDatabase,
   FiGitBranch,
@@ -11,11 +13,13 @@ import {
   FiHome,
   FiLayers,
   FiMap,
+  FiMonitor,
   FiPackage,
   FiPlayCircle,
   FiRadio,
   FiRepeat,
   FiSettings,
+  FiTag,
   FiTerminal,
   FiTool,
   FiUploadCloud,
@@ -36,12 +40,7 @@ function flatten(entries: any[]): any[] {
 }
 
 function iconFor(entry: any) {
-  if (entry.type === "group") {
-    if (entry.label === "Start here") return FiHome;
-    if (entry.label === "Concepts") return FiLayers;
-    if (entry.label === "Reference") return FiBookOpen;
-    return FiGrid;
-  }
+  if (entry.type === "group") return null;
 
   const href = entry.href ?? "";
   if (href === "/") return FiHome;
@@ -57,15 +56,16 @@ function iconFor(entry: any) {
   if (href.includes("/chief-of-staff/")) return FiUsers;
   if (href.includes("/yaml-spec/")) return FiSettings;
   if (href.includes("/registry-publishing/")) return FiUploadCloud;
+  if (href.includes("/harness-versioning/")) return FiTag;
   if (href.includes("/deployment/")) return FiPlayCircle;
   if (href.includes("/web-api/")) return FiRadio;
-  if (href.includes("/operator-ui/")) return FiUsers;
+  if (href.includes("/operator-ui/")) return FiMonitor;
   if (href.includes("/capabilities/")) return FiZap;
   if (href.includes("/authoring-capability-packs/")) return FiTool;
   if (href.includes("/authoring-bundle-templates/")) return FiLayers;
-  if (href.includes("/built-in-tools/")) return FiTool;
+  if (href.includes("/built-in-tools/")) return FiCode;
   if (href.includes("/state-and-streaming/")) return FiDatabase;
-  if (href.includes("/examples-and-blueprints/")) return FiPlayCircle;
+  if (href.includes("/examples-and-blueprints/")) return FiArchive;
   if (href.includes("/operations/")) return FiActivity;
   return FiBookOpen;
 }
@@ -84,7 +84,7 @@ function iconFor(entry: any) {
               class:list={[{ large: !nested }, entry.attrs.class]}
               {...entry.attrs}
             >
-              <EntryIcon className="sidebar-icon" aria-hidden="true" />
+              {EntryIcon ? <EntryIcon className="sidebar-icon" aria-hidden="true" /> : null}
               <span>{entry.label}</span>
               {entry.badge && (
                 <span class:list={["sidebar-badge", entry.badge.class]}>{entry.badge.text}</span>
@@ -94,7 +94,6 @@ function iconFor(entry: any) {
             <details open={flatten(entry.entries).some((item) => item.isCurrent) || !entry.collapsed}>
               <summary>
                 <span class="group-label">
-                  <EntryIcon className="sidebar-icon" aria-hidden="true" />
                   <span class="large">{entry.label}</span>
                   {entry.badge && (
                     <span class:list={["sidebar-badge", entry.badge.class]}>{entry.badge.text}</span>

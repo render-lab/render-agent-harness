@@ -91,6 +91,7 @@ export default defineConfig({
           items: [
             { label: "render-harness.yaml spec", slug: "yaml-spec" },
             { label: "Registry publishing", slug: "registry-publishing" },
+            { label: "Harness versioning", slug: "harness-versioning" },
             { label: "Deployment model", slug: "deployment" },
             { label: "Web API", slug: "web-api" },
             { label: "Operator UI", slug: "operator-ui" },
