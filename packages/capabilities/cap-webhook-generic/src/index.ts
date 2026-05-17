@@ -40,13 +40,15 @@ const pack = definePack({
             if (!secret) {
               return json({ error: "missing_secret", env: cfg.secretEnv }, 500);
             }
-            const ok = verifyWebhookSignature({
+            const verifyArgs = {
               rawBody,
               signature: req.headers.get(cfg.signatureHeader),
               secret,
               algorithm: cfg.algorithm,
-              prefix: cfg.signaturePrefix,
-            });
+            };
+            const ok = verifyWebhookSignature(
+              cfg.signaturePrefix ? { ...verifyArgs, prefix: cfg.signaturePrefix } : verifyArgs,
+            );
             if (!ok) return json({ error: "invalid_signature" }, 401);
           }
 
@@ -81,26 +83,33 @@ const pack = definePack({
 
 export default pack;
 
-function readConfig(
-  raw: Record<string, unknown>,
-): Required<
+type ResolvedWebhookGenericConfig = Required<
   Pick<WebhookGenericConfig, "secretEnv" | "signatureHeader" | "algorithm" | "requireSignature">
 > &
-  Omit<WebhookGenericConfig, "secretEnv" | "signatureHeader" | "algorithm" | "requireSignature"> {
-  return {
-    ...raw,
-    agent: stringValue(raw.agent),
-    userId: stringValue(raw.userId),
+  Omit<WebhookGenericConfig, "secretEnv" | "signatureHeader" | "algorithm" | "requireSignature">;
+
+function readConfig(raw: Record<string, unknown>): ResolvedWebhookGenericConfig {
+  const cfg: ResolvedWebhookGenericConfig = {
     secretEnv: stringValue(raw.secretEnv) ?? DEFAULT_SECRET_ENV,
     signatureHeader: stringValue(raw.signatureHeader) ?? DEFAULT_SIGNATURE_HEADER,
-    signaturePrefix: stringValue(raw.signaturePrefix),
     algorithm: stringValue(raw.algorithm) ?? "sha256",
-    idHeader: stringValue(raw.idHeader),
-    textPath: stringValue(raw.textPath),
-    textHeader: stringValue(raw.textHeader),
-    metadataPaths: recordOfStrings(raw.metadataPaths),
     requireSignature: raw.requireSignature !== false,
   };
+  const agent = stringValue(raw.agent);
+  if (agent) cfg.agent = agent;
+  const userId = stringValue(raw.userId);
+  if (userId) cfg.userId = userId;
+  const signaturePrefix = stringValue(raw.signaturePrefix);
+  if (signaturePrefix) cfg.signaturePrefix = signaturePrefix;
+  const idHeader = stringValue(raw.idHeader);
+  if (idHeader) cfg.idHeader = idHeader;
+  const textPath = stringValue(raw.textPath);
+  if (textPath) cfg.textPath = textPath;
+  const textHeader = stringValue(raw.textHeader);
+  if (textHeader) cfg.textHeader = textHeader;
+  const metadataPaths = recordOfStrings(raw.metadataPaths);
+  if (metadataPaths) cfg.metadataPaths = metadataPaths;
+  return cfg;
 }
 
 function parseBody(rawBody: string): unknown {

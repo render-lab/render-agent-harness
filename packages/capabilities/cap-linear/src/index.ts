@@ -49,12 +49,16 @@ const pack = definePack({
           const parsed = parseBody(rawBody);
           const secret = ctx.env(cfg.webhookSecretEnv);
           if (!secret) return json({ error: "missing_secret", env: cfg.webhookSecretEnv }, 500);
+          const verifyArgs = {
+            rawBody,
+            secret,
+            signature: req.headers.get("linear-signature"),
+          };
+          const timestamp = timestampFrom(parsed);
           if (
             !verifyLinearWebhook({
-              rawBody,
-              secret,
-              signature: req.headers.get("linear-signature"),
-              timestamp: timestampFrom(parsed),
+              ...verifyArgs,
+              ...(timestamp !== undefined ? { timestamp } : {}),
             })
           ) {
             return json({ error: "invalid_signature" }, 401);
@@ -81,22 +85,32 @@ const pack = definePack({
 
 export default pack;
 
-function readConfig(
-  raw: Record<string, unknown>,
-): Required<Pick<LinearConfig, "webhookSecretEnv" | "apiKeyEnv" | "accessMode">> &
-  Omit<LinearConfig, "webhookSecretEnv" | "apiKeyEnv" | "accessMode"> {
-  return {
-    agent: stringValue(raw.agent),
-    userId: stringValue(raw.userId),
+type ResolvedLinearConfig = Required<
+  Pick<LinearConfig, "webhookSecretEnv" | "apiKeyEnv" | "accessMode">
+> &
+  Omit<LinearConfig, "webhookSecretEnv" | "apiKeyEnv" | "accessMode">;
+
+function readConfig(raw: Record<string, unknown>): ResolvedLinearConfig {
+  const cfg: ResolvedLinearConfig = {
     webhookSecretEnv: stringValue(raw.webhookSecretEnv) ?? DEFAULT_WEBHOOK_SECRET_ENV,
     apiKeyEnv: stringValue(raw.apiKeyEnv) ?? DEFAULT_API_KEY_ENV,
     accessMode: raw.accessMode === "read_write" ? "read_write" : "read",
-    allowedTeams: stringArray(raw.allowedTeams),
-    allowedProjects: stringArray(raw.allowedProjects),
-    states: stringArray(raw.states),
-    labels: stringArray(raw.labels),
-    ignoredActors: stringArray(raw.ignoredActors),
   };
+  const agent = stringValue(raw.agent);
+  if (agent) cfg.agent = agent;
+  const userId = stringValue(raw.userId);
+  if (userId) cfg.userId = userId;
+  const allowedTeams = stringArray(raw.allowedTeams);
+  if (allowedTeams) cfg.allowedTeams = allowedTeams;
+  const allowedProjects = stringArray(raw.allowedProjects);
+  if (allowedProjects) cfg.allowedProjects = allowedProjects;
+  const states = stringArray(raw.states);
+  if (states) cfg.states = states;
+  const labels = stringArray(raw.labels);
+  if (labels) cfg.labels = labels;
+  const ignoredActors = stringArray(raw.ignoredActors);
+  if (ignoredActors) cfg.ignoredActors = ignoredActors;
+  return cfg;
 }
 
 function parseBody(rawBody: string): unknown {

@@ -1,0 +1,48 @@
+{
+  "name": "@your-scope/cap-example",
+  "version": "0.1.0",
+  "description": "Example capability pack for the Render agent harness.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "keywords": [
+    "render-harness-cap",
+    "render-harness"
+  ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Example",
+      "envHint": "EXAMPLE_API_KEY"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "validate": "render-harness-capability validate ."
+  },
+  "dependencies": {
+    "@render-harness/registry": "^0.1.1"
+  },
+  "devDependencies": {
+    "@render-harness/core": "^0.1.1",
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

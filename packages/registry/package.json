@@ -42,6 +42,7 @@
   },
   "bin": {
     "render-harness-build": "./dist/bin/build.js",
+    "render-harness-capability": "./dist/bin/capability.js",
     "render-harness-deploy": "./dist/bin/deploy.js"
   },
   "files": [

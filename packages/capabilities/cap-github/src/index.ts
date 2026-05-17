@@ -85,22 +85,32 @@ const pack = definePack({
 
 export default pack;
 
-function readConfig(
-  raw: Record<string, unknown>,
-): Required<Pick<GitHubConfig, "webhookSecretEnv" | "tokenEnv" | "accessMode">> &
-  Omit<GitHubConfig, "webhookSecretEnv" | "tokenEnv" | "accessMode"> {
-  return {
-    agent: stringValue(raw.agent),
-    userId: stringValue(raw.userId),
+type ResolvedGitHubConfig = Required<
+  Pick<GitHubConfig, "webhookSecretEnv" | "tokenEnv" | "accessMode">
+> &
+  Omit<GitHubConfig, "webhookSecretEnv" | "tokenEnv" | "accessMode">;
+
+function readConfig(raw: Record<string, unknown>): ResolvedGitHubConfig {
+  const cfg: ResolvedGitHubConfig = {
     webhookSecretEnv: stringValue(raw.webhookSecretEnv) ?? DEFAULT_WEBHOOK_SECRET_ENV,
     tokenEnv: stringValue(raw.tokenEnv) ?? DEFAULT_TOKEN_ENV,
     accessMode: raw.accessMode === "read_write" ? "read_write" : "read",
-    allowedRepositories: stringArray(raw.allowedRepositories),
-    events: stringArray(raw.events),
-    branches: stringArray(raw.branches),
-    labels: stringArray(raw.labels),
-    ignoredActors: stringArray(raw.ignoredActors),
   };
+  const agent = stringValue(raw.agent);
+  if (agent) cfg.agent = agent;
+  const userId = stringValue(raw.userId);
+  if (userId) cfg.userId = userId;
+  const allowedRepositories = stringArray(raw.allowedRepositories);
+  if (allowedRepositories) cfg.allowedRepositories = allowedRepositories;
+  const events = stringArray(raw.events);
+  if (events) cfg.events = events;
+  const branches = stringArray(raw.branches);
+  if (branches) cfg.branches = branches;
+  const labels = stringArray(raw.labels);
+  if (labels) cfg.labels = labels;
+  const ignoredActors = stringArray(raw.ignoredActors);
+  if (ignoredActors) cfg.ignoredActors = ignoredActors;
+  return cfg;
 }
 
 function parseBody(rawBody: string): unknown {

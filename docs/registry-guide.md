@@ -169,14 +169,14 @@ Push new commits to your repo. Open a follow-up PR to the index changing only th
 
 ## Pack contributor: publishing a capability pack
 
-You're shipping a reusable extension other entries can pull in. Examples: a new MCP wiring, a `LocalToolHandler` that wraps a SaaS API, a memory backend.
+You're shipping a reusable extension other entries can pull in. Examples: a new MCP wiring, a `LocalToolHandler` that wraps a SaaS API, a webhook connector, or a memory backend.
 
 ### Pack contract
 
 A capability pack is an npm package whose default export is a `CapabilityPack`:
 
 ```ts
-import { definePack, type PackContext } from "@render-harness/registry";
+import { definePack, type ConnectorContribution, type PackContext } from "@render-harness/registry";
 import type { McpServerConfig, SkillMetadata, LocalToolHandler } from "@render-harness/core";
 
 export default definePack({
@@ -201,6 +201,10 @@ export default definePack({
   },
   skills(ctx: PackContext): SkillMetadata[] {
     // optional: markdown skills the agent can load via the built-in load_skill tool
+    return [];
+  },
+  connectors(ctx: PackContext): ConnectorContribution[] {
+    // optional: inbound webhooks mounted by @render-harness/web at /connectors/<key>
     return [];
   },
   renderServices(ctx: PackContext) {
@@ -231,19 +235,52 @@ my-pack/
   README.md
 ```
 
+You can also copy [`templates/capability-pack/`](../templates/capability-pack/) as a starter. It includes a read-only tool, an opt-in write tool, a connector skeleton, Vitest tests, and a `pnpm validate` script.
+
 ### Naming conventions
 
 - npm name: `@<scope>/cap-<short-name>` (e.g. `@render-harness/cap-search-exa`).
 - `pack.name`: the npm package's short name (`cap-search-exa`).
 - Tool names: don't pre-namespace; the loader prepends `<pack.name>.` automatically (so a tool named `web_search` becomes `cap-search-exa.web_search` in the agent).
 - MCP server names: same — declare the short name; loader namespaces it.
+- Connector keys: use lowercase kebab-case (`github`, `linear`, `my-provider`). Avoid reserved route names such as `runs`, `agents`, `ui`, and `connectors`.
 - Env var names: pack-specific prefixes are encouraged (`EXA_API_KEY`, `FIRECRAWL_API_KEY`).
+
+### Access modes and mutation tools
+
+Provider packs should default to read mode. If a pack exposes mutation tools, hide them unless the user sets a config field such as:
+
+```yaml
+capabilities:
+  - pack: "@your-scope/cap-thing"
+    config:
+      accessMode: read_write
+```
+
+Generated templates should approval-gate mutation tools with `permissions.requireApproval` unless the user explicitly chooses unattended writes.
+
+### Validation
+
+Run the capability validator before publishing:
+
+```sh
+pnpm build
+pnpm exec render-harness-capability validate .
+```
+
+The validator checks package metadata, ESM exports, the `render-harness-cap` keyword, and the default `CapabilityPack` export. It is intentionally conservative for v1: connector hook validation that needs provider secrets belongs in your own integration tests.
+
+### Catalog metadata
+
+Community registry entries live in a capability catalog, separate from agent gallery entries. A catalog row includes package name, provider, docs, compatible harness range, features, env vars, connector keys, permission profile, quality status, and trust tier. First-party examples live in [`capability-catalog/index.yaml`](../capability-catalog/index.yaml).
 
 ### Publishing
 
 Standard npm flow: `pnpm publish --access public`. Add the `render-harness-cap` keyword to `package.json` so your pack shows up in npm search.
 
 Entries pull it in: `pnpm add @your/cap-thing`, then reference it under `capabilities[]`.
+
+Installing a capability pack is equivalent to installing any npm dependency: its code runs in the app process. Community registry tiers (`official`, `verified`, `community`, `experimental`) describe review status, not sandbox boundaries.
 
 ---
 

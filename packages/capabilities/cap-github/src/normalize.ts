@@ -64,59 +64,65 @@ function buildNormalized(
 ): NormalizedGitHubEvent {
   if (event === "issues") {
     const number = numberAt(payload, "issue.number");
+    const url = stringAt(payload, "issue.html_url");
     return {
       event,
       ...(action ? { action } : {}),
       repo,
       ...(actor ? { actor } : {}),
       objectType: "issue",
-      objectId: number,
+      ...(number !== undefined ? { objectId: number } : {}),
       ...(number !== undefined ? { number } : {}),
-      url: stringAt(payload, "issue.html_url"),
+      ...(url ? { url } : {}),
       summary: `GitHub issue ${repo}#${number ?? "unknown"} ${action ?? "changed"}`,
     };
   }
   if (event === "pull_request") {
     const number = numberAt(payload, "pull_request.number");
+    const url = stringAt(payload, "pull_request.html_url");
     return {
       event,
       ...(action ? { action } : {}),
       repo,
       ...(actor ? { actor } : {}),
       objectType: "pull_request",
-      objectId: number,
+      ...(number !== undefined ? { objectId: number } : {}),
       ...(number !== undefined ? { number } : {}),
       ...(branch ? { branch } : {}),
-      url: stringAt(payload, "pull_request.html_url"),
+      ...(url ? { url } : {}),
       summary: `GitHub PR ${repo}#${number ?? "unknown"} ${action ?? "changed"}`,
     };
   }
   if (event === "push") {
+    const objectId = stringAt(payload, "after");
+    const url = stringAt(payload, "compare");
     return {
       event,
       repo,
       ...(actor ? { actor } : {}),
       objectType: "push",
-      objectId: stringAt(payload, "after"),
+      ...(objectId ? { objectId } : {}),
       ...(branch ? { branch } : {}),
-      url: stringAt(payload, "compare"),
+      ...(url ? { url } : {}),
       summary: `GitHub push to ${repo}${branch ? `:${branch}` : ""}`,
     };
   }
   const objectType = event.replace(/_/g, "-");
+  const objectId =
+    stringAt(payload, `${event}.id`) ??
+    numberAt(payload, `${event}.id`) ??
+    stringAt(payload, "check_run.id") ??
+    numberAt(payload, "check_run.id");
+  const url = stringAt(payload, `${event}.html_url`) ?? stringAt(payload, `${event}.url`);
   return {
     event,
     ...(action ? { action } : {}),
     repo,
     ...(actor ? { actor } : {}),
     objectType,
-    objectId:
-      stringAt(payload, `${event}.id`) ??
-      numberAt(payload, `${event}.id`) ??
-      stringAt(payload, "check_run.id") ??
-      numberAt(payload, "check_run.id"),
+    ...(objectId !== undefined ? { objectId } : {}),
     ...(branch ? { branch } : {}),
-    url: stringAt(payload, `${event}.html_url`) ?? stringAt(payload, `${event}.url`),
+    ...(url ? { url } : {}),
     summary: `GitHub ${objectType} event for ${repo}`,
   };
 }

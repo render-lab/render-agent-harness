@@ -11,6 +11,7 @@ export default defineConfig({
     gallery: "src/gallery.ts",
     "builtin-chat": "src/builtin-chat.ts",
     "deploy/index": "src/deploy/index.ts",
+    "bin/capability": "src/bin/capability.ts",
     "bin/build": "src/bin/build.ts",
     "bin/deploy": "src/bin/deploy.ts",
   },

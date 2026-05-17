@@ -49,10 +49,12 @@ export function normalizeLinearEvent(
 
   const issueId = stringValue(data.id);
   const issueIdentifier = stringValue(data.identifier);
+  const organizationId = stringValue(payload.organizationId);
+  const url = stringValue(data.url);
   return {
     type,
     ...(action ? { action } : {}),
-    organizationId: stringValue(payload.organizationId),
+    ...(organizationId ? { organizationId } : {}),
     ...(teamId ? { teamId } : {}),
     ...(teamKey ? { teamKey } : {}),
     ...(projectId ? { projectId } : {}),
@@ -60,7 +62,7 @@ export function normalizeLinearEvent(
     ...(issueIdentifier ? { issueIdentifier } : {}),
     ...(state ? { state } : {}),
     ...(actorId ? { actorId } : {}),
-    url: stringValue(data.url),
+    ...(url ? { url } : {}),
     summary: `Linear ${type}${issueIdentifier ? ` ${issueIdentifier}` : ""} ${action ?? "changed"}`,
   };
 }
