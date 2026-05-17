@@ -11,6 +11,7 @@ import {
 } from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { EditModelModal } from "./EditModelModal.js";
+import { InstallCapabilityModal } from "./InstallCapabilityModal.js";
 
 export function AgentsTab() {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
@@ -18,6 +19,8 @@ export function AgentsTab() {
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [installingCapability, setInstallingCapability] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +62,12 @@ export function AgentsTab() {
       }}
     >
       <div className="space-y-6">
-        <CapabilityOverview capabilities={capabilities} connectors={connectors} />
+        {notice ? <p className="border border-line p-2 text-xs text-muted">{notice}</p> : null}
+        <CapabilityOverview
+          capabilities={capabilities}
+          connectors={connectors}
+          onAdd={() => setInstallingCapability(true)}
+        />
         <div className="grid gap-4 md:grid-cols-2">
           {agents.map((agent) => (
             <AgentCard
@@ -74,6 +82,13 @@ export function AgentsTab() {
           ))}
         </div>
       </div>
+      {installingCapability ? (
+        <InstallCapabilityModal
+          agents={agents}
+          onClose={() => setInstallingCapability(false)}
+          onInstalled={setNotice}
+        />
+      ) : null}
     </AsyncBoundary>
   );
 }
@@ -81,14 +96,18 @@ export function AgentsTab() {
 function CapabilityOverview({
   capabilities,
   connectors,
+  onAdd,
 }: {
   capabilities: CapabilitySummary[];
   connectors: ConnectorSummary[];
+  onAdd: () => void;
 }) {
-  if (capabilities.length === 0 && connectors.length === 0) return null;
   return (
     <div className="panel grid gap-4 p-4 text-xs md:grid-cols-2">
       <Section title="capabilities">
+        <button type="button" className="btn mb-3" onClick={onAdd}>
+          Add capability
+        </button>
         {capabilities.length === 0 ? (
           <p className="text-muted">{"// none installed"}</p>
         ) : (

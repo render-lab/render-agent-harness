@@ -72,3 +72,15 @@ Connector packs mount inbound webhooks on the web service and enqueue work for a
 | `@render-harness/cap-webhook-generic` | `/connectors/webhook-generic` | HMAC-verified custom event sources. |
 
 Provider packs default to `accessMode: read`. Set `accessMode: read_write` only when the agent should get mutation tools, such as posting a Slack reply or updating an issue.
+
+## Installing after deployment
+
+Already-deployed harnesses install capabilities through the Operator UI. The UI commits source changes through the wizard service and GitHub App instead of editing the running process directly.
+
+The first install flow commits:
+
+- `render-harness.yaml` capability config and permissions.
+- `package.json` dependency changes.
+- `.env.example` placeholders for required secrets when present.
+
+After the commit merges and Render redeploys, set the required secrets in the Config tab. Lockfile and `render.yaml` refresh are still follow-up steps: run `pnpm install` and `pnpm build:bp` in source control to commit those generated changes.

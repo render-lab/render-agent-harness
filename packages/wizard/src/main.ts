@@ -18,6 +18,7 @@ import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerBrowseRoute } from "./routes/browse.js";
+import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
 import { registerGalleryRoute } from "./routes/gallery.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerInstallsRoute } from "./routes/installs.js";
@@ -54,6 +55,10 @@ async function main(): Promise<void> {
   // Phase 2: in-UI model edits. The deployed worker's proxy route
   // calls this with WIZARD_SHARED_SECRET in the Authorization header.
   registerAgentModelRoute(app, {
+    sharedSecret: env.wizardSharedSecret,
+    github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+  });
+  registerCapabilityInstallRoute(app, {
     sharedSecret: env.wizardSharedSecret,
     github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
   });

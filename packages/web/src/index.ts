@@ -19,6 +19,7 @@ import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
 import { registerCapabilityRoutes } from "./routes/capabilities.js";
+import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerDeploymentRoutes } from "./routes/deployment.js";
@@ -209,6 +210,14 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     agents,
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
+  registerCapabilityInstallRoute(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
+    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
   });
   registerDeploymentRoutes(app, {
     auth,

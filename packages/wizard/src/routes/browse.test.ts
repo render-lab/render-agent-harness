@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ResolvedGallery } from "@render-harness/registry/gallery";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
-import { buildBrowseResponse, registerBrowseRoute, type BrowseResponse } from "./browse.js";
+import { type BrowseResponse, buildBrowseResponse, registerBrowseRoute } from "./browse.js";
 
 const GALLERY: ResolvedGallery = {
   schemaVersion: 1,

@@ -266,6 +266,33 @@ export function listConnectors(): Promise<ConnectorsResp> {
   return request<ConnectorsResp>("/connectors");
 }
 
+export interface InstallCapabilityBody {
+  agentId: string;
+  pack: string;
+  accessMode: "read" | "read_write";
+  config?: Record<string, unknown>;
+  requireApproval?: boolean;
+}
+
+export interface InstallCapabilityResp {
+  ok?: boolean;
+  unchanged?: boolean;
+  commitSha?: string | null;
+  changedFiles?: string[];
+  warnings?: string[];
+  error?: string;
+  details?: string;
+  installUrl?: string;
+}
+
+export function installCapability(body: InstallCapabilityBody): Promise<InstallCapabilityResp> {
+  return request<InstallCapabilityResp>("/capabilities/install", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function getDeployment(): Promise<DeploymentInfo> {
   return request<DeploymentInfo>("/deployment");
 }
