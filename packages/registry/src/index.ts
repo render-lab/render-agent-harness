@@ -31,6 +31,36 @@ export {
   type RenderServiceSpec,
   RenderServiceSpecSchema,
 } from "./capability.js";
+export {
+  type CapabilityCatalog,
+  type CapabilityCatalogEntry,
+  CapabilityCatalogEntrySchema,
+  CapabilityCatalogSchema,
+  type CapabilityConnectorMetadata,
+  CapabilityConnectorMetadataSchema,
+  type CapabilityFeature,
+  CapabilityFeatureSchema,
+  type CapabilityPermissionProfile,
+  CapabilityPermissionProfileSchema,
+  type CapabilityQuality,
+  CapabilityQualitySchema,
+  type CapabilityTrustTier,
+  CapabilityTrustTierSchema,
+  loadCapabilityCatalog,
+  parseCapabilityCatalogJson,
+  parseCapabilityCatalogYaml,
+  serializeCapabilityCatalog,
+} from "./capability-index.js";
+export {
+  type CapabilityPackageJson,
+  type CapabilityValidationIssue,
+  type CapabilityValidationResult,
+  type CapabilityValidationSeverity,
+  validateCapabilityPack,
+  validateCapabilityPackageDir,
+  validateCapabilityPackageMetadata,
+  validateConnectorKey,
+} from "./capability-validate.js";
 export { enrichDeploymentInfo, toDeploymentInfo } from "./deployment-info.js";
 export {
   type GalleryAgentEntryInput,

@@ -19,6 +19,14 @@
       "types": "./dist/capability.d.ts",
       "import": "./dist/capability.js"
     },
+    "./capability-index": {
+      "types": "./dist/capability-index.d.ts",
+      "import": "./dist/capability-index.js"
+    },
+    "./capability-validate": {
+      "types": "./dist/capability-validate.d.ts",
+      "import": "./dist/capability-validate.js"
+    },
     "./emitter": {
       "types": "./dist/emitter.d.ts",
       "import": "./dist/emitter.js"

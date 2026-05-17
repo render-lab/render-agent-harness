@@ -5,6 +5,8 @@ export default defineConfig({
     index: "src/index.ts",
     schema: "src/schema.ts",
     capability: "src/capability.ts",
+    "capability-index": "src/capability-index.ts",
+    "capability-validate": "src/capability-validate.ts",
     emitter: "src/emitter.ts",
     gallery: "src/gallery.ts",
     "builtin-chat": "src/builtin-chat.ts",

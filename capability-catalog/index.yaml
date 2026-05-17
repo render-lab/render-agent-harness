@@ -1,0 +1,115 @@
+schemaVersion: 1
+capabilities:
+  - package: "@render-harness/cap-webhook-generic"
+    name: Generic webhook
+    description: HMAC-verified inbound webhook connector for custom event sources.
+    categories: [connector, webhook]
+    provider: Generic
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-webhook-generic
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.1"
+    features: [connectors]
+    envVars:
+      - name: WEBHOOK_SECRET
+        required: false
+        secret: true
+        description: Secret used to verify generic webhook HMAC signatures.
+    permissions:
+      accessMode: read
+      network: false
+      filesystem: none
+      sidecarServices: false
+    connectors:
+      - key: webhook-generic
+        auth: hmac
+        description: Generic HMAC webhook receiver.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-webhook-generic test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
+  - package: "@render-harness/cap-github"
+    name: GitHub
+    description: GitHub work-monitoring connector with webhook ingestion and SDK-backed tools.
+    categories: [connector, github, work]
+    provider: GitHub
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-github
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.1"
+    features: [tools, connectors]
+    envVars:
+      - name: GITHUB_WEBHOOK_SECRET
+        required: true
+        secret: true
+        description: Secret used to verify GitHub webhook signatures.
+      - name: GITHUB_TOKEN
+        required: true
+        secret: true
+        description: GitHub token used for read tools and optional write tools.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: Defaults to read mode; mutation tools require accessMode read_write.
+    connectors:
+      - key: github
+        auth: hmac
+        eventTypes:
+          - issues
+          - issue_comment
+          - pull_request
+          - pull_request_review
+          - pull_request_review_comment
+          - check_run
+          - workflow_run
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-github test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
+  - package: "@render-harness/cap-linear"
+    name: Linear
+    description: Linear work-monitoring connector with webhook ingestion and SDK-backed tools.
+    categories: [connector, linear, work]
+    provider: Linear
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-linear
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.1"
+    features: [tools, connectors]
+    envVars:
+      - name: LINEAR_WEBHOOK_SECRET
+        required: true
+        secret: true
+        description: Secret used to verify Linear webhook signatures.
+      - name: LINEAR_API_KEY
+        required: true
+        secret: true
+        description: Linear API key used for read tools and optional write tools.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: Defaults to read mode; mutation tools require accessMode read_write.
+    connectors:
+      - key: linear
+        auth: hmac
+        eventTypes:
+          - Issue
+          - Comment
+          - Project
+          - Cycle
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-linear test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
