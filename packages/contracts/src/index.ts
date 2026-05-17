@@ -357,6 +357,28 @@ export interface AgentsResp {
   agents: AgentSummary[];
 }
 
+export interface CapabilitySummary {
+  pack: string;
+  agents: string[];
+  localToolCount: number;
+  mcpServerCount: number;
+  envVars: DeploymentEnvVar[];
+}
+
+export interface CapabilitiesResp {
+  capabilities: CapabilitySummary[];
+}
+
+export interface ConnectorSummary {
+  key: string;
+  pack: string;
+  url: string;
+}
+
+export interface ConnectorsResp {
+  connectors: ConnectorSummary[];
+}
+
 /**
  * Deployment-wide metadata exposed at GET /deployment. Drives the operator
  * UI's header label and the in-product Guide so prose, service names, and

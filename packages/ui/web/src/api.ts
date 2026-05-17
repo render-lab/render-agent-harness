@@ -13,6 +13,10 @@ import type {
   AgentModelSummary,
   AgentSummary,
   CancelRunResp,
+  CapabilitiesResp,
+  CapabilitySummary,
+  ConnectorSummary,
+  ConnectorsResp,
   ContentBlock,
   ConversationDetailResp,
   ConversationSummary,
@@ -49,6 +53,8 @@ import { uiPath } from "./lib/mount.js";
 export type {
   AgentModelSummary,
   AgentSummary,
+  CapabilitySummary,
+  ConnectorSummary,
   ContentBlock,
   ConversationSummary,
   DeploymentAgentInfo,
@@ -242,6 +248,14 @@ export async function getBlueprint(): Promise<string> {
 
 export function listAgents(): Promise<{ agents: AgentSummary[] }> {
   return request<{ agents: AgentSummary[] }>("/agents");
+}
+
+export function listCapabilities(): Promise<CapabilitiesResp> {
+  return request<CapabilitiesResp>("/capabilities");
+}
+
+export function listConnectors(): Promise<ConnectorsResp> {
+  return request<ConnectorsResp>("/connectors");
 }
 
 export function getDeployment(): Promise<DeploymentInfo> {

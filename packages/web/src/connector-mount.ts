@@ -39,6 +39,7 @@ export type ConnectorMountConfig =
 interface MountConnectorsArgs {
   app: Hono;
   connectors: ConnectorMountConfig;
+  auth: (req: Request) => Promise<UserId | null>;
   pool: Pool;
   boss: PgBoss;
   queue: string;
@@ -48,6 +49,8 @@ interface MountConnectorsArgs {
 }
 
 interface MountedConnector {
+  key: string;
+  packName: string;
   contribution: ConnectorContribution;
   ctx: ConnectorWebCtx;
 }
@@ -71,6 +74,8 @@ export async function mountConnectorsIfAvailable(args: MountConnectorsArgs): Pro
         throw new Error(`connector key "${key}" is registered by more than one capability pack`);
       }
       mounted.set(key, {
+        key,
+        packName: loaded.ref.pack,
         contribution,
         ctx: buildConnectorWebCtx({
           pool: args.pool,
@@ -91,6 +96,7 @@ export async function mountConnectorsIfAvailable(args: MountConnectorsArgs): Pro
 
   registerConnectorRoutes(args.app, {
     connectors: mounted,
+    auth: args.auth,
     logger: args.logger,
     pathPrefix: args.pathPrefix,
   });

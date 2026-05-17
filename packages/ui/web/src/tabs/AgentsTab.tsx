@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
-import { type AgentModelSummary, type AgentSummary, ApiError, listAgents } from "../api.js";
+import {
+  type AgentModelSummary,
+  type AgentSummary,
+  ApiError,
+  type CapabilitySummary,
+  type ConnectorSummary,
+  listAgents,
+  listCapabilities,
+  listConnectors,
+} from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { EditModelModal } from "./EditModelModal.js";
 
 export function AgentsTab() {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -24,6 +35,15 @@ export function AgentsTab() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    Promise.all([listCapabilities(), listConnectors()])
+      .then(([capRes, connRes]) => {
+        if (cancelled) return;
+        setCapabilities(capRes.capabilities);
+        setConnectors(connRes.connectors);
+      })
+      .catch(() => {
+        // Older servers may not expose these routes yet; keep the Agents tab usable.
+      });
     return () => {
       cancelled = true;
     };
@@ -38,20 +58,68 @@ export function AgentsTab() {
         message: "// no agents loaded — pass via serveWeb({ agent }) or serveWeb({ agents })",
       }}
     >
-      <div className="grid gap-4 md:grid-cols-2">
-        {agents.map((agent) => (
-          <AgentCard
-            key={agent.name}
-            agent={agent}
-            onModelUpdated={(spec) =>
-              setAgents((curr) =>
-                curr.map((a) => (a.name === agent.name ? { ...a, model: spec } : a)),
-              )
-            }
-          />
-        ))}
+      <div className="space-y-6">
+        <CapabilityOverview capabilities={capabilities} connectors={connectors} />
+        <div className="grid gap-4 md:grid-cols-2">
+          {agents.map((agent) => (
+            <AgentCard
+              key={agent.name}
+              agent={agent}
+              onModelUpdated={(spec) =>
+                setAgents((curr) =>
+                  curr.map((a) => (a.name === agent.name ? { ...a, model: spec } : a)),
+                )
+              }
+            />
+          ))}
+        </div>
       </div>
     </AsyncBoundary>
+  );
+}
+
+function CapabilityOverview({
+  capabilities,
+  connectors,
+}: {
+  capabilities: CapabilitySummary[];
+  connectors: ConnectorSummary[];
+}) {
+  if (capabilities.length === 0 && connectors.length === 0) return null;
+  return (
+    <div className="panel grid gap-4 p-4 text-xs md:grid-cols-2">
+      <Section title="capabilities">
+        {capabilities.length === 0 ? (
+          <p className="text-muted">{"// none installed"}</p>
+        ) : (
+          <ul className="space-y-1">
+            {capabilities.map((cap) => (
+              <li key={cap.pack} className="border border-line px-2 py-1">
+                <div className="font-mono">{cap.pack}</div>
+                <div className="mt-1 text-[11px] text-muted">
+                  tools: {cap.localToolCount} · mcp: {cap.mcpServerCount} · env:{" "}
+                  {cap.envVars.length}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+      <Section title="connectors">
+        {connectors.length === 0 ? (
+          <p className="text-muted">{"// none mounted"}</p>
+        ) : (
+          <ul className="space-y-1">
+            {connectors.map((connector) => (
+              <li key={connector.key} className="border border-line px-2 py-1">
+                <div className="font-mono">{connector.url}</div>
+                <div className="mt-1 text-[11px] text-muted">{connector.pack}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </div>
   );
 }
 

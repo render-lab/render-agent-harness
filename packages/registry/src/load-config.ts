@@ -274,6 +274,7 @@ async function mergePackContributions(
     ...base,
     ...(localTools.length ? { localTools } : {}),
     ...(mcpServers.length ? { mcpServers } : {}),
+    ...(packs.length ? { capabilityPacks: mergeCapabilityPacks(base.capabilityPacks, packs) } : {}),
   };
 
   const allSkills = [...(baseSkills ?? []), ...skills];
@@ -283,6 +284,10 @@ async function mergePackContributions(
     out.skills = base.skills;
   }
   return out;
+}
+
+function mergeCapabilityPacks(existing: string[] | undefined, packs: LoadedPack[]): string[] {
+  return [...new Set([...(existing ?? []), ...packs.map((loaded) => loaded.ref.pack)])];
 }
 
 interface ContribAccumulator {

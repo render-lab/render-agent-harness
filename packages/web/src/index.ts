@@ -18,6 +18,7 @@ import { type ConnectorMountConfig, mountConnectorsIfAvailable } from "./connect
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
+import { registerCapabilityRoutes } from "./routes/capabilities.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerDeploymentRoutes } from "./routes/deployment.js";
@@ -202,6 +203,12 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     pathPrefix,
   });
   registerAgentsRoutes(app, { auth, agents, pathPrefix });
+  registerCapabilityRoutes(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
   registerDeploymentRoutes(app, {
     auth,
     agents,
@@ -237,6 +244,7 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     await mountConnectorsIfAvailable({
       app,
       connectors: opts.connectors,
+      auth,
       pool,
       boss,
       queue,
