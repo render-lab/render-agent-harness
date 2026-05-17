@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/runtime-worker",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Queue-driven worker runtime for @render-harness/core. pg-boss consumer + soft checkpoint + cooperative cancel.",
   "type": "module",
   "license": "MIT",

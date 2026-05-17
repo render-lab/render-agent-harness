@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-browser-browserbase",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Browserbase headless-browser capability pack for the Render agent harness.",
   "type": "module",
   "license": "MIT",
@@ -38,10 +38,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@render-harness/registry": "^0.1.1"
+    "@render-harness/registry": "workspace:*"
   },
   "devDependencies": {
-    "@render-harness/core": "^0.1.1",
+    "@render-harness/core": "workspace:*",
     "@types/node": "^25.6.2",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
