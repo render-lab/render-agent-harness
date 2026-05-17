@@ -37,7 +37,7 @@ const pack = definePack({
   localTools(ctx: PackContext): LocalToolHandler[] {
     const cfg = readConfig(ctx.config);
     const apiKey = ctx.env(cfg.apiKeyEnv);
-    if (!apiKey) throw new Error(`cap-linear: ${cfg.apiKeyEnv} is not set`);
+    if (!apiKey) return [];
     return linearTools({ apiKey, accessMode: cfg.accessMode });
   },
   connectors(ctx: PackContext): ConnectorContribution[] {

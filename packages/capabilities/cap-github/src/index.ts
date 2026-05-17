@@ -37,7 +37,7 @@ const pack = definePack({
   localTools(ctx: PackContext): LocalToolHandler[] {
     const cfg = readConfig(ctx.config);
     const token = ctx.env(cfg.tokenEnv);
-    if (!token) throw new Error(`cap-github: ${cfg.tokenEnv} is not set`);
+    if (!token) return [];
     return githubTools({ token, accessMode: cfg.accessMode });
   },
   connectors(ctx: PackContext): ConnectorContribution[] {

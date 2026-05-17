@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import pack from "./index.js";
 import { githubTools } from "./tools.js";
 
 describe("githubTools", () => {
@@ -21,5 +22,16 @@ describe("githubTools", () => {
     expect(names).toContain("github.create_pull_request_review_comment");
     expect(names).toContain("github.update_issue");
     expect(names).toContain("github.rerun_workflow_run");
+  });
+});
+
+describe("cap-github pack", () => {
+  it("skips local tools when GITHUB_TOKEN is missing", async () => {
+    const tools = await pack.localTools?.({
+      config: {},
+      env: () => undefined,
+      entryName: "test",
+    });
+    expect(tools).toEqual([]);
   });
 });

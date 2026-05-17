@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import pack from "./index.js";
 import { slackTools } from "./tools.js";
 
 describe("slackTools", () => {
@@ -16,5 +17,16 @@ describe("slackTools", () => {
     expect(names).toContain("slack.send_message");
     expect(names).toContain("slack.add_reaction");
     expect(names).toContain("slack.update_message");
+  });
+});
+
+describe("cap-slack pack", () => {
+  it("skips local tools when SLACK_BOT_TOKEN is missing", async () => {
+    const tools = await pack.localTools?.({
+      config: {},
+      env: () => undefined,
+      entryName: "test",
+    });
+    expect(tools).toEqual([]);
   });
 });

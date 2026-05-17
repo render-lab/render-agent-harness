@@ -38,7 +38,7 @@ const pack = definePack({
   localTools(ctx: PackContext): LocalToolHandler[] {
     const cfg = readConfig(ctx.config);
     const botToken = ctx.env(cfg.botTokenEnv);
-    if (!botToken) throw new Error(`cap-slack: ${cfg.botTokenEnv} is not set`);
+    if (!botToken) return [];
     return slackTools({
       botToken,
       accessMode: cfg.accessMode,

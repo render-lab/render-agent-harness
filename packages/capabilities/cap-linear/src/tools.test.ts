@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import pack from "./index.js";
 import { linearTools } from "./tools.js";
 
 describe("linearTools", () => {
@@ -21,5 +22,16 @@ describe("linearTools", () => {
     expect(names).toContain("linear.update_issue");
     expect(names).toContain("linear.assign_issue");
     expect(names).toContain("linear.link_related_issue");
+  });
+});
+
+describe("cap-linear pack", () => {
+  it("skips local tools when LINEAR_API_KEY is missing", async () => {
+    const tools = await pack.localTools?.({
+      config: {},
+      env: () => undefined,
+      entryName: "test",
+    });
+    expect(tools).toEqual([]);
   });
 });
