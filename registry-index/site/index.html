@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Render harness registry</title>
+    <title>Deprecated Render harness registry</title>
     <meta
       name="description"
-      content="Browse and deploy community-built Render agent harness entries."
+      content="Deprecated standalone registry site for Render agent harness entries."
     />
     <style>
       :root {
@@ -166,11 +166,11 @@
   </head>
   <body>
     <header>
-      <h1>Render harness registry</h1>
+      <h1>Deprecated Render harness registry</h1>
       <p>
-        One-click-deploy agents built on the
-        <a href="https://github.com/render-examples/render-harness">Render agent harness</a>. Each
-        entry is its own GitHub repo, pinned by commit SHA, with a Deploy-to-Render badge.
+        The standalone static registry has been replaced by the public wizard site’s
+        <code>/browse</code> route, which shows official templates and community submissions together.
+        This page remains only as a compatibility fallback for old registry-index deploys.
       </p>
     </header>
 
@@ -183,9 +183,8 @@
     </main>
 
     <footer>
-      Want to add an entry? Open a PR adding 4 fields to
-      <code>index.json</code> in
-      <a href="https://github.com/render-examples/render-harness-index">render-harness-index</a>.
+      Community submissions still live in <code>index.json</code>. The canonical browse UI is the
+      wizard service at <code>/browse</code>.
     </footer>
 
     <script>

@@ -9,14 +9,18 @@ The registry and scaffolding packages turn source templates into runnable projec
 flowchart LR
   template[/"Template catalog"/]
   cli[["CLI scaffolder"]]
-  wizard[["Browser wizard"]]
+  browse[["Public /browse"]]
+  wizard[["Public /new"]]
+  community[/"Community index"/]
   manifest[/"render-harness.yaml"/]
   registry{{"Registry"}}
   project[("Generated project")]
   blueprint[/"render.yaml"/]
 
   template --> cli
+  template --> browse
   template --> wizard
+  community --> browse
   cli --> project
   wizard --> project
   project --> manifest
@@ -24,7 +28,7 @@ flowchart LR
   registry --> blueprint
 
   class template,manifest,blueprint config
-  class cli,wizard surface
+  class cli,browse,wizard surface
   class registry central
   class project data
   classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
@@ -92,11 +96,18 @@ The CLI:
 
 Local framework development commonly uses `--harness-root` so generated projects link to the local workspace packages.
 
-## Browser wizard
+## Public browse and new routes
 
-The browser wizard uses the same gallery data but writes through a managed web flow.
+The public wizard site uses the same gallery data but splits discovery from creation.
 
-The wizard:
+The `/browse` route:
+
+- Serves `GET /api/browse`.
+- Shows official template catalog entries.
+- Shows community registry submissions from `registry-index/index.json`.
+- Supports search and filters across source, runtime, category, capability, and kind.
+
+The `/new` route:
 
 - Serves `GET /api/gallery`.
 - Renders a template picker.
@@ -104,7 +115,7 @@ The wizard:
 - Produces deploy links.
 - Supports model edit proxy flows for deployed harnesses.
 
-Use the wizard for guided onboarding. Use the CLI for local-first scaffolding.
+Use `/new` for guided onboarding. Use the CLI for local-first scaffolding.
 
 ## Sealed bundles
 
@@ -134,4 +145,7 @@ For the authoring flow, see [Authoring bundle templates](/authoring-bundle-templ
 | `packages/create-render-agent/src/generate.ts` | File generation. |
 | `packages/create-render-agent/src/templates/bundle.ts` | Sealed bundle runtime templates. |
 | `packages/wizard/src/main.ts` | Browser wizard server. |
+| `packages/wizard/src/routes/browse.ts` | Public browse API. |
+| `packages/wizard/web/src/BrowsePage.tsx` | Public browse UI. |
 | `packages/wizard/web/src/steps/Template.tsx` | Template picker UI. |
+| `registry-index/index.json` | Community registry submissions. |

@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://render.com/schema/render.yaml.json
 #
-# Static site that hosts the registry's discovery page. Deploys
-# `site/` (this directory) plus a copy of `index.json` next to it.
+# Deprecated static site for old registry deploys. The canonical browse UI
+# now lives in the wizard service at `/browse`; this remains as a
+# compatibility fallback that can still read `index.json`.
 
 services:
   - type: web

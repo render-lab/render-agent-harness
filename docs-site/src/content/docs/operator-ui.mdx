@@ -1,14 +1,14 @@
 ---
 title: Operator UI
-description: Use the deployed `/ui` surface to chat, inspect runs, view agents, manage config, and read guides.
+description: Use a deployed harness's operator UI to chat, inspect runs, view agents, manage config, and read guides.
 ---
 
-The operator UI is an optional React SPA mounted by the web service at `/ui`. It is for operating a deployed harness, not for creating a new project.
+The operator UI is an optional React SPA mounted by the web service. Scaffolded projects mount it at the service root, and library users can choose another path. It is for operating a deployed harness, not for creating a new project.
 
 ```mermaid
 flowchart LR
   operator["Operator"]
-  ui[["/ui"]]
+  ui[["operator UI"]]
 
   subgraph tabs["Operator surfaces"]
     chat["Chat"]
@@ -59,7 +59,7 @@ await serveWeb({
 });
 ```
 
-Passing `ui: true` mounts the UI at `/ui`. To customize it, pass an object:
+Passing `ui: true` mounts the UI at `/ui`. Scaffolded projects pass `ui: { path: "/" }` when the user enables the UI, so the deployed harness opens directly into the operator console. To customize the mount path, pass an object:
 
 ```ts
 await serveWeb({

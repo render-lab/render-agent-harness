@@ -1,6 +1,6 @@
 ---
 title: Ways to Use Render Harness
-description: Choose between the CLI, browser wizard, deployed operator UI, and source-level APIs.
+description: Choose between the CLI, public browse/new site, deployed operator UI, and source-level APIs.
 ---
 
 Render Harness has several user surfaces. They serve different stages of the agent lifecycle: creating a project, deploying it, operating it, and extending the framework.
@@ -13,13 +13,15 @@ flowchart LR
   integrator["Integrator"]
   contributor["Framework contributor"]
 
-  wizard[["Browser wizard"]]
+  browse[["Public /browse"]]
+  wizard[["Public /new"]]
   cli[["CLI scaffolder"]]
   catalog[/"Template catalog"/]
   ui[["Operator UI"]]
   api[["HTTP API"]]
   registry[["Registry APIs"]]
 
+  user --> browse
   user --> wizard
   author --> cli
   author --> catalog
@@ -29,7 +31,7 @@ flowchart LR
   contributor --> catalog
 
   class user,author,operator,integrator,contributor role
-  class wizard,cli,ui,api,registry surface
+  class browse,wizard,cli,ui,api,registry surface
   class catalog config
   classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
   classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
@@ -41,7 +43,8 @@ flowchart LR
 | Surface | Use it to | Where it lives |
 | --- | --- | --- |
 | CLI scaffolder | Create a new local project from a blank prompt or starter template. | `packages/create-render-agent` |
-| Browser wizard | Create a managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
+| Public `/browse` | Browse official templates and community harness submissions. | `packages/wizard` |
+| Public `/new` | Create a managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
 | Operator UI | Chat with deployed agents, inspect runs, view agents, edit config, and read in-product guides. | `packages/ui` mounted by `packages/web` |
 | HTTP API | Create runs, stream results, send conversation turns, cancel work, and inspect usage. | `packages/web` |
 | Template catalog | Store starter agents and bundles consumed by the CLI and wizard. | `gallery/` |
@@ -70,36 +73,42 @@ Use the CLI when:
 - You want to test framework changes against a newly scaffolded project.
 - You want a local project before creating a GitHub repo.
 
-## Browser wizard
+## Public browse and new routes
 
-Use the browser wizard when you want a guided flow that creates a managed repo and deploy path.
+Use the public wizard site when you want to discover harnesses or create a managed repo and deploy path.
 
-The wizard loads the same template catalog through `GET /api/gallery`. The first screen is a template picker with a blank option and every available starter.
+The `/browse` route shows official templates from the template catalog alongside community registry submissions. The `/new` route starts the guided scaffolding flow.
 
-The wizard is the right surface when:
+The public site is the right surface when:
 
 - You want a no-code or low-code onboarding flow.
 - You want a managed GitHub repo created for the user.
 - You want a deploy link instead of a local-only project.
+- You want to compare official templates with community harnesses before starting.
 
-The wizard is implemented as a Hono server plus React SPA in `packages/wizard`.
+The public site is implemented as a Hono server plus React SPA in `packages/wizard`.
 
 ```mermaid
 flowchart LR
   person["User or author"]
-  wizard[["Browser wizard"]]
+  browse[["/browse"]]
+  wizard[["/new"]]
   catalog[/"Template catalog"/]
+  community[/"Community registry index"/]
   repo[("Managed GitHub repo")]
   deploy[["Deploy to Render link"]]
 
+  person --> browse
   person --> wizard
+  browse --> community
+  browse --> catalog
   wizard --> catalog
   wizard --> repo
   repo --> deploy
 
   class person role
-  class wizard,deploy surface
-  class catalog config
+  class browse,wizard,deploy surface
+  class catalog,community config
   class repo data
   classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
   classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
@@ -109,7 +118,7 @@ flowchart LR
 
 ## Template catalog
 
-The template catalog is currently named `gallery/`. Despite the name, it is not a standalone visual gallery. It is source data consumed by the CLI and browser wizard.
+The template catalog is currently named `gallery/`. It is source data consumed by the CLI, `/new`, and the official entries shown on `/browse`.
 
 The catalog includes:
 
@@ -129,7 +138,7 @@ The Chief of Staff template is a sealed multi-agent bundle. It ships multiple ag
 
 ## Deployed operator UI
 
-The operator UI is mounted at `/ui` when a deployment enables `shared.ui: true`.
+The operator UI belongs to a specific deployed harness. Scaffolded projects mount it at the service root when UI is enabled. Library users can mount it elsewhere, including `/ui`, by passing a custom `ui.path`.
 
 Use it after deployment to:
 
@@ -141,7 +150,7 @@ Use it after deployment to:
 - Edit supported model/config values through the Config tab.
 - Read the in-product Guide.
 
-The UI is not the scaffolder. It operates a harness that is already deployed.
+The UI is not the public wizard site. It operates one harness that is already deployed.
 
 ```mermaid
 flowchart LR
@@ -252,10 +261,10 @@ flowchart LR
 
 | Stage | Primary surface |
 | --- | --- |
-| Pick a starting point | CLI scaffolder or browser wizard |
+| Pick a starting point | CLI scaffolder or public `/browse` |
 | Author agent behavior | Generated TypeScript files |
 | Declare deployment shape | `render-harness.yaml` |
 | Build Render infrastructure | Registry and Blueprint emitter |
 | Start runs | Web API, Cron, Worker, or Workflows |
-| Operate deployed agents | Operator UI |
+| Operate deployed agents | The deployed harness's operator UI |
 | Extend the framework | Core, registry, runtime, and capability packages |

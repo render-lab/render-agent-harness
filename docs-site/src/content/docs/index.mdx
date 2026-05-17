@@ -40,7 +40,8 @@ The harness handles the platform work around your agent:
 - A `render-harness.yaml` manifest that describes agents, runtimes, capabilities, environment variables, and deployment shape.
 - A registry and Blueprint emitter that turn the manifest into Render services.
 - CLI and browser scaffolding flows for starting from a gallery template.
-- An optional operator UI at `/ui` for chat, run inspection, agents, usage, and guides.
+- A public browse surface for official templates and community harness submissions.
+- An operator UI for each deployed harness, usually mounted at the service root in scaffolded projects.
 
 ## The mental model
 
@@ -118,9 +119,10 @@ The Chief of Staff bundle is the most complete example because it uses web, work
 Render Harness is not only a runtime library. It has different surfaces for different jobs:
 
 - Use the CLI scaffolder to create a local project.
-- Use the browser wizard to pick a template and create a managed repo/deploy flow.
-- Use the template catalog to define what starters are available.
-- Use the deployed operator UI to chat, inspect runs, view agents, edit config, and read guides.
+- Use `/browse` on the public wizard site to compare official templates and community harness submissions.
+- Use `/new` on the public wizard site to create a managed repo and deploy flow.
+- Use the template catalog to define what official starters are available.
+- Use each deployed harness's operator UI to chat, inspect runs, view agents, edit config, and read guides.
 - Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
 - Use the registry APIs when you are extending the framework itself.
 
@@ -138,19 +140,21 @@ flowchart TB
   integrate["Integrate"]
 
   cli[["CLI scaffolder"]]
-  wizard[["Browser wizard"]]
+  browse[["Public /browse"]]
+  wizard[["Public /new"]]
   registry[["Registry + Blueprint emitter"]]
   ui[["Operator UI"]]
   api[["HTTP API"]]
 
   create --> cli
+  create --> browse
   create --> wizard
   deploy --> registry
   operate --> ui
   integrate --> api
 
   class create,deploy,operate,integrate role
-  class cli,wizard,registry,ui,api surface
+  class cli,browse,wizard,registry,ui,api surface
   classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
   classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
 ```
@@ -158,8 +162,9 @@ flowchart TB
 | Surface | What it does |
 | --- | --- |
 | CLI scaffolder | Creates a local project from a blank prompt or starter template. |
-| Browser wizard | Creates a guided repo/deploy flow from the same template catalog. |
-| Deployed operator UI | Operates a running harness at `/ui`. |
+| Public `/browse` | Lists official templates and community harness submissions. |
+| Public `/new` | Creates a guided repo/deploy flow from an official template or blank project. |
+| Deployed operator UI | Operates one running harness deployment. Scaffolded projects mount it at the service root. |
 | HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
 
 It also has framework surfaces for contributors:

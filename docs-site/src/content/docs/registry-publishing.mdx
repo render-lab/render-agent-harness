@@ -3,11 +3,11 @@ title: Registry Publishing
 description: Publish a pinned deployable repo so others can deploy it from the registry.
 ---
 
-Use the registry publishing flow when you have a working harness project in its own Git repository and want other people to deploy that exact project with a Deploy to Render button.
+Use the registry publishing flow when you have a working harness project in its own Git repository and want other people to discover and deploy that exact project from `/browse`.
 
 Registry publishing is not the starter-template workflow. If you are adding a scaffoldable starter to this repository, use [Template catalog](/template-catalog/) instead. If that starter is a multi-agent bundle, use [Authoring bundle templates](/authoring-bundle-templates/) as the bundle-specific subcase.
 
-The registry website is [render-agent-harness-r5pq.onrender.com](https://render-agent-harness-r5pq.onrender.com/). It points at external, immutable deployable repos. Each entry is pinned to a Git commit SHA so the generated Render Blueprint and source code are reproducible.
+The public wizard site’s `/browse` route shows community registry entries alongside official templates. Community entries point at external, immutable deployable repos. Each entry is pinned to a Git commit SHA so the generated Render Blueprint and source code are reproducible.
 
 ## Publishing flow
 
@@ -16,7 +16,7 @@ The registry website is [render-agent-harness-r5pq.onrender.com](https://render-
 3. Generate `render.yaml` from the manifest.
 4. Commit the manifest, generated Blueprint, source files, and README.
 5. Pin the registry entry to a Git commit SHA.
-6. Submit the entry through the registry website.
+6. Submit the entry to the community registry index.
 
 ## Generate the Blueprint
 
@@ -48,9 +48,9 @@ Registry entries should point at an immutable SHA, not a floating branch. This m
 
 ## Submit to the registry
 
-Use the registry website to submit the pinned repo:
+Use `/browse` on the public wizard site to find published entries.
 
-[Open the registry](https://render-agent-harness-r5pq.onrender.com/)
+Official templates and community submissions appear together, but they have different source data. Official templates come from `gallery/`. Community submissions come from `registry-index/index.json`.
 
 The registry records entries with this shape:
 

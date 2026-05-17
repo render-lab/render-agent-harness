@@ -16,7 +16,7 @@ The web service:
 - Creates the run queue.
 - Authenticates requests.
 - Registers run, conversation, agent, usage, diagnostics, deployment, Blueprint, config, Vitals, and model routes.
-- Optionally mounts the operator UI at `/ui`.
+- Optionally mounts the operator UI. Scaffolded projects use the service root; library users can choose another path.
 
 `serveWeb()` requires `DATABASE_URL`. The default auth checks `Authorization: Bearer <WEB_API_KEY>`.
 
