@@ -393,9 +393,6 @@ function WizardHeader({
           <a className="btn" href="/browse">
             Browse
           </a>
-          <button type="button" className="btn" onClick={onHome}>
-            New
-          </button>
         </div>
       </div>
       <div className="border-t border-line px-5 py-2">

@@ -3,19 +3,7 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [
-    [
-      "@render-harness/contracts",
-      "@render-harness/core",
-      "@render-harness/registry",
-      "@render-harness/runtime-cron",
-      "@render-harness/runtime-web",
-      "@render-harness/runtime-worker",
-      "@render-harness/runtime-workflows",
-      "@render-harness/web",
-      "@render-harness/ui"
-    ]
-  ],
+  "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",

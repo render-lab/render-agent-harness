@@ -7,7 +7,8 @@
 "@render-harness/runtime-worker": minor
 "@render-harness/runtime-workflows": minor
 "@render-harness/web": minor
-"@render-harness/ui": minor
+"@render-harness/ui": patch
+"@render-harness/wizard": minor
 "@render-harness/cap-webhook-generic": minor
 "@render-harness/cap-github": minor
 "@render-harness/cap-linear": minor
