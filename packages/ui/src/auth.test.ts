@@ -25,6 +25,18 @@ describe("buildCookieConfig", () => {
     }
   });
 
+  it("treats empty UI_COOKIE_SECRET as missing", () => {
+    const prev = process.env.UI_COOKIE_SECRET;
+    process.env.UI_COOKIE_SECRET = "";
+    try {
+      const cfg = buildCookieConfig({});
+      expect(cfg.secret).toMatch(/^[0-9a-f]{64}$/);
+    } finally {
+      if (prev === undefined) delete process.env.UI_COOKIE_SECRET;
+      else process.env.UI_COOKIE_SECRET = prev;
+    }
+  });
+
   it("respects explicit overrides", () => {
     const cfg = buildCookieConfig({
       cookieName: "custom",

@@ -43,8 +43,8 @@ export function buildCookieConfig(opts: {
   maxAge?: number;
   secure?: boolean;
 }): CookieSessionConfig {
-  const envSecret = process.env.UI_COOKIE_SECRET;
-  const secret = opts.secret ?? envSecret ?? generateEphemeralSecret();
+  const envSecret = nonEmpty(process.env.UI_COOKIE_SECRET);
+  const secret = nonEmpty(opts.secret) ?? envSecret ?? generateEphemeralSecret();
   const isDev = process.env.NODE_ENV !== "production";
   return {
     cookieName: opts.cookieName ?? DEFAULT_COOKIE_NAME,
@@ -68,7 +68,12 @@ export async function readSessionCookie(
   cfg: CookieSessionConfig,
 ): Promise<UserId | null> {
   const shim = { req: { raw: req } } as unknown as Context;
-  const value = await getSignedCookie(shim, cfg.secret, cfg.cookieName);
+  let value: string | false | undefined;
+  try {
+    value = await getSignedCookie(shim, cfg.secret, cfg.cookieName);
+  } catch {
+    return null;
+  }
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -157,4 +162,9 @@ function generateEphemeralSecret(): string {
     hex += b.toString(16).padStart(2, "0");
   }
   return hex;
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }

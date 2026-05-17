@@ -12,11 +12,11 @@ export function envExample(answers: Answers): string {
   const uiBlock = answers.ui
     ? `
 # Required when the operator UI is mounted: bearer token end users log in with.
-WEB_API_KEY=
+WEB_API_KEY=demo
 
 # Required when the operator UI is mounted: signing secret for session cookies.
-# Generate with: openssl rand -hex 32
-UI_COOKIE_SECRET=
+# Replace before production. Generate with: openssl rand -hex 32
+UI_COOKIE_SECRET=dev-only-cookie-secret-change-me
 `
     : "";
   const connectorBlock = connectorEnvBlock(answers);

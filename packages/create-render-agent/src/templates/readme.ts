@@ -44,7 +44,8 @@ Requires Docker (for Postgres + Valkey) and any Node 22+ package manager (npm, p
 ${harnessDepNote(answers)}
 \`\`\`sh
 ${pm} install
-# Edit .env — fill in ANTHROPIC_API_KEY (and WEB_API_KEY/UI_COOKIE_SECRET if you enabled the UI).
+# Edit .env — fill in ANTHROPIC_API_KEY and any provider secrets your capabilities need.
+# UI auth defaults are safe for local smoke tests; replace them before production.
 # Other values (DATABASE_URL, KV_URL) are pre-populated to match \`${run} db:up\`.
 ${run} db:up               # Postgres + Valkey via docker-compose
 ${run} dev
