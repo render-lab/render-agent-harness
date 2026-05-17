@@ -34,6 +34,7 @@ import {
   type SkillMetadata,
 } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = join(HERE, "..", "skills");
@@ -77,7 +78,7 @@ async function ensureSchema(): Promise<void> {
 
 const pack = definePack({
   name: "cap-scrape-firecrawl",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: "FIRECRAWL_API_KEY",

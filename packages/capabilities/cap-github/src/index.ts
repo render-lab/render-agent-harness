@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LocalToolHandler } from "@render-harness/core";
 import { type ConnectorContribution, definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 import { type GitHubFilterConfig, normalizeGitHubEvent } from "./normalize.js";
 import { type GitHubAccessMode, githubTools } from "./tools.js";
 import { verifyGitHubSignature } from "./verify.js";
@@ -18,7 +19,7 @@ const DEFAULT_TOKEN_ENV = "GITHUB_TOKEN";
 
 const pack = definePack({
   name: "cap-github",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: DEFAULT_WEBHOOK_SECRET_ENV,

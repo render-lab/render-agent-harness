@@ -26,6 +26,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPool, type LocalToolHandler, type SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = join(HERE, "..", "skills");
@@ -63,7 +64,7 @@ async function ensureSchema(): Promise<void> {
 
 const pack = definePack({
   name: "cap-memory-pg",
-  version: "0.1.0",
+  version: pkg.version,
   localTools(ctx: PackContext): LocalToolHandler[] {
     const cfg = ctx.config as MemoryConfig;
     const namespace = cfg.namespace ?? ctx.entryName;

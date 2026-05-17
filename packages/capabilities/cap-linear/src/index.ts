@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LocalToolHandler } from "@render-harness/core";
 import { type ConnectorContribution, definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 import { type LinearFilterConfig, normalizeLinearEvent } from "./normalize.js";
 import { type LinearAccessMode, linearTools } from "./tools.js";
 import { verifyLinearWebhook } from "./verify.js";
@@ -18,7 +19,7 @@ const DEFAULT_API_KEY_ENV = "LINEAR_API_KEY";
 
 const pack = definePack({
   name: "cap-linear",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: DEFAULT_WEBHOOK_SECRET_ENV,

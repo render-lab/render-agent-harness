@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { McpServerConfig, SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // dist/ is one level under the package root, so skills/ is one above.
@@ -55,7 +56,7 @@ function readConfig(
 
 const pack = definePack({
   name: "cap-search-exa",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: "EXA_API_KEY",

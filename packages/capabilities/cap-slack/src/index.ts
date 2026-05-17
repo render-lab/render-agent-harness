@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LocalToolHandler } from "@render-harness/core";
 import { type ConnectorContribution, definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 import { slackConversationId } from "./convid.js";
 import { normalizeSlackEvent, type SlackNormalizeConfig } from "./normalize.js";
 import { type SlackAccessMode, slackTools } from "./tools.js";
@@ -19,7 +20,7 @@ const DEFAULT_BOT_TOKEN_ENV = "SLACK_BOT_TOKEN";
 
 const pack = definePack({
   name: "cap-slack",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: DEFAULT_SIGNING_SECRET_ENV,

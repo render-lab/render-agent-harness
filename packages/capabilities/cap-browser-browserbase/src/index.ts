@@ -27,6 +27,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { McpServerConfig, SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = join(HERE, "..", "skills");
@@ -50,7 +51,7 @@ function readConfig(ctx: PackContext) {
 
 const pack = definePack({
   name: "cap-browser-browserbase",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: "BROWSERBASE_API_KEY",

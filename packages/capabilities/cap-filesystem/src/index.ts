@@ -38,6 +38,7 @@ import { dirname, join, resolve, sep, dirname as urlDirname, join as urlJoin } f
 import { fileURLToPath } from "node:url";
 import type { LocalToolHandler, SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = urlDirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = urlJoin(HERE, "..", "skills");
@@ -52,7 +53,7 @@ const DEFAULT_MAX_BYTES = 1_048_576; // 1 MB
 
 const pack = definePack({
   name: "cap-filesystem",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [],
   async localTools(ctx: PackContext): Promise<LocalToolHandler[]> {
     const cfg = (ctx.config ?? {}) as FsConfig;

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { type ConnectorContribution, definePack, type PackContext } from "@render-harness/registry";
+import pkg from "../package.json" with { type: "json" };
 import { type ExtractConfig, extractWebhookPayload } from "./extract.js";
 import { verifyWebhookSignature } from "./verify.js";
 
@@ -19,7 +20,7 @@ const DEFAULT_SIGNATURE_HEADER = "X-Signature-256";
 
 const pack = definePack({
   name: "cap-webhook-generic",
-  version: "0.1.0",
+  version: pkg.version,
   envSchema: [
     {
       name: DEFAULT_SECRET_ENV,
