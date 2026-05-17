@@ -1,5 +1,11 @@
 # @render-harness/cap-github
 
+## 0.2.1
+
+### Patch Changes
+
+- Read capability pack metadata versions from package.json so runtime pack metadata matches the published npm version.
+
 ## 0.2.0
 
 ### Minor Changes

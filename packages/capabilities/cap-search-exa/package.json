@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-search-exa",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Exa web-search capability pack for the Render agent harness.",
   "type": "module",
   "license": "MIT",
