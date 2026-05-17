@@ -134,7 +134,13 @@ function toApiContentBlock(block: ContentBlock): Anthropic.ContentBlockParam {
         thinking: block.thinking,
         signature: block.signature ?? "",
       };
+    default:
+      return assertNever(block);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported content block: ${JSON.stringify(value)}`);
 }
 
 function fromApiBlock(block: Anthropic.ContentBlock): ContentBlock {
