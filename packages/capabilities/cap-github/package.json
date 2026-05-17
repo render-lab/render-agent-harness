@@ -1,0 +1,48 @@
+{
+  "name": "@render-harness/cap-github",
+  "version": "0.1.0",
+  "description": "GitHub monitoring capability pack for the Render agent harness.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "render-harness-cap",
+    "render-harness",
+    "github"
+  ],
+  "renderHarness": {
+    "gallery": {
+      "label": "GitHub",
+      "envHint": "GITHUB_TOKEN"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "@render-harness/registry": "workspace:*"
+  },
+  "devDependencies": {
+    "@render-harness/core": "workspace:*",
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
