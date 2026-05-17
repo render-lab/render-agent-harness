@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertCapabilityPack, type CapabilityPack } from "./capability.js";
+import { type CapabilityCatalog, loadCapabilityCatalog } from "./capability-index.js";
 
 export type CapabilityValidationSeverity = "error" | "warning";
 
@@ -14,6 +15,11 @@ export interface CapabilityValidationIssue {
 export interface CapabilityValidationResult {
   ok: boolean;
   issues: CapabilityValidationIssue[];
+}
+
+export interface CapabilityCatalogValidationOpts {
+  catalogPath: string;
+  workspaceRoot?: string;
 }
 
 export interface CapabilityPackageJson {
@@ -92,6 +98,65 @@ export async function validateCapabilityPackageDir(
       path: "exports",
       message: `failed to import capability pack: ${err instanceof Error ? err.message : String(err)}`,
     });
+  }
+
+  return toResult(issues);
+}
+
+export async function validateCapabilityCatalog(
+  opts: CapabilityCatalogValidationOpts,
+): Promise<CapabilityValidationResult> {
+  let catalog: CapabilityCatalog;
+  try {
+    catalog = await loadCapabilityCatalog(opts.catalogPath);
+  } catch (err) {
+    return {
+      ok: false,
+      issues: [
+        {
+          severity: "error",
+          path: opts.catalogPath,
+          message: `failed to load capability catalog: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ],
+    };
+  }
+
+  const issues: CapabilityValidationIssue[] = [];
+  const connectorKeys = new Map<string, string>();
+  for (const [index, entry] of catalog.capabilities.entries()) {
+    const entryPath = `capabilities[${index}]`;
+    for (const connector of entry.connectors) {
+      for (const issue of validateConnectorKey(connector.key)) {
+        issues.push({ ...issue, path: `${entryPath}.${issue.path}` });
+      }
+      const seenBy = connectorKeys.get(connector.key);
+      if (seenBy && seenBy !== entry.package) {
+        error(
+          issues,
+          `${entryPath}.connectors.key`,
+          `connector key "${connector.key}" is already declared by ${seenBy}`,
+        );
+      } else {
+        connectorKeys.set(connector.key, entry.package);
+      }
+    }
+
+    if (opts.workspaceRoot && entry.package.startsWith("@render-harness/")) {
+      const packageDir = resolve(
+        opts.workspaceRoot,
+        "packages",
+        "capabilities",
+        stripPackageScope(entry.package),
+      );
+      const result = await validateCapabilityPackageDir(packageDir);
+      for (const issue of result.issues) {
+        issues.push({
+          ...issue,
+          path: `${entryPath}.${issue.path}`,
+        });
+      }
+    }
   }
 
   return toResult(issues);
