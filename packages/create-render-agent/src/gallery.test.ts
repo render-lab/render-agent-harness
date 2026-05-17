@@ -54,12 +54,14 @@ describe("enrichGalleryCapabilities", () => {
         label: "GitHub",
         description: "GitHub work-monitoring connector.",
         envHint: "GITHUB_TOKEN, GITHUB_WEBHOOK_SECRET",
+        versionRange: "^0.1",
       },
       {
         pack: "@acme/cap-thing",
         label: "Thing",
         description: "Community thing.",
         envHint: null,
+        versionRange: "^0.1",
       },
     ]);
   });

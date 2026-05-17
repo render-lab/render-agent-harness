@@ -1,5 +1,6 @@
 import { posix } from "node:path";
 import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
+import { DEFAULT_HARNESS_VERSION_RANGE } from "../version-ranges.js";
 
 /**
  * Builds the scaffolded project's package.json. Layout follows the
@@ -10,8 +11,8 @@ import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
  *                      `main` points at the first entry's dist file
  *
  * Harness deps:
- *   - When `answers.harnessRoot` is null (default), `@render-harness/*` deps
- *     are pinned to `^0.1.1` — the published version range.
+ *   - When `answers.harnessRoot` is null (default), core `@render-harness/*`
+ *     deps are pinned to the current published harness range.
  *   - When `answers.harnessRoot` is set, the deps become `link:` references
  *     pointing into that checkout, so `pnpm install` works against the
  *     local source today.
@@ -75,7 +76,9 @@ export function packageJson(answers: Answers): string {
     dependencies.dotenv = "^17.4.2";
   }
   for (const cap of answers.capabilities) {
-    dependencies[cap.pack] = harnessDep(cap.pack);
+    dependencies[cap.pack] = answers.harnessRoot
+      ? harnessDep(cap.pack)
+      : (cap.version ?? harnessDep(cap.pack));
   }
 
   const pkg: Record<string, unknown> = {
@@ -125,7 +128,7 @@ function hasConnectorCapabilities(answers: Answers): boolean {
  * else under `packages/<name>`.
  */
 function harnessDepVersion(pkgName: string, harnessRoot: string | null): string {
-  if (!harnessRoot) return "^0.1.1";
+  if (!harnessRoot) return DEFAULT_HARNESS_VERSION_RANGE;
   const tail = pkgName.replace(/^@render-harness\//, "");
   const subdir = tail.startsWith("cap-") ? `capabilities/${tail}` : tail;
   // Always emit a POSIX-style path. `link:` accepts absolute paths.

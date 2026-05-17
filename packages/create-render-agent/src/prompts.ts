@@ -315,7 +315,12 @@ async function promptRuntimeDetails(
 }
 
 async function promptCapabilities(
-  available: ReadonlyArray<{ pack: string; label: string; envHint: string | null }>,
+  available: ReadonlyArray<{
+    pack: string;
+    label: string;
+    envHint: string | null;
+    versionRange?: string | null;
+  }>,
   initial: readonly string[],
 ): Promise<CapabilityPick[]> {
   if (available.length === 0) return [];
@@ -330,7 +335,10 @@ async function promptCapabilities(
     required: false,
   });
   const picked = unwrap(result);
-  return picked.map((pack) => ({ pack }));
+  return picked.map((pack) => {
+    const found = available.find((c) => c.pack === pack);
+    return { pack, ...(found?.versionRange ? { version: found.versionRange } : {}) };
+  });
 }
 
 async function promptModel(templateModel: ModelSpecInput | undefined): Promise<ModelSpecInput> {

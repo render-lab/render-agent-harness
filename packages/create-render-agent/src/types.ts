@@ -108,6 +108,7 @@ export type RuntimeKind = RuntimeSelection["kind"];
 
 export interface CapabilityPick {
   pack: string;
+  version?: string;
   config?: Record<string, unknown>;
 }
 

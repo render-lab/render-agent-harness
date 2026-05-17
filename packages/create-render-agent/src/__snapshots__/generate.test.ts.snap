@@ -250,7 +250,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:
@@ -598,7 +598,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:
@@ -930,7 +930,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:
@@ -1300,7 +1300,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:
@@ -1675,7 +1675,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:
@@ -2076,7 +2076,7 @@ volumes:
   "render-harness.yaml": "schemaVersion: 1
 name: my-agent
 description: A test agent.
-harnessVersion: ^0.1
+harnessVersion: ^0.1.1
 license: MIT
 shared:
   model:

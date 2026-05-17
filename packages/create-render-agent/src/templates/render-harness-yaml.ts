@@ -1,5 +1,6 @@
 import { stringify } from "yaml";
 import type { Answers, RuntimeSelection } from "../types.js";
+import { DEFAULT_HARNESS_VERSION_RANGE } from "../version-ranges.js";
 
 /**
  * Build the `render-harness.yaml` content for a scaffolded project. The
@@ -48,7 +49,7 @@ export function buildHarnessConfig(answers: Answers): Record<string, unknown> {
     schemaVersion: 1,
     name: answers.agentName,
     description: answers.description,
-    harnessVersion: "^0.1",
+    harnessVersion: DEFAULT_HARNESS_VERSION_RANGE,
     license: "MIT",
     shared,
   };

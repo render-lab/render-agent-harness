@@ -144,6 +144,8 @@ const ResolvedCapabilityEntrySchema = z
     label: z.string().min(1),
     /** Hint shown next to the option, e.g. "EXA_API_KEY". */
     envHint: z.string().nullable(),
+    /** npm version range to install for this capability. */
+    versionRange: SemverRangeSchema.nullable(),
   })
   .strict();
 
@@ -175,6 +177,7 @@ export interface ResolvedCapabilityEntry {
   description: string;
   label: string;
   envHint: string | null;
+  versionRange: string | null;
 }
 
 export interface ResolvedGallery {
@@ -396,6 +399,7 @@ async function discoverCapabilities(dir: string): Promise<ResolvedCapabilityEntr
       description: pkg.description ?? "",
       label: pkg.renderHarness?.gallery?.label ?? deriveLabel(pkg.name),
       envHint: pkg.renderHarness?.gallery?.envHint ?? null,
+      versionRange: null,
     });
   }
   return caps;

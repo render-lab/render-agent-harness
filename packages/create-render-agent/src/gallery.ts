@@ -59,6 +59,7 @@ export function enrichGalleryCapabilities(
       label: entry.name,
       description: entry.description,
       envHint,
+      versionRange: entry.versionRange,
     };
   });
   for (const entry of catalog.capabilities) {
@@ -68,6 +69,7 @@ export function enrichGalleryCapabilities(
       label: entry.name,
       description: entry.description,
       envHint: entry.envVars.map((env) => env.name).join(", ") || null,
+      versionRange: entry.versionRange,
     });
   }
   return { ...gallery, capabilities };
