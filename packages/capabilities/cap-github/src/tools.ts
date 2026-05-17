@@ -41,6 +41,38 @@ export function githubTools(args: {
       },
     ),
     jsonTool(
+      "github.list_pull_request_commits",
+      "List commits on a GitHub pull request.",
+      prSchema(),
+      async (input) => {
+        const { owner, repo, pull_number } = input as PullInput;
+        return octokit.paginate(octokit.rest.pulls.listCommits, { owner, repo, pull_number });
+      },
+    ),
+    jsonTool(
+      "github.list_issue_comments",
+      "List comments on a GitHub issue or pull request.",
+      issueSchema(),
+      async (input) => {
+        const { owner, repo, issue_number } = input as IssueInput;
+        return octokit.paginate(octokit.rest.issues.listComments, { owner, repo, issue_number });
+      },
+    ),
+    jsonTool(
+      "github.get_content",
+      "Read a file or directory listing from a GitHub repository.",
+      contentSchema(),
+      async (input) => {
+        const { owner, repo, path, ref } = input as ContentInput;
+        return octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          ...(ref ? { ref } : {}),
+        });
+      },
+    ),
+    jsonTool(
       "github.list_checks",
       "List check runs for a GitHub ref.",
       refSchema(),
@@ -58,6 +90,24 @@ export function githubTools(args: {
         return octokit.rest.actions.listWorkflowRunsForRepo({ owner, repo });
       },
     ),
+    jsonTool(
+      "github.get_workflow_run",
+      "Read one GitHub Actions workflow run.",
+      workflowRunSchema(),
+      async (input) => {
+        const { owner, repo, run_id } = input as WorkflowRunInput;
+        return octokit.rest.actions.getWorkflowRun({ owner, repo, run_id });
+      },
+    ),
+    jsonTool(
+      "github.list_workflow_run_jobs",
+      "List jobs for a GitHub Actions workflow run.",
+      workflowRunSchema(),
+      async (input) => {
+        const { owner, repo, run_id } = input as WorkflowRunInput;
+        return octokit.rest.actions.listJobsForWorkflowRun({ owner, repo, run_id });
+      },
+    ),
   ];
 
   if (args.accessMode === "read_write") {
@@ -69,6 +119,53 @@ export function githubTools(args: {
         async (input) => {
           const { owner, repo, issue_number, body } = input as IssueCommentInput;
           return octokit.rest.issues.createComment({ owner, repo, issue_number, body });
+        },
+      ),
+      jsonTool(
+        "github.create_pull_request_review_comment",
+        "Create a review comment on a GitHub pull request diff.",
+        reviewCommentSchema(),
+        async (input) => {
+          const { owner, repo, pull_number, body, commit_id, path, line, side } =
+            input as PullReviewCommentInput;
+          return octokit.rest.pulls.createReviewComment({
+            owner,
+            repo,
+            pull_number,
+            body,
+            commit_id,
+            path,
+            line,
+            ...(side ? { side } : {}),
+          });
+        },
+      ),
+      jsonTool(
+        "github.update_issue",
+        "Update a GitHub issue or pull request issue fields.",
+        updateIssueSchema(),
+        async (input) => {
+          const { owner, repo, issue_number, title, body, state, assignees, labels } =
+            input as UpdateIssueInput;
+          return octokit.rest.issues.update({
+            owner,
+            repo,
+            issue_number,
+            ...(title ? { title } : {}),
+            ...(body ? { body } : {}),
+            ...(state ? { state } : {}),
+            ...(assignees ? { assignees } : {}),
+            ...(labels ? { labels } : {}),
+          });
+        },
+      ),
+      jsonTool(
+        "github.add_issue_labels",
+        "Add labels to a GitHub issue or pull request.",
+        labelsSchema(),
+        async (input) => {
+          const { owner, repo, issue_number, labels } = input as LabelsInput;
+          return octokit.rest.issues.addLabels({ owner, repo, issue_number, labels });
         },
       ),
       jsonTool(
@@ -87,6 +184,24 @@ export function githubTools(args: {
             ...(context ? { context } : {}),
             ...(target_url ? { target_url } : {}),
           });
+        },
+      ),
+      jsonTool(
+        "github.rerun_workflow_run",
+        "Rerun a GitHub Actions workflow run.",
+        workflowRunSchema(),
+        async (input) => {
+          const { owner, repo, run_id } = input as WorkflowRunInput;
+          return octokit.rest.actions.reRunWorkflow({ owner, repo, run_id });
+        },
+      ),
+      jsonTool(
+        "github.cancel_workflow_run",
+        "Cancel a GitHub Actions workflow run.",
+        workflowRunSchema(),
+        async (input) => {
+          const { owner, repo, run_id } = input as WorkflowRunInput;
+          return octokit.rest.actions.cancelWorkflowRun({ owner, repo, run_id });
         },
       ),
     );
@@ -130,8 +245,32 @@ interface PullInput extends RepoInput {
 interface RefInput extends RepoInput {
   ref: string;
 }
+interface WorkflowRunInput extends RepoInput {
+  run_id: number;
+}
+interface ContentInput extends RepoInput {
+  path: string;
+  ref?: string;
+}
 interface IssueCommentInput extends IssueInput {
   body: string;
+}
+interface PullReviewCommentInput extends PullInput {
+  body: string;
+  commit_id: string;
+  path: string;
+  line: number;
+  side?: "LEFT" | "RIGHT";
+}
+interface UpdateIssueInput extends IssueInput {
+  title?: string;
+  body?: string;
+  state?: "open" | "closed";
+  assignees?: string[];
+  labels?: string[];
+}
+interface LabelsInput extends IssueInput {
+  labels: string[];
 }
 interface CommitStatusInput extends RepoInput {
   sha: string;
@@ -172,6 +311,23 @@ function refSchema() {
   });
 }
 
+function workflowRunSchema() {
+  return objectSchema({
+    owner: { type: "string" },
+    repo: { type: "string" },
+    run_id: { type: "number" },
+  });
+}
+
+function contentSchema() {
+  return objectSchema({
+    owner: { type: "string" },
+    repo: { type: "string" },
+    path: { type: "string" },
+    ref: { type: "string", optional: true },
+  });
+}
+
 function issueCommentSchema() {
   return objectSchema({
     owner: { type: "string" },
@@ -181,15 +337,50 @@ function issueCommentSchema() {
   });
 }
 
+function reviewCommentSchema() {
+  return objectSchema({
+    owner: { type: "string" },
+    repo: { type: "string" },
+    pull_number: { type: "number" },
+    body: { type: "string" },
+    commit_id: { type: "string" },
+    path: { type: "string" },
+    line: { type: "number" },
+    side: { type: "string", enum: ["LEFT", "RIGHT"], optional: true },
+  });
+}
+
+function updateIssueSchema() {
+  return objectSchema({
+    owner: { type: "string" },
+    repo: { type: "string" },
+    issue_number: { type: "number" },
+    title: { type: "string", optional: true },
+    body: { type: "string", optional: true },
+    state: { type: "string", enum: ["open", "closed"], optional: true },
+    assignees: { type: "array", items: { type: "string" }, optional: true },
+    labels: { type: "array", items: { type: "string" }, optional: true },
+  });
+}
+
+function labelsSchema() {
+  return objectSchema({
+    owner: { type: "string" },
+    repo: { type: "string" },
+    issue_number: { type: "number" },
+    labels: { type: "array", items: { type: "string" } },
+  });
+}
+
 function commitStatusSchema() {
   return objectSchema({
     owner: { type: "string" },
     repo: { type: "string" },
     sha: { type: "string" },
     state: { type: "string", enum: ["error", "failure", "pending", "success"] },
-    description: { type: "string" },
-    context: { type: "string" },
-    target_url: { type: "string" },
+    description: { type: "string", optional: true },
+    context: { type: "string", optional: true },
+    target_url: { type: "string", optional: true },
   });
 }
 

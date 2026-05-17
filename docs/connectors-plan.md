@@ -182,13 +182,22 @@ A GitHub work-monitoring connector. Inbound webhooks tell the agent that work ch
 - `get_pull_request`
 - `list_pull_request_files`
 - `list_pull_request_reviews`
+- `list_pull_request_commits`
+- `list_issue_comments`
+- `get_content`
 - `list_checks`
 - `list_workflow_runs`
+- `get_workflow_run`
+- `list_workflow_run_jobs`
 
 **Write tools** (`accessMode: read_write` only):
 - `create_issue_comment`
 - `create_pull_request_review_comment`
+- `update_issue`
+- `add_issue_labels`
 - `set_commit_status`
+- `rerun_workflow_run`
+- `cancel_workflow_run`
 
 **Config example**:
 ```yaml
@@ -229,9 +238,15 @@ A Linear work-monitoring connector. Inbound webhooks tell the agent that issues,
 - `get_issue`
 - `search_issues`
 - `list_comments`
+- `list_teams`
+- `list_projects`
+- `list_workflow_states`
+- `list_users`
 
 **Write tools** (`accessMode: read_write` only):
+- `create_issue`
 - `create_comment`
+- `update_issue`
 - `update_issue_status`
 - `assign_issue`
 - `link_related_issue`
