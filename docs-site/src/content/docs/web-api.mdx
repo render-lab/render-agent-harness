@@ -26,6 +26,7 @@ The web service:
 | --- | --- |
 | `POST /runs` | Create a run and enqueue worker execution. |
 | `GET /runs` | List runs with filters and keyset pagination. |
+| `GET /runs/active` | Return the caller's most recent non-terminal run for an agent. |
 | `GET /runs/:id` | Fetch a run and its message history. |
 | `GET /runs/:id/tool-calls` | List tool calls and joined results for a run. |
 | `GET /runs/:id/stream` | Stream run events over SSE. |
@@ -33,6 +34,8 @@ The web service:
 | `POST /runs/:id/input` | Resume a paused run with human input. |
 
 `POST /runs` accepts an `agentName` when a deployment serves multiple agents.
+
+`GET /runs/active?agent=<name>` returns `{ "run": null }` when there is no active run.
 
 ## Conversation endpoints
 
@@ -45,6 +48,8 @@ The web service:
 | `GET /conversations/:id/stream` | Stream updates across every run in a conversation. |
 
 Conversations are the chat surface. A conversation can contain many runs over time.
+
+Only one run in a conversation can be pending, running, or paused at a time. `POST /conversations/:id/messages` returns 409 `conversation_busy` if the previous turn is still active. Cancel the active run before sending the next message.
 
 ## Operator endpoints
 

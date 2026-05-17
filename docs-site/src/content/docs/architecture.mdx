@@ -1,19 +1,137 @@
 ---
-title: Architecture Graph
-description: Explore packages, runtime paths, and Render primitives in an interactive graph.
-tableOfContents: false
+title: Architecture
+description: Understand the harness structure, infrastructure boundaries, and runtime paths.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 3
 ---
 
 import ArchitectureGraph from "../../components/ArchitectureGraph.tsx";
 
-Click a node to see the package or service boundary it represents. Use the controls to pan and zoom through the graph.
+## Structural model
 
-<ArchitectureGraph client:load />
+The system is easier to read if you separate it into three parts:
+
+- **Harness:** The platform layer. `@render-harness/core` owns the loop, model clients, prompt assembly, MCP execution, state writes, checkpointing, cancellation, and built-in tools. Runtime packages wrap that core and decide when to call it.
+- **Agents:** The behavior layer. An agent is an `AgentDefinition` created with `defineAgent()` or loaded from `render-harness.yaml` through `@render-harness/registry`. It declares the model, system prompt, permissions, MCP servers, skills, and tool surface for one unit of work.
+- **Capabilities:** The extension layer. A capability pack contributes reusable tools, optional setup, environment schema, and model-facing instructions. Packs attach to agents through `capabilities[]`; they do not own the runtime loop or deployment lifecycle.
+
+```mermaid
+flowchart TB
+  harness{{"Harness"}}
+
+  subgraph agents["Agents"]
+    chat["chat"]
+    support["support"]
+    recap["weekly recap"]
+  end
+
+  subgraph capabilities["Capabilities"]
+    memory["memory"]
+    search["search"]
+    browser["browser"]
+  end
+
+  harness --> agents
+  capabilities --> agents
+
+  class harness central
+  class chat,support,recap agent
+  class memory,search,browser capability
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef agent fill:#101010,stroke:#38bdf8,color:#ffffff
+  classDef capability fill:#111827,stroke:#22c55e,color:#ffffff
+```
+
+The boundary is intentionally small. The harness can add new runtimes without changing agent definitions, agents can move between runtime shapes without changing their prompts and tools, and capabilities can be shared across templates without becoming global defaults.
+
+## Infrastructure views
+
+The abstract structure above maps to infrastructure at three different levels.
+
+### Harness infrastructure
+
+```mermaid
+flowchart LR
+  web[["public web service"]]
+  worker[["worker service"]]
+  cron[["cron jobs"]]
+  workflows[["workflow tasks"]]
+  core{{"shared core loop"}}
+  state[("Postgres")]
+  signals[("Key Value")]
+
+  web --> core
+  worker --> core
+  cron --> core
+  workflows --> core
+  core --> state
+  core --> signals
+
+  class web,worker,cron,workflows runtime
+  class core central
+  class state,signals data
+  classDef runtime fill:#111827,stroke:#a78bfa,color:#ffffff
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef data fill:#050505,stroke:#f59e0b,color:#ffffff
+```
+
+### Agent infrastructure
+
+```mermaid
+flowchart LR
+  definition[/"agent definition"/]
+  triggers["web, worker, cron, or workflow trigger"]
+  run{{"agent run"}}
+  history[("messages, tool calls, results")]
+
+  definition --> triggers
+  triggers --> run
+  run --> history
+
+  class definition config
+  class triggers runtime
+  class run central
+  class history data
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef runtime fill:#111827,stroke:#a78bfa,color:#ffffff
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef data fill:#050505,stroke:#f59e0b,color:#ffffff
+```
+
+### Capability infrastructure
+
+```mermaid
+flowchart LR
+  pack{{"capability pack"}}
+  tools["tools and MCP servers"]
+  env[/"env requirements"/]
+  services[["optional Render services"]]
+  agent["agent tool surface"]
+
+  pack --> tools
+  pack --> env
+  pack --> services
+  tools --> agent
+
+  class pack capability
+  class tools,agent agent
+  class env config
+  class services runtime
+  classDef capability fill:#111827,stroke:#22c55e,stroke-width:2px,color:#ffffff
+  classDef agent fill:#101010,stroke:#38bdf8,color:#ffffff
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef runtime fill:#111827,stroke:#a78bfa,color:#ffffff
+```
 
 ## How to read the graph
 
-The graph separates authoring, deployment, runtime execution, and shared primitives. Workflows are a peer execution target, not a required hop after Cron.
+Use the graph below as a runtime flow explorer. Pick the question you are trying to answer, then click a node to see the package or service boundary it represents.
+
+Workflows are a peer execution target, not a required hop after Cron.
 
 - Manual/API workflow trigger: `web -> workflows`
 - Model-delegated workflow trigger: `web -> worker -> trigger_workflow -> workflows`
 - Scheduled workflow trigger: `cron -> workflows`
+
+<ArchitectureGraph client:load />

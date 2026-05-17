@@ -13,6 +13,32 @@ The harness is a thin core wrapped by four runtime adapters. The same agent defi
 
 For multi-tenant production deployments, the `@render-harness/web` package fronts `runtime-worker` with API-key-bearer auth, SSE streaming via Postgres `LISTEN/NOTIFY`, cooperative cancel, a HITL `/runs/:id/input` endpoint, and a first-class conversations API (`POST /conversations`, `POST /conversations/:id/messages`, `GET /conversations/:id/stream`) for multi-turn chat that groups many runs under one conversation. Operators can opt into `@render-harness/ui` (`serveWeb({ ui: true })`) for a browser control plane: chat with the agent across multi-turn sessions, list/inspect runs, watch live, cancel, inject HITL input, see loaded agents, and view usage rollups. See [`docs/ui-guide.md`](docs/ui-guide.md).
 
+## How the pieces fit together
+
+Render Agent Harness has three structural layers:
+
+- **Harness:** The shared runtime substrate. It owns the agent loop, model adapters, state, streaming, cancellation, MCP wiring, built-in tools, and Render deployment shapes.
+- **Agents:** The product logic that runs on the harness. An agent is a `defineAgent()` TypeScript definition, or a `render-harness.yaml` entry that resolves to one. It declares the model, prompt, permissions, MCP servers, skills, local tools, and runtime triggers.
+- **Capabilities:** Reusable extension packs that add tools, env vars, setup requirements, and prompt guidance to one or more agents. Capabilities are npm packages under `packages/capabilities/` or community packages with the `render-harness-cap` keyword.
+
+The relationship is deliberately narrow: runtimes start work, the harness executes it, agents describe what work to do, and capabilities provide reusable powers the agent can opt into. The same agent can run as a web request, worker job, cron invocation, or Workflow task without changing its business logic.
+
+```
+render-harness.yaml or defineAgent()
+          │
+          ▼
+AgentDefinition ── loads ── capabilities + MCP servers + built-in tools
+          │
+          ▼
+@render-harness/core runAgent()
+          │
+          ▼
+runtime-web | runtime-worker | runtime-cron | runtime-workflows
+          │
+          ▼
+Render primitives: Postgres, Key Value, private services, Cron, Workflows
+```
+
 ## Quickstart: scaffold a new agent
 
 The fastest path to a working agent is the wizard CLI:

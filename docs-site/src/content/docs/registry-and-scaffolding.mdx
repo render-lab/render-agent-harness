@@ -5,6 +5,34 @@ description: Understand how manifests, templates, capability packs, and generate
 
 The registry and scaffolding packages turn source templates into runnable projects and Render infrastructure.
 
+```mermaid
+flowchart LR
+  template[/"Template catalog"/]
+  cli[["CLI scaffolder"]]
+  wizard[["Browser wizard"]]
+  manifest[/"render-harness.yaml"/]
+  registry{{"Registry"}}
+  project[("Generated project")]
+  blueprint[/"render.yaml"/]
+
+  template --> cli
+  template --> wizard
+  cli --> project
+  wizard --> project
+  project --> manifest
+  manifest --> registry
+  registry --> blueprint
+
+  class template,manifest,blueprint config
+  class cli,wizard surface
+  class registry central
+  class project data
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef data fill:#050505,stroke:#f59e0b,color:#ffffff
+```
+
 ## Registry responsibilities
 
 `@render-harness/registry` has two main surfaces:
@@ -48,6 +76,8 @@ The registry emits Render services from runtime declarations:
 - Postgres is included for durable state.
 - Key Value is included when needed by workers or capability packs.
 
+For the publishing flow, see [Registry publishing](/registry-publishing/).
+
 ## CLI scaffolder
 
 `create-render-agent` creates local projects. It can start from a blank agent or from a template catalog entry.
@@ -88,6 +118,8 @@ Sealed bundles are useful when a starter needs:
 - Multiple runtime entrypoints.
 - Shared capabilities.
 - Hand-authored TypeScript source files.
+
+For the authoring flow, see [Authoring bundle templates](/authoring-bundle-templates/).
 
 ## Important files
 

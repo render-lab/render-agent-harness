@@ -1,0 +1,104 @@
+---
+title: Authoring Capability Packs
+description: Ship reusable tools, MCP servers, skills, and setup requirements for agents.
+---
+
+A capability pack is an npm package that extends agents without adding behavior to the core loop. Use a pack when multiple agents or templates need the same integration.
+
+## What a pack can provide
+
+A pack can contribute:
+
+- Local TypeScript tools.
+- MCP server definitions.
+- Skills that agents can load.
+- Environment variable requirements.
+- Connector metadata.
+- Extra Render services during Blueprint generation.
+
+Pack-contributed environment variables merge into the effective `envSchema`. Authors who use your pack should not redeclare those variables in `render-harness.yaml`.
+
+## Package shape
+
+```text
+my-pack/
+  src/index.ts
+  skills/
+  package.json
+  tsconfig.json
+```
+
+The package should be ESM and default-export a `CapabilityPack`.
+
+## Define the pack
+
+```ts
+import { definePack, type PackContext } from "@render-harness/registry";
+import type { LocalToolHandler, McpServerConfig, SkillMetadata } from "@render-harness/core";
+
+export default definePack({
+  name: "@acme/render-harness-cap-example",
+  version: "0.1.0",
+  envSchema: [
+    {
+      name: "EXAMPLE_API_KEY",
+      required: true,
+      secret: true,
+      description: "API key for Example.",
+    },
+  ],
+  mcpServers(ctx: PackContext): McpServerConfig[] {
+    const apiKey = ctx.env("EXAMPLE_API_KEY");
+    return [
+      {
+        name: "example",
+        transport: "http",
+        url: "https://example.com/mcp",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      },
+    ];
+  },
+  localTools(_ctx: PackContext): LocalToolHandler[] {
+    return [];
+  },
+  skills(_ctx: PackContext): SkillMetadata[] {
+    return [];
+  },
+});
+```
+
+Each callback receives a `PackContext`:
+
+- `ctx.config` contains the user's `config:` block from `render-harness.yaml`.
+- `ctx.env(name)` reads environment variables at build time or runtime.
+
+## Tool names
+
+Local tools from capability packs are namespaced when loaded. Mention the namespaced tool names in your prompt guidance so the model knows which tools exist.
+
+Use stable names. Manifests can reference capability tools in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval`.
+
+## Validate before publishing
+
+Build and validate the package:
+
+```sh
+pnpm build
+pnpm exec render-harness-capability validate .
+```
+
+The validator checks package metadata, ESM exports, the `render-harness-cap` keyword, and the default `CapabilityPack` export.
+
+## Publish and use
+
+Publish the pack like a normal npm package. Add the `render-harness-cap` keyword so tooling can discover it.
+
+Users add the package as a dependency and reference it in `render-harness.yaml`:
+
+```yaml
+capabilities:
+  - pack: "@acme/render-harness-cap-example"
+    config:
+      defaultLimit: 5
+```
+

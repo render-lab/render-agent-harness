@@ -1,0 +1,86 @@
+---
+title: Registry Publishing
+description: Publish an agent entry so others can deploy it from the registry.
+---
+
+Use the registry publishing flow when you have a working harness project and want other people to deploy it with a Deploy to Render button.
+
+## Publishing flow
+
+1. Scaffold or create a project with `render-harness.yaml`.
+2. Add any custom agent code, MCP servers, capabilities, and environment schema.
+3. Generate `render.yaml` from the manifest.
+4. Commit the manifest, generated Blueprint, source files, and README.
+5. Pin the registry entry to a Git commit SHA.
+6. Submit the entry to `registry-index/index.json`.
+
+## Generate the Blueprint
+
+Run the Blueprint build before publishing:
+
+```sh
+pnpm build:bp
+```
+
+The build reads `render-harness.yaml`, validates the manifest, resolves capability packs, writes `render.yaml`, and prints the environment variables that the deploy will ask users to provide.
+
+Use the drift check in CI:
+
+```sh
+pnpm build:check
+```
+
+`build:check` exits nonzero when `render.yaml` is stale relative to `render-harness.yaml`.
+
+## Commit and pin
+
+Commit the generated files, then capture the SHA:
+
+```sh
+git rev-parse HEAD
+```
+
+Registry entries should point at an immutable SHA, not a floating branch. This makes Deploy to Render links reproducible.
+
+## Submit to the index
+
+Add an object to `registry-index/index.json`:
+
+```json
+{
+  "name": "my-agent",
+  "description": "One-line description.",
+  "repo": "https://github.com/<owner>/my-agent",
+  "ref": "<40-character-sha>",
+  "categories": ["chat", "demo"]
+}
+```
+
+Index CI validates the index shape, fetches `render-harness.yaml` at the pinned SHA, and validates the manifest.
+
+## README badge
+
+Published entries should include a Deploy to Render badge near the top of the README. `render-harness-build` prints a badge snippet after generating the Blueprint.
+
+## Environment interpolation
+
+MCP server fields and capability config can reference environment variables:
+
+```yaml
+mcpServers:
+  - name: render
+    transport: http
+    url: https://mcp.render.com/mcp
+    headers:
+      Authorization: "Bearer ${RENDER_API_KEY}"
+      X-Optional: "${MAYBE:-default-value}"
+```
+
+Interpolation rules:
+
+- `${VAR}` is required and throws if unset.
+- `${VAR:-fallback}` uses `fallback` when unset.
+- `\${VAR}` stays literal.
+
+Declare user-provided values in `envSchema` so the Blueprint, scaffolder, and operator surfaces can explain them.
+

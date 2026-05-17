@@ -5,6 +5,38 @@ description: Use the deployed `/ui` surface to chat, inspect runs, view agents, 
 
 The operator UI is an optional React SPA mounted by the web service at `/ui`. It is for operating a deployed harness, not for creating a new project.
 
+```mermaid
+flowchart LR
+  operator["Operator"]
+  ui[["/ui"]]
+
+  subgraph tabs["Operator surfaces"]
+    chat["Chat"]
+    runs["Runs"]
+    agents["Agents"]
+    config["Config"]
+    usage["Usage"]
+    guide["Guide"]
+  end
+
+  api[["web API"]]
+  harness{{"deployed harness"}}
+
+  operator --> ui
+  ui --> tabs
+  tabs --> api
+  api --> harness
+
+  class operator role
+  class ui,api surface
+  class chat,runs,agents,config,usage,guide surfaceDetail
+  class harness central
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef surfaceDetail fill:#101010,stroke:#38bdf8,color:#ffffff
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+```
+
 Enable it with:
 
 ```yaml
@@ -13,6 +45,33 @@ shared:
 ```
 
 The web service dynamically loads `@render-harness/ui` when `serveWeb({ ui: true })` is used.
+
+You can also enable it directly in code:
+
+```ts
+import { serveWeb } from "@render-harness/web";
+import { agent } from "./agent.js";
+
+await serveWeb({
+  agent,
+  ui: true,
+});
+```
+
+Passing `ui: true` mounts the UI at `/ui`. To customize it, pass an object:
+
+```ts
+await serveWeb({
+  agent,
+  ui: {
+    path: "/admin",
+    cookieName: "harness_admin",
+    cookieMaxAge: 60 * 60,
+  },
+});
+```
+
+The UI package is loaded dynamically, so services that do not enable the UI do not need to serve the SPA.
 
 ## Tabs
 
@@ -78,6 +137,26 @@ Required environment variables commonly include:
 
 - `WEB_API_KEY`
 - `UI_COOKIE_SECRET`
+
+`WEB_API_KEY` is the bearer key used by the JSON API and the UI login form. `UI_COOKIE_SECRET` signs the browser session cookie. Blueprints should generate `UI_COOKIE_SECRET` and prompt users to provide `WEB_API_KEY`.
+
+## Local UI development
+
+Use the operator demo to run the mounted UI locally:
+
+```sh
+pnpm db:up
+pnpm dev:operator-web
+pnpm dev:operator-worker
+```
+
+For hot module replacement while editing the SPA:
+
+```sh
+pnpm --filter @render-harness/ui dev:web
+```
+
+Log in once through the mounted service to seed the cookie, then use the Vite dev server for SPA edits.
 
 ## Important files
 

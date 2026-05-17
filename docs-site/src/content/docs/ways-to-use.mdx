@@ -5,6 +5,37 @@ description: Choose between the CLI, browser wizard, deployed operator UI, and s
 
 Render Harness has several user surfaces. They serve different stages of the agent lifecycle: creating a project, deploying it, operating it, and extending the framework.
 
+```mermaid
+flowchart LR
+  user["End user"]
+  author["Agent author"]
+  operator["Operator"]
+  integrator["Integrator"]
+  contributor["Framework contributor"]
+
+  wizard[["Browser wizard"]]
+  cli[["CLI scaffolder"]]
+  catalog[/"Template catalog"/]
+  ui[["Operator UI"]]
+  api[["HTTP API"]]
+  registry[["Registry APIs"]]
+
+  user --> wizard
+  author --> cli
+  author --> catalog
+  operator --> ui
+  integrator --> api
+  contributor --> registry
+  contributor --> catalog
+
+  class user,author,operator,integrator,contributor role
+  class wizard,cli,ui,api,registry surface
+  class catalog config
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+```
+
 ## Choose a surface
 
 | Surface | Use it to | Where it lives |
@@ -53,6 +84,29 @@ The wizard is the right surface when:
 
 The wizard is implemented as a Hono server plus React SPA in `packages/wizard`.
 
+```mermaid
+flowchart LR
+  person["User or author"]
+  wizard[["Browser wizard"]]
+  catalog[/"Template catalog"/]
+  repo[("Managed GitHub repo")]
+  deploy[["Deploy to Render link"]]
+
+  person --> wizard
+  wizard --> catalog
+  wizard --> repo
+  repo --> deploy
+
+  class person role
+  class wizard,deploy surface
+  class catalog config
+  class repo data
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef data fill:#050505,stroke:#f59e0b,color:#ffffff
+```
+
 ## Template catalog
 
 The template catalog is currently named `gallery/`. Despite the name, it is not a standalone visual gallery. It is source data consumed by the CLI and browser wizard.
@@ -89,6 +143,31 @@ Use it after deployment to:
 
 The UI is not the scaffolder. It operates a harness that is already deployed.
 
+```mermaid
+flowchart LR
+  operator["Operator"]
+  ui[["Operator UI"]]
+  chat["Chat"]
+  runs["Runs"]
+  agents["Agents"]
+  config["Config"]
+  usage["Usage"]
+
+  operator --> ui
+  ui --> chat
+  ui --> runs
+  ui --> agents
+  ui --> config
+  ui --> usage
+
+  class operator role
+  class ui surface
+  class chat,runs,agents,config,usage surfaceDetail
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef surfaceDetail fill:#101010,stroke:#38bdf8,color:#ffffff
+```
+
 ## HTTP API
 
 The web package exposes the production HTTP surface. Use it when you want to integrate an external app, custom frontend, Slack bot, webhook, or internal tool.
@@ -104,6 +183,29 @@ Common API actions include:
 - List agents and usage.
 
 The web service usually fronts a worker so requests return quickly while jobs continue in the background.
+
+```mermaid
+flowchart LR
+  app["Custom app, bot, or webhook"]
+  api[["HTTP API"]]
+  runs["Runs"]
+  conversations["Conversations"]
+  streams["SSE streams"]
+  operations["Cancel and HITL input"]
+
+  app --> api
+  api --> runs
+  api --> conversations
+  api --> streams
+  api --> operations
+
+  class app role
+  class api surface
+  class runs,conversations,streams,operations surfaceDetail
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef surfaceDetail fill:#101010,stroke:#38bdf8,color:#ffffff
+```
 
 ## Registry and framework APIs
 
@@ -121,6 +223,32 @@ Important registry responsibilities include:
 Most application authors should start with the CLI or wizard. Framework contributors usually work directly with the registry, runtimes, and core packages.
 
 ## Lifecycle map
+
+```mermaid
+flowchart LR
+  pick["Pick a starter"]
+  author["Author agent behavior"]
+  manifest[/"Declare render-harness.yaml"/]
+  build[/"Emit render.yaml"/]
+  deploy["Deploy"]
+  operate["Operate"]
+  extend["Extend"]
+
+  pick --> author
+  author --> manifest
+  manifest --> build
+  build --> deploy
+  deploy --> operate
+  extend -.-> pick
+  extend -.-> build
+
+  class pick,author,deploy,operate stage
+  class manifest,build config
+  class extend extension
+  classDef stage fill:#101010,stroke:#a855f7,color:#ffffff
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef extension fill:#111827,stroke:#22c55e,color:#ffffff
+```
 
 | Stage | Primary surface |
 | --- | --- |

@@ -1,0 +1,244 @@
+---
+import {
+  FiActivity,
+  FiAlertTriangle,
+  FiBookOpen,
+  FiBox,
+  FiCpu,
+  FiDatabase,
+  FiGitBranch,
+  FiGrid,
+  FiHome,
+  FiLayers,
+  FiMap,
+  FiPackage,
+  FiPlayCircle,
+  FiRadio,
+  FiRepeat,
+  FiSettings,
+  FiTerminal,
+  FiTool,
+  FiUploadCloud,
+  FiUsers,
+  FiZap,
+  FiChevronRight,
+} from "react-icons/fi";
+
+interface Props {
+  sublist: any[];
+  nested?: boolean;
+}
+
+const { sublist, nested } = Astro.props;
+
+function flatten(entries: any[]): any[] {
+  return entries.flatMap((entry) => (entry.type === "group" ? flatten(entry.entries) : [entry]));
+}
+
+function iconFor(entry: any) {
+  if (entry.type === "group") {
+    if (entry.label === "Start here") return FiHome;
+    if (entry.label === "Concepts") return FiLayers;
+    if (entry.label === "Reference") return FiBookOpen;
+    return FiGrid;
+  }
+
+  const href = entry.href ?? "";
+  if (href === "/") return FiHome;
+  if (href.includes("/ways-to-use/")) return FiMap;
+  if (href.includes("/architecture/")) return FiGitBranch;
+  if (href.includes("/local-development/")) return FiTerminal;
+  if (href.includes("/core-loop/")) return FiCpu;
+  if (href.includes("/runtime-paths/")) return FiRepeat;
+  if (href.includes("/platform-constraints/")) return FiAlertTriangle;
+  if (href.includes("/package-map/")) return FiPackage;
+  if (href.includes("/registry-and-scaffolding/")) return FiBox;
+  if (href.includes("/template-catalog/")) return FiGrid;
+  if (href.includes("/chief-of-staff/")) return FiUsers;
+  if (href.includes("/yaml-spec/")) return FiSettings;
+  if (href.includes("/registry-publishing/")) return FiUploadCloud;
+  if (href.includes("/deployment/")) return FiPlayCircle;
+  if (href.includes("/web-api/")) return FiRadio;
+  if (href.includes("/operator-ui/")) return FiUsers;
+  if (href.includes("/capabilities/")) return FiZap;
+  if (href.includes("/authoring-capability-packs/")) return FiTool;
+  if (href.includes("/authoring-bundle-templates/")) return FiLayers;
+  if (href.includes("/built-in-tools/")) return FiTool;
+  if (href.includes("/state-and-streaming/")) return FiDatabase;
+  if (href.includes("/examples-and-blueprints/")) return FiPlayCircle;
+  if (href.includes("/operations/")) return FiActivity;
+  return FiBookOpen;
+}
+---
+
+<ul class:list={{ "top-level": !nested }}>
+  {
+    sublist.map((entry) => {
+      const EntryIcon = iconFor(entry);
+      return (
+        <li>
+          {entry.type === "link" ? (
+            <a
+              href={entry.href}
+              aria-current={entry.isCurrent ? "page" : undefined}
+              class:list={[{ large: !nested }, entry.attrs.class]}
+              {...entry.attrs}
+            >
+              <EntryIcon className="sidebar-icon" aria-hidden="true" />
+              <span>{entry.label}</span>
+              {entry.badge && (
+                <span class:list={["sidebar-badge", entry.badge.class]}>{entry.badge.text}</span>
+              )}
+            </a>
+          ) : (
+            <details open={flatten(entry.entries).some((item) => item.isCurrent) || !entry.collapsed}>
+              <summary>
+                <span class="group-label">
+                  <EntryIcon className="sidebar-icon" aria-hidden="true" />
+                  <span class="large">{entry.label}</span>
+                  {entry.badge && (
+                    <span class:list={["sidebar-badge", entry.badge.class]}>{entry.badge.text}</span>
+                  )}
+                </span>
+                <FiChevronRight className="caret" aria-hidden="true" />
+              </summary>
+              <Astro.self sublist={entry.entries} nested />
+            </details>
+          )}
+        </li>
+      );
+    })
+  }
+</ul>
+
+<style>
+  @layer starlight.core {
+    ul {
+      --sl-sidebar-item-padding-inline: 0.5rem;
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      overflow-wrap: anywhere;
+    }
+
+    ul ul li {
+      margin-inline-start: var(--sl-sidebar-item-padding-inline);
+      border-inline-start: 1px solid var(--sl-color-hairline-light);
+      padding-inline-start: var(--sl-sidebar-item-padding-inline);
+    }
+
+    .large {
+      font-size: var(--sl-text-lg);
+      font-weight: 600;
+      color: var(--sl-color-white);
+    }
+
+    .top-level > li + li {
+      margin-top: 0.75rem;
+    }
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.2em var(--sl-sidebar-item-padding-inline);
+      line-height: 1.4;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    summary::marker,
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .caret {
+      flex-shrink: 0;
+      width: 1.1rem;
+      height: 1.1rem;
+      color: var(--sl-color-gray-3);
+      transition: transform 0.2s ease-in-out;
+    }
+
+    :global([dir="rtl"]) .caret {
+      transform: rotateZ(180deg);
+    }
+
+    [open] > summary .caret {
+      transform: rotateZ(90deg);
+    }
+
+    a {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      border-radius: 0;
+      text-decoration: none;
+      color: var(--sl-color-gray-2);
+      padding: 0.3em var(--sl-sidebar-item-padding-inline);
+      line-height: 1.4;
+    }
+
+    .group-label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-width: 0;
+    }
+
+    .sidebar-icon {
+      flex: 0 0 auto;
+      width: 1rem;
+      height: 1rem;
+      color: var(--sl-color-accent-high);
+    }
+
+    .sidebar-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.05rem 0.35rem;
+      border: 1px solid var(--sl-color-accent);
+      color: var(--sl-color-accent-high);
+      font-size: var(--sl-text-xs);
+      line-height: 1.2;
+    }
+
+    a:hover,
+    a:focus {
+      color: var(--sl-color-white);
+    }
+
+    [aria-current="page"],
+    [aria-current="page"]:hover,
+    [aria-current="page"]:focus {
+      font-weight: 600;
+      color: var(--sl-color-text-invert);
+      background-color: var(--sl-color-text-accent);
+    }
+
+    [aria-current="page"] .sidebar-icon {
+      color: currentColor;
+    }
+
+    a > *:not(:last-child),
+    .group-label > *:not(:last-child) {
+      margin-inline-end: 0;
+    }
+
+    @media (min-width: 50rem) {
+      .top-level > li + li {
+        margin-top: 0.5rem;
+      }
+
+      .large {
+        font-size: var(--sl-text-base);
+      }
+
+      a {
+        font-size: var(--sl-text-sm);
+      }
+    }
+  }
+</style>

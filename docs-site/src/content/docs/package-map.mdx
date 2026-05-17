@@ -7,27 +7,35 @@ The monorepo is easier to navigate when you group packages by job.
 
 ## Agent execution
 
-- `packages/core`: The model loop, tools, MCP wiring, skills, state writes, budgets, and cancellation.
-- `packages/contracts`: Browser-safe shared types for the server and SPA.
-- `packages/capabilities/*`: Optional tool packs that add local tools, MCP servers, skills, and environment requirements.
+| Package | npm | Owns |
+| --- | --- | --- |
+| `packages/core` | [`@render-harness/core`](https://www.npmjs.com/package/@render-harness/core) | The model loop, tools, MCP wiring, skills, state writes, budgets, and cancellation. |
+| `packages/contracts` | [`@render-harness/contracts`](https://www.npmjs.com/package/@render-harness/contracts) | Browser-safe shared types for the server and SPA. |
+| `packages/capabilities/*` | [Capability packages](https://www.npmjs.com/search?q=keywords%3Arender-harness-cap) | Optional tool packs that add local tools, MCP servers, skills, and environment requirements. |
 
 ## Runtime entrypoints
 
-- `packages/runtime-web`: A synchronous HTTP runtime for demos and short runs.
-- `packages/runtime-worker`: A queue consumer for production interactive work.
-- `packages/runtime-cron`: A scheduled one-shot runtime.
-- `packages/runtime-workflows`: A durable Render Workflows runtime.
+| Package | npm | Owns |
+| --- | --- | --- |
+| `packages/runtime-web` | [`@render-harness/runtime-web`](https://www.npmjs.com/package/@render-harness/runtime-web) | A synchronous HTTP runtime for demos and short runs. |
+| `packages/runtime-worker` | [`@render-harness/runtime-worker`](https://www.npmjs.com/package/@render-harness/runtime-worker) | A queue consumer for production interactive work. |
+| `packages/runtime-cron` | [`@render-harness/runtime-cron`](https://www.npmjs.com/package/@render-harness/runtime-cron) | A scheduled one-shot runtime. |
+| `packages/runtime-workflows` | [`@render-harness/runtime-workflows`](https://www.npmjs.com/package/@render-harness/runtime-workflows) | A durable Render Workflows runtime. |
 
 ## Product surface
 
-- `packages/web`: The public HTTP API, run queueing, SSE streams, and optional UI mount.
-- `packages/ui`: The operator SPA served at `/ui`.
+| Package | npm | Owns |
+| --- | --- | --- |
+| `packages/web` | [`@render-harness/web`](https://www.npmjs.com/package/@render-harness/web) | The public HTTP API, run queueing, SSE streams, and optional UI mount. |
+| `packages/ui` | [`@render-harness/ui`](https://www.npmjs.com/package/@render-harness/ui) | The operator SPA served at `/ui`. |
 
 ## Authoring and deploy
 
-- `packages/registry`: Config schema, capability loading, gallery loading, and `render.yaml` emission.
-- `packages/create-render-agent`: The CLI scaffolder and bundled gallery snapshot.
-- `packages/wizard`: The browser scaffolder that creates managed repos and deploy links.
+| Package | npm | Owns |
+| --- | --- | --- |
+| `packages/registry` | [`@render-harness/registry`](https://www.npmjs.com/package/@render-harness/registry) | Config schema, capability loading, gallery loading, and `render.yaml` emission. |
+| `packages/create-render-agent` | [`create-render-agent`](https://www.npmjs.com/package/create-render-agent) | The CLI scaffolder and bundled gallery snapshot. |
+| `packages/wizard` | [`@render-harness/wizard`](https://www.npmjs.com/package/@render-harness/wizard) | The browser scaffolder that creates managed repos and deploy links. |
 
 ## Templates and examples
 

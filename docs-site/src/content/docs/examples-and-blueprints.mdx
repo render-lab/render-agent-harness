@@ -5,6 +5,8 @@ description: Map local examples and Blueprint files to the platform runtime shap
 
 The repo includes examples and Blueprint files that exercise different deployment shapes. Use them to understand a runtime path before creating your own agent.
 
+Examples are reference implementations, not product boundaries. Some are useful as-is for demos or internal tools; most are meant to be adapted. Swap prompts, replace capabilities, add MCP servers, change runtime paths, or split one example into several agents when your workflow needs it.
+
 ## Root commands
 
 Run these from the repo root:
@@ -36,6 +38,8 @@ pnpm apps:citations
 | `examples/citations-monitor` | Scheduled citation monitoring. | Cron |
 | `examples/deploy-agent` | Deployment/workflow-oriented agent. | Workflow-oriented |
 
+`examples/deploy-agent` uses Render Workflows for durable, approval-friendly work. Create the Workflow service in the Dashboard, then run the example trigger command from its README to start or resume work.
+
 ## Gallery agents as examples
 
 Gallery agents are also examples:
@@ -49,6 +53,8 @@ Gallery agents are also examples:
 
 Use the gallery when you want a starter. Use `examples/` when you want a runnable local app.
 
+If you are deciding whether to create a new template or a new example, use this rule: templates help authors start new projects, while examples help contributors and operators understand how a runtime path behaves.
+
 ## Blueprint files
 
 The `blueprints/` directory contains reference Render Blueprints for hand-authored deployment shapes.
@@ -58,6 +64,7 @@ The `blueprints/` directory contains reference Render Blueprints for hand-author
 | `blueprints/render.demo.yaml` | Simple demo web shape. |
 | `blueprints/render.demo-cron.yaml` | Cron-oriented demo shape. |
 | `blueprints/render.private.yaml` | Production-style web plus worker/private service shape. |
+| `blueprints/render.hardened.yaml` | Hardened private-network shape with tighter deployment defaults. |
 
 Generated projects usually get a `render.yaml` from the registry emitter rather than copying these files directly.
 

@@ -7,6 +7,8 @@ The template catalog is the repo data that powers starter selection in the CLI a
 
 The directory is currently named `gallery/`, but it is not a standalone gallery service. It is a catalog of starter manifests and source files.
 
+Templates are not the full set of things Render Harness can build. They are curated starting points that demonstrate common shapes. A good template should be valuable as-is for the matching use case, but it should also be easy to fork, edit, and extend into a different agent product.
+
 ## Directory layout
 
 ```text
@@ -44,6 +46,8 @@ The CLI wrapper chooses source or bundled mode:
 
 ## How to add a starter
 
+Add a starter when you find a repeatable pattern that another author should not have to rediscover. That pattern might be a single agent, a multi-agent bundle, a runtime topology, or a capability combination.
+
 To add a starter:
 
 1. Create `gallery/agents/<slug>/render-harness.yaml`.
@@ -53,6 +57,8 @@ To add a starter:
 5. Run registry and scaffolder tests.
 
 The registry cross-checks the declared runtime kinds against the manifest.
+
+For multi-agent sealed bundles, follow [Authoring bundle templates](/authoring-bundle-templates/).
 
 ## Bundled gallery snapshot
 

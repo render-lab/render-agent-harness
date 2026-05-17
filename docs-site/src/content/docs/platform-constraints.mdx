@@ -1,0 +1,64 @@
+---
+title: Platform Constraints
+description: Understand the Render and runtime limits that shape harness deployments.
+---
+
+These constraints explain why the harness chooses certain runtime and deployment shapes.
+
+## Workflows
+
+Render Workflows are the durable execution path for long-running or approval-heavy work.
+
+Important constraints:
+
+- Workflow services are not currently supported in `render.yaml` Blueprints.
+- Create Workflow services in the Render Dashboard.
+- A Workflow task can run much longer than a web request, but task arguments and return values must stay JSON-serializable and small enough for the Workflow API.
+- The harness soft checkpoint policy leaves margin under the default task timeout so state can flush before the platform boundary.
+
+Use Workflows when work needs durable steps, retries, visibility in the Workflows UI, or human approval before actions continue.
+
+## Cron Jobs
+
+Cron is a scheduler, not a queue worker.
+
+Important constraints:
+
+- Render Cron Jobs run on a UTC schedule.
+- A Cron invocation has a 12-hour platform limit.
+- The cron runtime defaults to an 11-hour budget so it can flush state before the platform limit.
+- A Cron service does not start overlapping runs. A new scheduled run does not start while the previous run is active.
+- Cron Jobs can send traffic to the private network, but they cannot receive inbound private-network traffic.
+- Cron Jobs do not support persistent disks.
+
+Do not poll a queue inside Cron. Use the worker runtime for queue consumption.
+
+## Private network
+
+Production-style deployments keep worker and MCP services private when possible.
+
+Important constraints:
+
+- Web services, workers, private services, Postgres, and Key Value can communicate over the private network inside a Render project.
+- The public web service should be the only internet-facing surface in the production shape.
+- Worker private services and MCP private services should use internal URLs for Postgres and service-to-service calls.
+
+## Streaming
+
+The harness streams through Postgres `LISTEN/NOTIFY`.
+
+Important constraints:
+
+- Postgres notification payloads are limited to 8 KB.
+- Notifications carry pointers to durable rows, not full message content.
+- Clients can reconnect and load missed state from Postgres.
+
+## State and signals
+
+The harness separates durable state from low-latency control signals:
+
+- Postgres stores runs, messages, tool calls, full tool results, conversations, queues, and usage.
+- Key Value stores cancellation flags and locks.
+
+This keeps run history durable while making cancellation checks fast.
+

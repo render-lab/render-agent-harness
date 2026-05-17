@@ -5,37 +5,9 @@ description: Build, deploy, and operate agents on Render primitives.
 
 Render Harness is a TypeScript framework for building agents that run on Render primitives: Web Services, Workers, Cron Jobs, Workflows, Postgres, and Key Value.
 
-Use it when you want more than a local demo script. Render Harness gives you a shared agent loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI.
+Render Harness gives agent projects a shared execution loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI.
 
-## How you use it
-
-Render Harness is not only a runtime library. It has different surfaces for different jobs:
-
-- Use the CLI scaffolder to create a local project.
-- Use the browser wizard to pick a template and create a managed repo/deploy flow.
-- Use the template catalog to define what starters are available.
-- Use the deployed operator UI to chat, inspect runs, view agents, edit config, and read guides.
-- Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
-- Use the registry APIs when you are extending the framework itself.
-
-See [Ways to use Render Harness](/ways-to-use/) for the full map.
-
-## Platform surfaces
-
-Render Harness has four user-facing surfaces:
-
-| Surface | What it does |
-| --- | --- |
-| CLI scaffolder | Creates a local project from a blank prompt or starter template. |
-| Browser wizard | Creates a guided repo/deploy flow from the same template catalog. |
-| Deployed operator UI | Operates a running harness at `/ui`. |
-| HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
-
-It also has framework surfaces for contributors:
-
-- Registry APIs for manifest loading, template loading, capability packs, and Blueprint emission.
-- Runtime packages for web, worker, cron, and Workflows.
-- Core APIs for model loops, tools, MCP, state, and cancellation.
+Render Harness is extensible by design. The included agents, templates, examples, and capability packs are starting points: useful as shipped when they match your use case, and meant to be copied, edited, combined, or replaced when they do not. Your product logic lives in agents and capabilities; the harness supplies the production substrate around them.
 
 ## What you can build
 
@@ -49,6 +21,8 @@ Render Harness supports several agent shapes:
 - Tool-using agents that connect to MCP servers, built-in tools, and capability packs.
 
 The same core loop runs all of these shapes. The runtime changes how work starts, how long it can run, and how users observe it.
+
+These shapes are examples, not limits. You can define new agents, publish new capability packs, add MCP servers, build custom HTTP surfaces, or package multi-agent bundles that share the same underlying harness.
 
 ## What the harness gives you
 
@@ -68,14 +42,48 @@ The harness handles the platform work around your agent:
 
 ## The mental model
 
-Think of the project as four layers:
+Think of the project as three structural parts:
 
-1. Define agents in TypeScript and `render-harness.yaml`.
+- **Harness:** The shared runtime substrate. It owns the model loop, runtime adapters, state, streaming, cancellation, MCP wiring, built-in tools, and Render deployment shapes.
+- **Agents:** The behavior layer that runs on the harness. An agent starts as a `defineAgent()` TypeScript definition, or as a `render-harness.yaml` manifest that resolves to one. It declares the prompt, model, permissions, MCP servers, skills, tools, and runtime triggers.
+- **Capabilities:** Reusable extension packs that add tools, environment variables, setup requirements, and prompt guidance. Capabilities live outside the core loop so agents can opt into memory, browser automation, search, scraping, filesystem access, and similar integrations.
+
+```mermaid
+flowchart TB
+  harness{{"Harness"}}
+
+  subgraph agents["Agents"]
+    chat["chat"]
+    support["support"]
+    recap["weekly recap"]
+  end
+
+  subgraph capabilities["Capabilities"]
+    memory["memory"]
+    search["search"]
+    browser["browser"]
+  end
+
+  harness --> agents
+  capabilities --> agents
+
+  class harness central
+  class chat,support,recap agent
+  class memory,search,browser capability
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef agent fill:#101010,stroke:#38bdf8,color:#ffffff
+  classDef capability fill:#111827,stroke:#22c55e,color:#ffffff
+```
+
+Those parts compose in one direction:
+
+1. Define an agent or bundle in TypeScript and `render-harness.yaml`.
 2. Load the manifest through the registry to produce runnable agent definitions.
-3. Start work through the runtime that matches the job.
-4. Store state in Postgres and control signals in Key Value.
+3. Merge in built-in tools, configured MCP servers, and selected capabilities.
+4. Start work through the runtime that matches the job.
+5. Store state in Postgres and control signals in Key Value.
 
-`@render-harness/core` owns the model loop. Runtime packages decide when to call the loop. The registry turns config into code and infrastructure. The web and UI packages expose the product surface.
+`@render-harness/core` owns the model loop. Runtime packages decide when to call the loop. The registry turns config into code and infrastructure. Capability packs extend an agent without becoming global defaults.
 
 ## Runtime choices
 
@@ -101,16 +109,72 @@ The gallery includes these starter shapes:
 - `research-cron`: Scheduled research agent with search.
 - `chief-of-staff`: Multi-agent bundle with chat, memory, meeting prep, weekly recap, interview prep, and feedback capture.
 
-The Chief of Staff bundle is the most complete example because it uses web, worker, cron, workflows, memory, and multiple agent entrypoints in one deployment.
+The Chief of Staff bundle is the most complete example because it uses web, worker, cron, workflows, memory, and multiple agent entrypoints in one deployment. Treat it as a reference architecture as much as a starter: keep what is useful, replace the agent prompts and capabilities that are specific to your own workflow, and add new agents as the product grows.
+
+## How you use it
+
+Render Harness is not only a runtime library. It has different surfaces for different jobs:
+
+- Use the CLI scaffolder to create a local project.
+- Use the browser wizard to pick a template and create a managed repo/deploy flow.
+- Use the template catalog to define what starters are available.
+- Use the deployed operator UI to chat, inspect runs, view agents, edit config, and read guides.
+- Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
+- Use the registry APIs when you are extending the framework itself.
+
+See [Ways to use Render Harness](/ways-to-use/) for the full map.
+
+## Platform surfaces
+
+Render Harness has four user-facing surfaces:
+
+```mermaid
+flowchart TB
+  create["Create"]
+  deploy["Deploy"]
+  operate["Operate"]
+  integrate["Integrate"]
+
+  cli[["CLI scaffolder"]]
+  wizard[["Browser wizard"]]
+  registry[["Registry + Blueprint emitter"]]
+  ui[["Operator UI"]]
+  api[["HTTP API"]]
+
+  create --> cli
+  create --> wizard
+  deploy --> registry
+  operate --> ui
+  integrate --> api
+
+  class create,deploy,operate,integrate role
+  class cli,wizard,registry,ui,api surface
+  classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+```
+
+| Surface | What it does |
+| --- | --- |
+| CLI scaffolder | Creates a local project from a blank prompt or starter template. |
+| Browser wizard | Creates a guided repo/deploy flow from the same template catalog. |
+| Deployed operator UI | Operates a running harness at `/ui`. |
+| HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
+
+It also has framework surfaces for contributors:
+
+- Registry APIs for manifest loading, template loading, capability packs, and Blueprint emission.
+- Runtime packages for web, worker, cron, and Workflows.
+- Core APIs for model loops, tools, MCP, state, and cancellation.
 
 ## What to read first
 
 If you want to understand the system, start here:
 
-- [Architecture graph](/architecture/): Follow the main runtime paths and click nodes to inspect package responsibilities.
+- [Architecture](/architecture/): Understand the structural model, infrastructure boundaries, and runtime paths.
 - [Ways to use](/ways-to-use/): Compare the CLI, wizard, template catalog, deployed UI, HTTP API, and registry APIs.
 - [Core loop](/core-loop/): Understand the shared execution engine.
 - [Runtime paths](/runtime-paths/): Compare web, worker, cron, and Workflow execution.
+- [Platform constraints](/platform-constraints/): Understand the Render limits that shape runtime choices.
 - [Package map](/package-map/): Find which package owns each part of the system.
 - [Registry and scaffolding](/registry-and-scaffolding/): Understand manifests, templates, and generated projects.
 - [`render-harness.yaml` spec](/yaml-spec/): Learn the manifest format.
@@ -123,6 +187,9 @@ If you want to run or change code, start here:
 - [Web API](/web-api/): Integrate custom frontends, bots, webhooks, and internal tools.
 - [Operator UI](/operator-ui/): Operate a deployed harness.
 - [Capabilities](/capabilities/): Add tools and integration packs.
+- [Registry publishing](/registry-publishing/): Publish an entry with a generated Blueprint and pinned SHA.
+- [Authoring capability packs](/authoring-capability-packs/): Ship reusable tools, MCP servers, and setup requirements.
+- [Authoring bundle templates](/authoring-bundle-templates/): Add multi-agent starters to the template catalog.
 - [Built-in tools](/built-in-tools/): Understand the tools core can add automatically.
 - [State and streaming](/state-and-streaming/): Understand persistence, cancellation, and SSE updates.
 - [Operations](/operations/): Debug deployed harnesses and common failure modes.

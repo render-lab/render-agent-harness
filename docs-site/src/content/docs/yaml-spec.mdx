@@ -5,7 +5,7 @@ description: Define agents, runtimes, models, capabilities, and deploy-time envi
 
 Every harness project includes a `render-harness.yaml` file at the project root. The file is the deploy-time contract for the registry, scaffolder, Blueprint emitter, and runtime entrypoints.
 
-The current schema version is `1`. A single manifest can define one agent or a bundle of agents that share one Render deployment.
+The current schema version is `1`. A single manifest can define one agent or a bundle of agents that share one Render deployment through `agents[]`.
 
 ## Minimal chat agent
 
@@ -48,6 +48,8 @@ agents:
 | `capabilities` | No | Bundle-wide capability pack references. |
 | `envSchema` | No | Deploy-time environment variable requirements. |
 | `agents` | Yes | One to 16 agent definitions. |
+
+For a bundle authoring walkthrough, see [Authoring bundle templates](/authoring-bundle-templates/).
 
 ## `shared`
 

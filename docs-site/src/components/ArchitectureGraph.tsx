@@ -19,48 +19,70 @@ interface GraphView {
   diagram: string;
 }
 
+const graphClassDefs = `
+  classDef external fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
+  classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
+  classDef runtime fill:#111827,stroke:#a78bfa,color:#ffffff
+  classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
+  classDef data fill:#050505,stroke:#f59e0b,color:#ffffff
+  classDef config fill:#050505,stroke:#60a5fa,color:#ffffff
+  classDef capability fill:#111827,stroke:#22c55e,stroke-width:2px,color:#ffffff
+`;
+
 const graphViews: GraphView[] = [
   {
-    id: "manual",
-    label: "Manual workflow",
-    description: "An explicit user or API action starts a durable Workflow task directly.",
+    id: "request",
+    label: "How does a request start work?",
+    description:
+      "An external app or user hits the public web service. The web service authenticates, creates state, and either runs short work or hands off to another runtime.",
     defaultNode: "web",
     diagram: `
 flowchart LR
-  web["Web service"]
-  workflows["Workflow runtime"]
-  core["Core loop"]
-  postgres["Postgres"]
-  web -->|"manual trigger"| workflows
-  workflows -->|"runAgentStep"| core
-  core -->|"messages, results"| postgres
+  client["User, app, or webhook"]
+  web[["Web service"]]
+  runtimeWeb[["Sync web runtime"]]
+  core{{"Core loop"}}
+  postgres[("Postgres")]
+  client -->|"HTTP request"| web
+  web -->|"short demo path"| runtimeWeb
+  runtimeWeb -->|"runAgent"| core
+  core -->|"run state"| postgres
+  class client external
+  class web surface
+  class runtimeWeb runtime
+  class core central
+  class postgres data
+  ${graphClassDefs}
   click web selectArchitectureNode
-  click workflows selectArchitectureNode
+  click runtimeWeb selectArchitectureNode
   click core selectArchitectureNode
   click postgres selectArchitectureNode
 `,
   },
   {
-    id: "delegated",
-    label: "Model delegated",
-    description: "A chat turn runs in the worker, then the model calls `trigger_workflow`.",
+    id: "queued",
+    label: "How does production chat run?",
+    description:
+      "The web service returns quickly after enqueueing work. The worker owns execution, streams state through Postgres, and checks Key Value for cancellation.",
     defaultNode: "runtime-worker",
     diagram: `
 flowchart LR
-  web["Web service"]
-  worker["Worker runtime"]
-  workflows["Workflow runtime"]
-  core["Core loop"]
-  postgres["Postgres"]
-  kv["Key Value"]
-  web -->|"enqueue run"| worker
-  worker -->|"trigger_workflow"| workflows
-  workflows -->|"runAgentStep"| core
+  web[["Web service"]]
+  worker[["Worker runtime"]]
+  core{{"Core loop"}}
+  postgres[("Postgres")]
+  kv[("Key Value")]
+  web -->|"enqueue job"| worker
+  worker -->|"runAgent"| core
   core -->|"messages, results"| postgres
   worker -.->|"cancel checks"| kv
+  class web surface
+  class worker runtime
+  class core central
+  class postgres,kv data
+  ${graphClassDefs}
   click web selectArchitectureNode
   click worker selectArchitectureNode
-  click workflows selectArchitectureNode
   click core selectArchitectureNode
   click postgres selectArchitectureNode
   click kv selectArchitectureNode
@@ -68,18 +90,24 @@ flowchart LR
   },
   {
     id: "scheduled",
-    label: "Scheduled workflow",
-    description: "A Render Cron service is a scheduler adapter that starts a Workflow task.",
+    label: "How does scheduled work run?",
+    description:
+      "Cron can run an agent inline for short work, or act as a small scheduler that starts a durable Workflow task.",
     defaultNode: "runtime-cron",
     diagram: `
 flowchart LR
-  cron["Cron runtime"]
-  workflows["Workflow runtime"]
-  core["Core loop"]
-  postgres["Postgres"]
-  cron -->|"scheduled trigger"| workflows
+  cron[["Cron runtime"]]
+  core{{"Core loop"}}
+  workflows[["Workflow runtime"]]
+  postgres[("Postgres")]
+  cron -->|"inline schedule"| core
+  cron -->|"durable schedule"| workflows
   workflows -->|"runAgentStep"| core
   core -->|"messages, results"| postgres
+  class cron,workflows runtime
+  class core central
+  class postgres data
+  ${graphClassDefs}
   click cron selectArchitectureNode
   click workflows selectArchitectureNode
   click core selectArchitectureNode
@@ -87,67 +115,94 @@ flowchart LR
 `,
   },
   {
-    id: "sync",
-    label: "Sync demo",
-    description: "The simple web runtime executes the agent inside one HTTP request.",
-    defaultNode: "runtime-web",
+    id: "durable",
+    label: "How does durable work run?",
+    description:
+      "Web, worker, and cron can all start Workflow tasks. The Workflow runtime executes checkpointed agent steps through the same core.",
+    defaultNode: "runtime-workflows",
     diagram: `
 flowchart LR
-  runtimeWeb["Sync web runtime"]
-  core["Core loop"]
-  postgres["Postgres"]
-  runtimeWeb -->|"in request"| core
-  core -->|"state writes"| postgres
-  click runtimeWeb selectArchitectureNode
+  web[["Web service"]]
+  worker[["Worker runtime"]]
+  cron[["Cron runtime"]]
+  workflows[["Workflow runtime"]]
+  core{{"Core loop"}}
+  postgres[("Postgres")]
+  web -->|"manual trigger"| workflows
+  worker -->|"model delegates"| workflows
+  cron -->|"schedule triggers"| workflows
+  workflows -->|"runAgentStep"| core
+  core -->|"checkpoint state"| postgres
+  class web surface
+  class worker,cron,workflows runtime
+  class core central
+  class postgres data
+  ${graphClassDefs}
+  click web selectArchitectureNode
+  click worker selectArchitectureNode
+  click cron selectArchitectureNode
+  click workflows selectArchitectureNode
   click core selectArchitectureNode
   click postgres selectArchitectureNode
 `,
   },
   {
     id: "authoring",
-    label: "Authoring to deploy",
-    description: "Gallery and wizard inputs become a registry-loaded deployment.",
+    label: "How does authoring become a deployment?",
+    description:
+      "Templates and scaffolding produce a manifest. The registry loads that manifest into agents and emits the Render deployment shape.",
     defaultNode: "registry",
     diagram: `
 flowchart LR
-  gallery["Gallery"]
-  wizard["Browser wizard"]
-  scaffolder["CLI scaffolder"]
-  registry["Registry"]
-  web["Web service"]
-  worker["Worker runtime"]
+  gallery[/"Gallery"/]
+  wizard[["Browser wizard"]]
+  scaffolder[["CLI scaffolder"]]
+  registry{{"Registry"}}
+  core{{"Core loop"}}
+  web[["Web service"]]
+  worker[["Worker runtime"]]
   gallery -->|"template"| scaffolder
   wizard -->|"managed repo"| scaffolder
   scaffolder -->|"render-harness.yaml"| registry
-  registry -->|"agents map"| web
-  registry -->|"resolver"| worker
+  registry -->|"AgentDefinition map"| core
+  registry -->|"Render services"| web
+  registry -->|"worker resolver"| worker
+  class gallery config
+  class wizard,scaffolder,web surface
+  class registry,core central
+  class worker runtime
+  ${graphClassDefs}
   click gallery selectArchitectureNode
   click wizard selectArchitectureNode
   click scaffolder selectArchitectureNode
   click registry selectArchitectureNode
+  click core selectArchitectureNode
   click web selectArchitectureNode
   click worker selectArchitectureNode
 `,
   },
   {
-    id: "core",
-    label: "Core and extensions",
+    id: "extensions",
+    label: "How do capabilities attach?",
     description:
-      "Capabilities extend the shared core loop, which writes state and observes signals.",
-    defaultNode: "core",
+      "Capability packs are loaded by the registry, then contribute tools, MCP servers, skills, and env requirements to agent definitions.",
+    defaultNode: "capabilities",
     diagram: `
 flowchart LR
-  capabilities["Capabilities"]
-  core["Core loop"]
-  postgres["Postgres"]
-  kv["Key Value"]
-  capabilities -->|"tools, MCP, skills"| core
-  core -->|"durable state"| postgres
-  core -.->|"signals"| kv
+  capabilities{{"Capabilities"}}
+  registry{{"Registry"}}
+  agents[/"Agent definitions"/]
+  core{{"Core loop"}}
+  capabilities -->|"pack contract"| registry
+  registry -->|"tools, MCP, skills"| agents
+  agents -->|"runtime tool surface"| core
+  class capabilities capability
+  class registry,core central
+  class agents config
+  ${graphClassDefs}
   click capabilities selectArchitectureNode
+  click registry selectArchitectureNode
   click core selectArchitectureNode
-  click postgres selectArchitectureNode
-  click kv selectArchitectureNode
 `,
   },
 ];
@@ -160,27 +215,28 @@ function selectedNodeFor(id: string): ArchitectureNodeRecord {
 
 function architectureNodeIdFor(viewId: string, mermaidNodeId: string): string {
   const map: Record<string, Record<string, string>> = {
-    manual: {
-      workflows: "runtime-workflows",
+    request: {
+      runtimeWeb: "runtime-web",
     },
-    delegated: {
+    queued: {
       worker: "runtime-worker",
-      workflows: "runtime-workflows",
       kv: "key-value",
     },
     scheduled: {
       cron: "runtime-cron",
       workflows: "runtime-workflows",
     },
-    sync: {
-      runtimeWeb: "runtime-web",
+    durable: {
+      worker: "runtime-worker",
+      cron: "runtime-cron",
+      workflows: "runtime-workflows",
     },
     authoring: {
       scaffolder: "create-render-agent",
       worker: "runtime-worker",
     },
-    core: {
-      kv: "key-value",
+    extensions: {
+      agents: "registry",
     },
   };
   return map[viewId]?.[mermaidNodeId] ?? mermaidNodeId;
@@ -209,23 +265,34 @@ export default function ArchitectureGraph() {
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: "loose",
-        theme: "dark",
+        theme: "base",
         flowchart: {
           curve: "linear",
           htmlLabels: false,
-          nodeSpacing: 55,
-          rankSpacing: 70,
+          nodeSpacing: 48,
+          padding: 32,
+          rankSpacing: 58,
+          wrappingWidth: 220,
         },
         themeVariables: {
           background: "#000000",
-          mainBkg: "#101010",
+          clusterBkg: "#050505",
+          clusterBorder: "#4c1d95",
+          edgeLabelBackground: "#000000",
+          fontFamily: "Arial, Helvetica, sans-serif",
+          fontSize: "16px",
+          lineColor: "#a78bfa",
           primaryColor: "#101010",
-          primaryTextColor: "#ffffff",
           primaryBorderColor: "#9cc3ff",
-          lineColor: "#9cc3ff",
-          secondaryColor: "#050505",
-          tertiaryColor: "#000000",
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+          primaryTextColor: "#ffffff",
+          mainBkg: "#101010",
+          nodeBorder: "#a855f7",
+          secondaryBorderColor: "#7c3aed",
+          secondaryColor: "#111827",
+          secondaryTextColor: "#ffffff",
+          tertiaryBorderColor: "#4a4a4a",
+          tertiaryColor: "#050505",
+          tertiaryTextColor: "#d0d0d0",
         },
       });
 
@@ -257,7 +324,7 @@ export default function ArchitectureGraph() {
     <div className="architecture-shell">
       <div className="architecture-main">
         <fieldset className="architecture-viewbar">
-          <legend>Graph views</legend>
+          <legend>Choose a question</legend>
           {graphViews.map((item) => (
             <button
               key={item.id}

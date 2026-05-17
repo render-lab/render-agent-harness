@@ -4,6 +4,38 @@ The harness is a thin core wrapped by four runtime adapters (Web, Cron, Worker, 
 
 This document captures the architectural decisions and the Phase 0 verifications that confirmed (or adjusted) them. It's the source of truth for how the pieces fit together.
 
+## Structural model
+
+The repo separates infrastructure, agent behavior, and reusable tool integrations:
+
+- **Harness:** The platform layer. `@render-harness/core` owns the loop, model clients, prompt assembly, MCP execution, state writes, checkpointing, cancellation, and built-in tools. Runtime packages wrap that core and decide when to call it.
+- **Agents:** The behavior layer. An agent is an `AgentDefinition` created with `defineAgent()` or loaded from `render-harness.yaml` through `@render-harness/registry`. It declares the model, system prompt, permissions, MCP servers, skills, and tool surface for one unit of work.
+- **Capabilities:** The extension layer. A capability pack is an npm package that contributes reusable tools, optional setup, env schema, and model-facing instructions. Packs attach to agents through `capabilities[]`; they do not own the runtime loop or deployment lifecycle.
+
+Those layers compose in one direction:
+
+```text
+Agent or bundle manifest
+        │
+        ▼
+AgentDefinition
+        │
+        ├── built-in tools from core
+        ├── MCP tools from configured servers
+        └── capability tools from selected packs
+        │
+        ▼
+runAgent()
+        │
+        ▼
+runtime adapter
+        │
+        ▼
+Render service shape
+```
+
+This keeps the boundary small. The harness can add new runtimes without changing agent definitions, agents can move between runtime shapes without changing their prompts and tools, and capabilities can be shared across gallery entries without becoming global defaults.
+
 ## Phase 0 verifications
 
 These are the verifications from the execution plan, with findings. Adjustments to defaults are noted inline.

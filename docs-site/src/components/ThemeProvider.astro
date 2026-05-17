@@ -1,0 +1,11 @@
+---
+// Dark-only docs site. Keep Starlight's expected global API, but never read
+// system preference or localStorage.
+---
+
+<script is:inline>
+  window.StarlightThemeProvider = {
+    updatePickers() {},
+  };
+  document.documentElement.dataset.theme = "dark";
+</script>

@@ -5,6 +5,8 @@ description: Add optional tools, MCP servers, skills, and environment requiremen
 
 Capabilities are package-level extensions that the registry merges into agent definitions. They keep integrations outside the core loop while still giving agents typed tools and deployment requirements.
 
+The first-party packs are examples of the extension model, not a closed catalog. Add a capability pack whenever an integration should be reusable across agents or templates: a SaaS API wrapper, an MCP server configuration, a memory backend, an inbound connector, or extra Render services that should travel with an agent.
+
 ## What a capability can contribute
 
 A capability pack can add:
@@ -17,16 +19,21 @@ A capability pack can add:
 
 Capability packs are declared at the bundle level, not per agent. This avoids duplicating module-level setup inside a single Node process.
 
+To publish your own pack, see [Authoring capability packs](/authoring-capability-packs/).
+
 ## Current packs
 
 | Package | Purpose |
 | --- | --- |
-| `@render-harness/cap-browser-browserbase` | Browser automation through Browserbase. |
-| `@render-harness/cap-filesystem` | Path-scoped filesystem access. |
-| `@render-harness/cap-memory-pg` | Shared memory backed by Postgres. |
-| `@render-harness/cap-scrape-firecrawl` | Web extraction through Firecrawl. |
-| `@render-harness/cap-search-exa` | Web search through Exa. |
-| `@render-harness/cap-search-tavily` | Web search through Tavily. |
+| [`@render-harness/cap-browser-browserbase`](https://www.npmjs.com/package/@render-harness/cap-browser-browserbase) | Browser automation through Browserbase. |
+| [`@render-harness/cap-filesystem`](https://www.npmjs.com/package/@render-harness/cap-filesystem) | Path-scoped filesystem access. |
+| [`@render-harness/cap-github`](https://www.npmjs.com/package/@render-harness/cap-github) | GitHub repository and issue workflows. |
+| [`@render-harness/cap-linear`](https://www.npmjs.com/package/@render-harness/cap-linear) | Linear issue monitoring and updates. |
+| [`@render-harness/cap-memory-pg`](https://www.npmjs.com/package/@render-harness/cap-memory-pg) | Shared memory backed by Postgres. |
+| [`@render-harness/cap-scrape-firecrawl`](https://www.npmjs.com/package/@render-harness/cap-scrape-firecrawl) | Web extraction through Firecrawl. |
+| [`@render-harness/cap-search-exa`](https://www.npmjs.com/package/@render-harness/cap-search-exa) | Web search through Exa. |
+| [`@render-harness/cap-search-tavily`](https://www.npmjs.com/package/@render-harness/cap-search-tavily) | Web search through Tavily. |
+| [`@render-harness/cap-webhook-generic`](https://www.npmjs.com/package/@render-harness/cap-webhook-generic) | Generic webhook connector support. |
 
 ## Declaring a capability
 

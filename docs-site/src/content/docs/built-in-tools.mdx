@@ -5,7 +5,13 @@ description: Understand the tools core can add to every agent.
 
 The core package builds a set of built-in tools before each run. Some tools are always available. Others register only when the required environment variables or primitives exist.
 
-## Always-on tools
+Built-ins fall into three tiers:
+
+- **Tier A:** Always available when core runs.
+- **Tier B:** Provider-chain tools that register only when matching environment variables exist.
+- **Tier C:** Primitive-backed tools that require Postgres, Workflows, or another harness primitive.
+
+## Tier A: always-on tools
 
 | Tool | Purpose |
 | --- | --- |
@@ -16,7 +22,7 @@ The core package builds a set of built-in tools before each run. Some tools are 
 | `ask_user` | Pause a run and wait for user input. |
 | `todo` | Track agent-visible task state during a run. |
 
-## Environment-gated tools
+## Tier B: environment-gated tools
 
 | Tool | Provider chain |
 | --- | --- |
@@ -26,7 +32,7 @@ The core package builds a set of built-in tools before each run. Some tools are 
 
 Provider selection can be overridden with `HARNESS_WEB_SEARCH_PROVIDER`, `HARNESS_WEB_EXTRACT_PROVIDER`, or `HARNESS_IMAGE_PROVIDER`.
 
-## Primitive-gated tools
+## Tier C: primitive-gated tools
 
 | Tool | Required primitive |
 | --- | --- |
@@ -38,3 +44,7 @@ Provider selection can be overridden with `HARNESS_WEB_SEARCH_PROVIDER`, `HARNES
 ## Skipped built-ins
 
 When a built-in cannot register, the run records why it was skipped. The operator API surfaces skipped built-ins through agent metadata so users can see which environment variables or primitives are missing.
+
+## Filesystem access
+
+Filesystem and terminal tools are not built into core because the production worker private service can be multi-tenant. Add path-scoped filesystem access per agent with `@render-harness/cap-filesystem`.

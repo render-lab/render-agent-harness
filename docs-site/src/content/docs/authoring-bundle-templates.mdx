@@ -1,0 +1,148 @@
+---
+title: Authoring Bundle Templates
+description: Add multi-agent starter templates to the template catalog.
+---
+
+A bundle template is a sealed multi-agent starter. One harness deployment hosts several agents that share Postgres, Key Value, one web service, one worker, and one Cron service per schedule.
+
+Use a bundle when the template's value comes from multiple agents working together. Use a single-agent template when one agent on one runtime is the whole product.
+
+Bundle templates should encode a useful opinion, not a permanent constraint. The scaffolded output is ordinary source code and `render-harness.yaml`: authors can remove agents, add agents, replace prompts, change schedules, or swap capability packs after scaffolding.
+
+## Files to add
+
+```text
+gallery/agents/<bundle-slug>/
+  README.md
+  render-harness.yaml
+  src/
+    <agent-id>.ts
+```
+
+The gallery loader walks `src/` and embeds each file in the bundled gallery snapshot. The scaffolder copies those files and generates runtime entrypoints on top.
+
+## Bundle manifest
+
+Use `schemaVersion: 1`. The current schema supports both single-agent entries and multi-agent bundles through `agents[]`.
+
+```yaml
+schemaVersion: 1
+name: chief-of-staff
+description: Multi-agent personal assistant bundle.
+harnessVersion: "^0.1"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: CALENDAR_ICS_URL
+    required: false
+    secret: true
+
+agents:
+  - id: chat
+    description: Main chat agent.
+    agent:
+      kind: custom
+      entrypoint: ./src/chat.ts
+    runtimes:
+      - kind: web
+      - kind: worker
+  - id: weekly-recap
+    description: Weekly summary agent.
+    workflowTask: true
+    agent:
+      kind: custom
+      entrypoint: ./src/weekly-recap.ts
+    runtimes:
+      - kind: cron
+        schedule: "0 17 * * 5"
+        via: workflow
+```
+
+Schema rules:
+
+- `agents[].id` must be a slug and unique within the bundle.
+- Each agent can declare each runtime kind at most once.
+- Every agent must have a model through `shared.model` or an agent-level `model`.
+- Capabilities are bundle-wide because pack instances can hold module-level state.
+
+## Agent source files
+
+Each source file should default-export a function that returns an `AgentDefinition`, or export the definition directly.
+
+```ts
+import { type AgentDefinition, defineAgent } from "@render-harness/core";
+
+export default function buildAgent(): AgentDefinition {
+  return defineAgent({
+    name: "weekly-recap",
+    version: "0.1.0",
+    model: { provider: "anthropic", model: "claude-sonnet-4-6" },
+    systemPrompt: SYSTEM_PROMPT,
+  });
+}
+
+const SYSTEM_PROMPT = `Write a concise weekly recap from available memory.`;
+```
+
+The registry routes by the manifest `id`, so the name in source is informational.
+
+## Register the template
+
+Add the bundle to `gallery/index.yaml`:
+
+```yaml
+- slug: chief-of-staff
+  name: Chief of Staff
+  description: Multi-agent assistant with chat, memory, and scheduled work.
+  path: ./agents/chief-of-staff
+  categories: ["bundle", "assistant"]
+  runtimeKinds: ["web", "worker", "cron", "workflows"]
+  capabilities:
+    - "@render-harness/cap-memory-pg"
+  author: "render-harness"
+```
+
+The loader cross-checks `runtimeKinds` against the union of every agent's runtimes.
+
+## Rebuild the bundled snapshot
+
+After adding or changing a catalog template:
+
+```sh
+cd packages/create-render-agent
+pnpm tsx scripts/bundle-gallery.ts
+```
+
+Then verify:
+
+```sh
+pnpm --filter "@render-harness/registry" test
+pnpm --filter "create-render-agent" test
+```
+
+The CLI uses the bundled snapshot when it is installed from npm, so source catalog changes are not enough.
+
+## Runtime emission
+
+For a bundle with chat, worker, and scheduled agents, the emitter coalesces shared services:
+
+| Render service | Why it exists |
+| --- | --- |
+| Postgres | Shared runs, messages, conversations, tool results, and usage. |
+| Key Value | Cancellation flags, locks, and capability needs. |
+| Web service | Shared HTTP/API/UI surface for web agents. |
+| Worker service | Shared queue consumer for worker agents. |
+| Cron services | One Cron service per scheduled runtime entry. |
+| Workflow service | One Dashboard-created Workflow service for workflow tasks. |
+
+Workflow services are not Blueprintable today. If a bundle has Workflow tasks, the emitter prints the Dashboard setup step and wires `WORKFLOW_SLUG` plus `RENDER_API_KEY` where needed.
+
