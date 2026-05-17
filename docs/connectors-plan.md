@@ -1,11 +1,12 @@
-# Inbound connectors: `cap-slack` + `cap-webhook-generic`
+# Inbound connectors: `cap-webhook-generic`, `cap-github`, `cap-linear`, and `cap-slack`
 
 ## Context
 
 The harness has zero inbound trigger surface today — every run starts via `POST /runs` or a cron tick. Anyone wanting a Slack bot, a GitHub webhook handler, or a Linear-event-driven agent has to build the plumbing from scratch each time. This plan adds inbound connectors as a **new capability slot** on the existing `CapabilityPack` interface, mounted as `POST /connectors/:key` routes on `@render-harness/web`. No fifth runtime, no core changes.
 
 User-confirmed v1 shape:
-- **Scope:** `cap-slack` + `cap-webhook-generic`. Discord/Socket Mode deferred.
+- **Scope:** `cap-webhook-generic`, `cap-github`, `cap-linear`, and `cap-slack`. Discord/Socket Mode deferred.
+- **GitHub and Linear monitoring:** each provider delivery enqueues a run with deterministic idempotency and structured metadata. The agent fetches current work state through provider tools.
 - **Slack threading:** thread = continued conversation, via the landed `agent_conversations` model. A new Slack thread creates a conversation; replies in that thread enqueue new runs with the same `conversation_id`.
 - **Reply:** tool-only. Agents call `slack.send_message` etc. explicitly. No `onJobResult` auto-post.
 
@@ -21,6 +22,76 @@ This plan rides on the conversations milestone described in `docs/conversations-
 - `findActiveRunForConversation(pool, conversationId)` for the sequential-only 409 guard.
 
 Connector implementation no longer needs to block on the conversations model. A small `enqueueIntoConversation(...)` convenience helper is still useful for connector code, but the underlying primitives are present.
+
+## Access modes
+
+Provider packs default to read mode. In read mode, a pack can receive webhooks and expose read-only tools, but it must not register tools that mutate provider state.
+
+Each provider pack accepts:
+
+```yaml
+accessMode: read # default; allowed values: read, read_write
+```
+
+Use `accessMode: read_write` to expose mutation tools such as creating comments, updating statuses, assigning work, or posting replies. Even in `read_write` mode, generated templates should still list mutation tools in `permissions.requireApproval` unless the user explicitly chooses unattended writes.
+
+## Service roadmap
+
+Build the connector library in waves. Each pack should follow the same contract: webhooks and read-only tools by default, `accessMode: read_write` for mutation tools, provider delivery IDs for idempotency, provider-specific filters, and structured run metadata.
+
+Use the provider's official SDK/package for outbound API clients when one exists and is actively maintained. Fall back to direct HTTP API calls when no SDK exists, the SDK is stale, or direct access is needed for webhook verification, pagination, retries, or APIs the SDK does not expose. Direct HTTP wrappers should stay small, typed, and provider-scoped.
+
+### Wave 1: Work monitoring
+
+- `cap-github`: PRs, issues, reviews, checks, workflow runs, comments.
+- `cap-linear`: issues, projects, cycles, comments, status changes.
+- `cap-gitlab`: merge requests, issues, comments, pipelines.
+- `cap-jira`: issues, epics, sprints, comments, status changes.
+
+### Wave 2: Communication
+
+- `cap-slack`: messages, mentions, threads, reactions, replies.
+- `cap-discord`: messages, mentions, channels, moderation events. Requires Gateway/WebSocket design.
+- `cap-teams`: Microsoft Teams messages, channels, meetings.
+- `cap-email-google`: Gmail messages, labels, threads.
+- `cap-email-microsoft`: Outlook messages, folders, threads.
+
+### Wave 3: Knowledge and meetings
+
+- `cap-notion`: pages, databases, comments, search.
+- `cap-google-workspace`: Drive, Docs, Sheets, Calendar.
+- `cap-microsoft-365`: SharePoint, OneDrive, Word, Excel, Calendar.
+- `cap-confluence`: spaces, pages, comments, search.
+- `cap-granola`: meeting notes and action items.
+- `cap-meetings`: Zoom, Google Meet, Teams transcripts.
+- `cap-call-notes`: Gong, Fireflies, Read AI.
+
+### Wave 4: Engineering signals
+
+- `cap-sentry`: errors, releases, regressions.
+- `cap-datadog`: logs, metrics, monitors, incidents.
+- `cap-pagerduty`: incidents, alerts, on-call schedules.
+- `cap-grafana`: dashboards, alerts, Prometheus-backed metrics.
+- `cap-honeycomb`: traces, queries, SLO signals.
+- `cap-security-alerts`: Dependabot, Snyk, GitHub security alerts.
+
+### Wave 5: Deployment and runtime
+
+- `cap-render`: services, deploys, logs, metrics, environment state.
+- `cap-github-actions`: CI workflow runs, jobs, artifacts, failures.
+- `cap-ci`: CircleCI and Buildkite pipelines.
+- `cap-frontend-platforms`: Vercel, Netlify, Cloudflare Pages.
+- `cap-runtime-platforms`: Kubernetes, Fly.io, Railway.
+
+### Wave 6: Customer and business context
+
+- `cap-zendesk`: tickets, comments, users, organizations.
+- `cap-intercom`: conversations, contacts, companies.
+- `cap-salesforce`: accounts, opportunities, cases.
+- `cap-hubspot`: companies, contacts, deals, tickets.
+- `cap-stripe`: customers, subscriptions, invoices, payment events.
+- `cap-product-analytics`: PostHog, Amplitude, Mixpanel events and cohorts.
+- `cap-segment`: customer event stream.
 
 ## Architecture
 
@@ -82,6 +153,103 @@ Add `connectors: z.unknown().optional()` to `PackShapeSchema`. Outbound tools (`
 
 **No changes.** Tool-only reply + no Socket Mode = nothing to attach to the worker process in v1. Outbound tools are already merged into the agent via `localTools()` during `runAgent`'s tool resolution.
 
+## `cap-github` v1
+
+Path: `packages/capabilities/cap-github/`.
+
+A GitHub work-monitoring connector. Inbound webhooks tell the agent that work changed. Outbound tools let the agent inspect the current issue, PR, checks, workflow runs, or comments before it decides what to do.
+
+**Webhook flow**:
+1. Read the raw body and verify `X-Hub-Signature-256` with HMAC-SHA256.
+2. Use `X-GitHub-Delivery` as the deterministic `runId` seed.
+3. Parse `X-GitHub-Event` and normalize supported events into `{ event, action, repo, actor, objectType, objectId, number?, branch?, url, summary }`.
+4. Apply config filters: repositories, events, branches, labels, and actors.
+5. Enqueue a run with no `conversationId` by default. Store the normalized event in metadata and pass a short text summary as initial content.
+
+**Supported events for v1**:
+- `issues`
+- `issue_comment`
+- `pull_request`
+- `pull_request_review`
+- `pull_request_review_comment`
+- `push`
+- `check_run`
+- `check_suite`
+- `workflow_run`
+
+**Outbound tools**:
+- `get_issue`
+- `get_pull_request`
+- `list_pull_request_files`
+- `list_pull_request_reviews`
+- `list_checks`
+- `list_workflow_runs`
+
+**Write tools** (`accessMode: read_write` only):
+- `create_issue_comment`
+- `create_pull_request_review_comment`
+- `set_commit_status`
+
+**Config example**:
+```yaml
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: "work-monitor"
+      accessMode: read
+      webhookSecretEnv: GITHUB_WEBHOOK_SECRET
+      tokenEnv: GITHUB_TOKEN
+      allowedRepositories: ["render/render-harness"]
+      events: ["issues", "pull_request", "workflow_run", "check_run"]
+      branches: ["main"]
+```
+
+## `cap-linear` v1
+
+Path: `packages/capabilities/cap-linear/`.
+
+A Linear work-monitoring connector. Inbound webhooks tell the agent that issues, projects, cycles, or comments changed. Outbound tools let the agent inspect and optionally update Linear state.
+
+**Webhook flow**:
+1. Read the raw body and verify the Linear signature with the configured webhook secret.
+2. Use the provider delivery ID when available. If Linear does not provide one for a payload shape, derive a deterministic id from `{ organizationId, type, action, data.id, updatedAt }`.
+3. Normalize supported events into `{ type, action, teamId, projectId?, issueId?, actorId?, url?, summary }`.
+4. Apply config filters: teams, projects, labels, states, and actors.
+5. Enqueue a run with no `conversationId` by default. Store the normalized event in metadata and pass a short text summary as initial content.
+
+**Supported events for v1**:
+- Issue created
+- Issue updated
+- Comment created
+- Project updated
+- Cycle changed
+- Status changed
+
+**Outbound tools**:
+- `get_issue`
+- `search_issues`
+- `list_comments`
+
+**Write tools** (`accessMode: read_write` only):
+- `create_comment`
+- `update_issue_status`
+- `assign_issue`
+- `link_related_issue`
+
+**Config example**:
+```yaml
+capabilities:
+  - pack: "@render-harness/cap-linear"
+    config:
+      agent: "work-monitor"
+      accessMode: read
+      webhookSecretEnv: LINEAR_WEBHOOK_SECRET
+      apiKeyEnv: LINEAR_API_KEY
+      allowedTeams: ["ENG"]
+      allowedProjects: ["agent-platform"]
+      states: ["Todo", "In Progress", "In Review", "Done"]
+```
+
 ## `cap-slack` v1
 
 Path: `packages/capabilities/cap-slack/`.
@@ -128,7 +296,7 @@ A configurable HMAC-verified inbound webhook. No outbound tools (one-shot semant
 | `src/extract.ts` | Pull initial message text from the request via configurable rules: dotted JSON path (`config.textPath: "payload.message"`), header pass-through, or full-body JSON.stringify fallback. |
 | `src/index.ts` | `definePack` with `connectors` only (no `localTools`). |
 
-**Config example** (GitHub-style):
+**Config example** (GitHub-compatible HMAC shape):
 ```yaml
 capabilities:
   - pack: "@render-harness/cap-webhook-generic"
@@ -152,6 +320,7 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 - **Discord** — Gateway is WebSocket-only; depends on Socket Mode design.
 - **Auto-reply via `onJobResult`** — user chose tool-only.
 - **OAuth install flow / multi-workspace** — one pack config = one workspace, paste a token.
+- **Issue/PR-level conversation grouping for GitHub and Linear** — useful, but defer until connectors have a burst/coalescing policy. V1 keeps every provider delivery as its own run.
 - **Slash commands / interactive components / block actions** — Events API only.
 - **Generic webhook outbound** — `cap-webhook-generic` is inbound-only; the outbound case is "use `fetch_url` or build a dedicated capability."
 - **First-class Zod schema for connector config** — packs self-validate. Promote to schema after the pattern proves out.
@@ -159,6 +328,22 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 ## File-by-file changes
 
 **New:**
+- `packages/capabilities/cap-github/package.json`
+- `packages/capabilities/cap-github/src/index.ts`
+- `packages/capabilities/cap-github/src/verify.ts`
+- `packages/capabilities/cap-github/src/normalize.ts`
+- `packages/capabilities/cap-github/src/tools.ts`
+- `packages/capabilities/cap-github/src/verify.test.ts`
+- `packages/capabilities/cap-github/src/normalize.test.ts`
+- `packages/capabilities/cap-github/src/index.integration.test.ts` (idempotency + filtered events)
+- `packages/capabilities/cap-linear/package.json`
+- `packages/capabilities/cap-linear/src/index.ts`
+- `packages/capabilities/cap-linear/src/verify.ts`
+- `packages/capabilities/cap-linear/src/normalize.ts`
+- `packages/capabilities/cap-linear/src/tools.ts`
+- `packages/capabilities/cap-linear/src/verify.test.ts`
+- `packages/capabilities/cap-linear/src/normalize.test.ts`
+- `packages/capabilities/cap-linear/src/index.integration.test.ts` (idempotency + filtered events)
 - `packages/capabilities/cap-slack/package.json`
 - `packages/capabilities/cap-slack/src/index.ts`
 - `packages/capabilities/cap-slack/src/verify.ts`
@@ -204,13 +389,25 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 ## Verification
 
 **Unit tests:**
+- `cap-github/verify.test.ts` — known good `X-Hub-Signature-256` passes; tampered body, missing header, and wrong secret fail.
+- `cap-github/normalize.test.ts` — supported GitHub events map to stable summaries and metadata; unsupported events return noop; repo, branch, label, and actor filters are applied.
+- `cap-linear/verify.test.ts` — known good Linear signature passes; tampered body, missing header, and wrong secret fail.
+- `cap-linear/normalize.test.ts` — supported Linear events map to stable summaries and metadata; unsupported events return noop; team, project, label, state, and actor filters are applied.
 - `cap-slack/verify.test.ts` — known good signature passes; tampered body, expired timestamp, missing header all fail.
 - `cap-slack/normalize.test.ts` — `url_verification` returns challenge; `app_mention` and `message` map correctly; bot_id messages and edits are skipped (unless `includeEdits`); unsupported event types return noop.
 - `cap-slack/convid.test.ts` — deterministic id for same `(team, channel, thread_ts)`; differs across threads; stable across runs.
-- `cap-webhook-generic/verify.test.ts` — GitHub-style HMAC validates; wrong prefix or algo fails.
+- `cap-webhook-generic/verify.test.ts` — configurable HMAC validates; wrong prefix or algo fails.
 - `cap-webhook-generic/extract.test.ts` — dotted path extraction; missing path returns full-body fallback.
 
 **Integration tests** (requires `pnpm db:up` — postgres + valkey):
+- `cap-github/index.integration.test.ts`:
+  - Send a webhook with delivery `D1` twice → exactly one `agent_runs` row.
+  - Send an allowed PR event → run metadata includes repo, event, action, actor, PR number, and URL.
+  - Send a filtered repo or branch event → 200 noop, no run enqueued.
+- `cap-linear/index.integration.test.ts`:
+  - Send the same issue event twice → exactly one `agent_runs` row.
+  - Send an allowed issue update → run metadata includes team, project, issue id, state, actor, and URL.
+  - Send a filtered team or project event → 200 noop, no run enqueued.
 - `cap-slack/index.integration.test.ts`:
   - Send a webhook with `event_id=E1` twice → exactly one `agent_runs` row + one `agent_conversations` row.
   - Send a follow-up in same `thread_ts` → new run, same `conversation_id`, conversation history loads prior messages.
@@ -218,6 +415,8 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 - `packages/web/src/connector-mount.test.ts` — mount with a fake pack, hit `POST /connectors/<key>`, assert the contribution's webhook was invoked.
 
 **Manual e2e** (after merge, on a staging service):
+- Deploy a `work-monitor` agent with `cap-github` configured against a sandbox repo. Open a PR, push a commit, and run a GitHub Actions workflow. Verify one run per delivery and correct metadata.
+- Deploy the same agent with `cap-linear` configured against a sandbox workspace. Move an issue between states and add a comment. Verify one run per delivery and correct metadata.
 - Deploy `examples/support-agent` with `cap-slack` configured against a sandbox Slack workspace.
 - DM the bot → bot replies via `slack.send_message` tool.
 - Reply in thread → second turn lands in the same conversation; `GET /conversations/:id` shows both runs.
@@ -227,6 +426,8 @@ No threading: webhooks don't have a natural conversation key. Each delivery is a
 **Commands:**
 ```sh
 pnpm db:up
+pnpm --filter @render-harness/cap-github test
+pnpm --filter @render-harness/cap-linear test
 pnpm --filter @render-harness/cap-slack test
 pnpm --filter @render-harness/cap-webhook-generic test
 pnpm --filter @render-harness/web test -- connector
@@ -240,5 +441,7 @@ pnpm build
 2. **Registry contract.** Add `ConnectorContribution` to `packages/registry/src/capability.ts`. One commit. No callers yet.
 3. **Web mount.** Add `connector-mount.ts`, `routes/connectors.ts`, wire into `serveWeb`. Tests with a fake pack.
 4. **`cap-webhook-generic`.** Simpler of the two — no threading, no outbound tools. Validates the contract end-to-end.
-5. **`cap-slack`.** Verify, normalize, convid, tools, full integration test against the running primitives stack.
-6. **Docs.** `docs/connectors.md` (developer guide), CLAUDE.md addendum.
+5. **`cap-github`.** Verify, normalize, filters, read/comment tools, full integration test against the running primitives stack.
+6. **`cap-linear`.** Verify, normalize, filters, read/comment/status tools, full integration test against the running primitives stack.
+7. **`cap-slack`.** Verify, normalize, convid, tools, full integration test against the running primitives stack.
+8. **Docs.** `docs/connectors.md` (developer guide), CLAUDE.md addendum.
