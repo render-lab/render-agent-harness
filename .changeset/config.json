@@ -2,8 +2,20 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["@render-harness/*"]],
-  "linked": [],
+  "fixed": [],
+  "linked": [
+    [
+      "@render-harness/contracts",
+      "@render-harness/core",
+      "@render-harness/registry",
+      "@render-harness/runtime-cron",
+      "@render-harness/runtime-web",
+      "@render-harness/runtime-worker",
+      "@render-harness/runtime-workflows",
+      "@render-harness/web",
+      "@render-harness/ui"
+    ]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
