@@ -8,6 +8,25 @@ shared:
   model:
     provider: anthropic
     model: claude-sonnet-4-6
+  permissions:
+    allowedTools:
+      - cap-slack__slack_get_thread
+      - cap-slack__slack_get_channel_history
+      - cap-slack__slack_send_message
+      - cap-slack__slack_add_reaction
+      - cap-slack__slack_update_message
+    requireApproval:
+      - cap-slack__slack_send_message
+      - cap-slack__slack_add_reaction
+      - cap-slack__slack_update_message
+
+capabilities:
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: support-bot
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
 
 agents:
   - id: support-bot

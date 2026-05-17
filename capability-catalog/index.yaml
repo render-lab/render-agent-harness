@@ -116,3 +116,43 @@ capabilities:
       smokeTestStatus: passing
       reviewStatus: maintainer-reviewed
     trustTier: official
+
+  - package: "@render-harness/cap-slack"
+    name: Slack
+    description: Slack Events connector with SDK-backed thread reads and opt-in replies.
+    categories: [connector, slack, chat]
+    provider: Slack
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-slack
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.1"
+    requiresHarness: "^0.1"
+    features: [tools, connectors]
+    envVars:
+      - name: SLACK_SIGNING_SECRET
+        required: true
+        secret: true
+        description: Slack signing secret used to verify Events API requests.
+      - name: SLACK_BOT_TOKEN
+        required: true
+        secret: true
+        description: Slack bot token used for read tools and optional write tools.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: Defaults to read mode; replies and reactions require accessMode read_write.
+    connectors:
+      - key: slack
+        auth: hmac
+        eventTypes:
+          - url_verification
+          - app_mention
+          - message
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-slack test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official

@@ -33,6 +33,7 @@ To publish your own pack, see [Authoring capability packs](/authoring-capability
 | [`@render-harness/cap-scrape-firecrawl`](https://www.npmjs.com/package/@render-harness/cap-scrape-firecrawl) | Web extraction through Firecrawl. |
 | [`@render-harness/cap-search-exa`](https://www.npmjs.com/package/@render-harness/cap-search-exa) | Web search through Exa. |
 | [`@render-harness/cap-search-tavily`](https://www.npmjs.com/package/@render-harness/cap-search-tavily) | Web search through Tavily. |
+| [`@render-harness/cap-slack`](https://www.npmjs.com/package/@render-harness/cap-slack) | Slack Events connector with thread reads and opt-in replies. |
 | [`@render-harness/cap-webhook-generic`](https://www.npmjs.com/package/@render-harness/cap-webhook-generic) | Generic webhook connector support. |
 
 ## Declaring a capability
@@ -58,3 +59,16 @@ permissions:
 ```
 
 Use `requireApproval` for tools that write durable state, trigger external work, or perform actions the user should review.
+
+## Connector capabilities
+
+Connector packs mount inbound webhooks on the web service and enqueue work for a worker runtime. For example:
+
+| Pack | Webhook path | Notes |
+| --- | --- | --- |
+| `@render-harness/cap-github` | `/connectors/github` | One run per GitHub delivery. |
+| `@render-harness/cap-linear` | `/connectors/linear` | One run per Linear webhook event. |
+| `@render-harness/cap-slack` | `/connectors/slack` | One conversation per Slack thread. |
+| `@render-harness/cap-webhook-generic` | `/connectors/webhook-generic` | HMAC-verified custom event sources. |
+
+Provider packs default to `accessMode: read`. Set `accessMode: read_write` only when the agent should get mutation tools, such as posting a Slack reply or updating an issue.

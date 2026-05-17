@@ -27,12 +27,13 @@ agents:
 
   - slug: support-bot
     name: "Support bot"
-    description: "Web + worker shape for queue-driven support flows (Slack, email, web form)."
+    description: "Slack-driven web + worker support flow with threaded replies."
     path: ./agents/support-bot
-    categories: ["support", "queue"]
+    categories: ["support", "queue", "slack"]
     runtimeKinds: ["web", "worker"]
     requiresHarness: "^0.1"
-    capabilities: []
+    capabilities:
+      - "@render-harness/cap-slack"
     author: "render-harness"
 
   - slug: work-monitor
