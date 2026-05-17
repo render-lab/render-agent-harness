@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiagnosticsBanner } from "./components/DiagnosticsBanner.js";
-import { DeploymentProvider, useDeploymentName } from "./deployment-context.js";
+import {
+  DeploymentProvider,
+  useDeploymentName,
+  useHarnessVersionLabel,
+} from "./deployment-context.js";
 import { uiPath } from "./lib/mount.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
@@ -76,6 +80,7 @@ export function App() {
 function AppInner() {
   const [route, setRoute] = useState<Route>(() => parseHash());
   const deploymentName = useDeploymentName();
+  const harnessVersion = useHarnessVersionLabel();
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -138,6 +143,7 @@ function AppInner() {
           <div className="mt-3 text-[10px] uppercase tracking-wider text-muted">
             {deploymentName}
           </div>
+          <div className="mt-1 font-mono text-[10px] text-muted">{harnessVersion}</div>
         </div>
 
         <nav className="flex flex-wrap gap-0 lg:block lg:flex-1 lg:overflow-y-auto">

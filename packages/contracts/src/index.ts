@@ -377,6 +377,8 @@ export interface DeploymentInfo {
   bundleSlug?: string;
   agents: DeploymentAgentInfo[];
   capabilityPacks?: string[];
+  /** Declared and running harness package versions for compatibility warnings. */
+  harness?: HarnessVersionInfo;
   /**
    * Origin of the wizard service that owns the GitHub App credentials
    * for in-UI edits (e.g. model changes). When absent, the operator UI
@@ -412,6 +414,19 @@ export interface DeploymentInfo {
     /** Whether `RENDER_API_KEY` is set on this service. */
     apiKeyConfigured: boolean;
   };
+}
+
+export type HarnessCompatibilityStatus = "ok" | "warning" | "incompatible" | "unknown";
+
+export interface HarnessVersionInfo {
+  /** The manifest's declared harness range, from render-harness.yaml. */
+  declaredRange: string | null;
+  /** Best-effort versions of loaded first-party harness packages. */
+  running: Record<string, string>;
+  /** Overall compatibility summary for the running deployment. */
+  status: HarnessCompatibilityStatus;
+  /** Human-readable warnings, safe to show in UI and Diagnostics. */
+  messages: string[];
 }
 
 /**

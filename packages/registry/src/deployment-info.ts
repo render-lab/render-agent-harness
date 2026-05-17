@@ -6,6 +6,7 @@ import type {
   DeploymentEnvVar,
   DeploymentInfo,
 } from "@render-harness/contracts";
+import { buildHarnessVersionInfo, CORE_HARNESS_PACKAGES } from "./harness-version.js";
 import type { LoadedPack } from "./load-pack.js";
 import type { AgentEntryInput, EnvVarSpec, HarnessConfig, RuntimeBlockInput } from "./schema.js";
 import { isWorkflowTaskAgent } from "./schema.js";
@@ -26,6 +27,13 @@ export function toDeploymentInfo(config: HarnessConfig): DeploymentInfo {
     name: config.name,
     description: config.description,
     agents: config.agents.map(toAgentInfo),
+    harness: buildHarnessVersionInfo({
+      declaredRange: config.harnessVersion,
+      packageNames: [
+        ...CORE_HARNESS_PACKAGES,
+        ...(config.capabilities ?? []).map((cap) => cap.pack),
+      ],
+    }),
   };
   const caps = config.capabilities?.map((c) => c.pack);
   if (caps && caps.length > 0) info.capabilityPacks = caps;

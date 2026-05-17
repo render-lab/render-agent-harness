@@ -35,6 +35,10 @@
       "types": "./dist/gallery.d.ts",
       "import": "./dist/gallery.js"
     },
+    "./harness-version": {
+      "types": "./dist/harness-version.d.ts",
+      "import": "./dist/harness-version.js"
+    },
     "./deploy": {
       "types": "./dist/deploy/index.d.ts",
       "import": "./dist/deploy/index.js"

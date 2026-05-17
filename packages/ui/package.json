@@ -34,8 +34,8 @@
   "dependencies": {
     "@assistant-ui/react": "^0.14.0",
     "@hono/node-server": "^2.0.2",
-    "@render-harness/contracts": "^0.1.1",
-    "@render-harness/core": "^0.1.1",
+    "@render-harness/contracts": "workspace:*",
+    "@render-harness/core": "workspace:*",
     "hono": "^4.12.18",
     "mermaid": "^11.15.0",
     "pg": "^8.20.0"

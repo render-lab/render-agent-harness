@@ -48,6 +48,8 @@ export function ConfigTab() {
 
   return (
     <div className="space-y-6">
+      <HarnessVersionPanel deployment={deployment} />
+
       <section>
         <SectionHeader title="ENV VARS" />
         <ConfigStatusBanner deployment={deployment} />
@@ -84,6 +86,40 @@ export function ConfigTab() {
         />
       ) : null}
     </div>
+  );
+}
+
+function HarnessVersionPanel({ deployment }: { deployment: ReturnType<typeof useDeployment> }) {
+  const harness = deployment?.harness;
+  if (!harness) return null;
+  const rows = Object.entries(harness.running).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <section>
+      <SectionHeader title="HARNESS VERSION" />
+      <div className="border border-line p-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="badge">{harness.status}</span>
+          <span className="text-muted">
+            declared: <span className="font-mono">{harness.declaredRange ?? "unknown"}</span>
+          </span>
+        </div>
+        {harness.messages.length > 0 ? (
+          <ul className="mt-3 space-y-1 text-[11px] text-muted">
+            {harness.messages.map((msg) => (
+              <li key={msg}>{`// ${msg}`}</li>
+            ))}
+          </ul>
+        ) : null}
+        <dl className="mt-3 grid gap-1 text-[11px] sm:grid-cols-2">
+          {rows.map(([name, version]) => (
+            <div key={name} className="flex justify-between gap-3 border border-line px-2 py-1">
+              <dt className="truncate font-mono">{name}</dt>
+              <dd className="font-mono text-muted">{version}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
   );
 }
 

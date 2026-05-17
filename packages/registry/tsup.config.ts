@@ -7,6 +7,7 @@ export default defineConfig({
     capability: "src/capability.ts",
     "capability-index": "src/capability-index.ts",
     "capability-validate": "src/capability-validate.ts",
+    "harness-version": "src/harness-version.ts",
     emitter: "src/emitter.ts",
     gallery: "src/gallery.ts",
     "builtin-chat": "src/builtin-chat.ts",

@@ -77,6 +77,11 @@ export {
   ResolvedGallerySchema,
   serializeGallery,
 } from "./gallery.js";
+export {
+  buildHarnessVersionInfo,
+  CORE_HARNESS_PACKAGES,
+  readPackageVersion,
+} from "./harness-version.js";
 export { type EnvLookup, interpolate, interpolateTree } from "./interpolate.js";
 export {
   type DefineFromConfigOpts,
