@@ -57,19 +57,21 @@ export function packageJson(answers: Answers): string {
     "@render-harness/registry": harnessDep("@render-harness/registry"),
   };
   for (const kind of runtimeKinds) {
-    // With UI enabled the web entry uses @render-harness/web (not runtime-web),
+    // With UI or connectors enabled the web entry uses @render-harness/web (not runtime-web),
     // which transitively wraps runtime-web. Skip the direct runtime-web dep.
-    if (kind === "web" && answers.ui) continue;
+    if (kind === "web" && usesWebPackage(answers)) continue;
     const pkg = runtimePackageFor(kind);
     dependencies[pkg] = harnessDep(pkg);
   }
-  if (answers.ui) {
+  if (usesWebPackage(answers)) {
     dependencies["@render-harness/web"] = harnessDep("@render-harness/web");
+  }
+  if (answers.ui) {
     dependencies["@render-harness/ui"] = harnessDep("@render-harness/ui");
   }
   // dotenv is used by cron, worker, and the UI-flavored web entry for
   // .env loading during local dev.
-  if (runtimeKinds.includes("cron") || runtimeKinds.includes("worker") || answers.ui) {
+  if (runtimeKinds.includes("cron") || runtimeKinds.includes("worker") || usesWebPackage(answers)) {
     dependencies.dotenv = "^17.4.2";
   }
   for (const cap of answers.capabilities) {
@@ -97,6 +99,21 @@ export function packageJson(answers: Answers): string {
   };
 
   return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+function usesWebPackage(answers: Answers): boolean {
+  return answers.ui || hasConnectorCapabilities(answers);
+}
+
+function hasConnectorCapabilities(answers: Answers): boolean {
+  return answers.capabilities.some((c) =>
+    [
+      "@render-harness/cap-webhook-generic",
+      "@render-harness/cap-github",
+      "@render-harness/cap-linear",
+      "@render-harness/cap-slack",
+    ].includes(c.pack),
+  );
 }
 
 /**

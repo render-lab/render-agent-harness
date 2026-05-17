@@ -126,6 +126,7 @@ await serveWeb({
   agents: agentsById,
   port,
   ui: config.shared?.ui ? { path: "/" } : false,
+  connectors: "from-config",
   deployment,
 });
 `;

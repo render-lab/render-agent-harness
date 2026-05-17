@@ -15,6 +15,7 @@ export function readme(answers: Answers): string {
   const run = scriptRunner(pm);
   const runtimeKinds = answers.runtimes.map((r) => r.kind);
   const runtimeBlurb = runtimeKindsBlurb(runtimeKinds);
+  const connectorBlurb = connectorInstructions(answers);
   const uiBlurb = answers.ui
     ? "\n\nThe operator chat UI is mounted at <http://127.0.0.1:8080/login>. Sign in with the value you set for `WEB_API_KEY`."
     : "";
@@ -107,7 +108,7 @@ capabilities:
   - pack: "@render-harness/cap-search-exa"
 \`\`\`
 
-Then re-run \`${run} build:bp\` so the pack's env requirements land in \`render.yaml\`.
+Then re-run \`${run} build:bp\` so the pack's env requirements land in \`render.yaml\`.${connectorBlurb}
 `;
 }
 
@@ -143,4 +144,43 @@ function runtimeKindsBlurb(kinds: readonly string[]): string {
       "- **worker** — always-on queue consumer. Reads jobs from the pg-boss queue declared in `render-harness.yaml`.",
   };
   return kinds.map((k) => blurbs[k] ?? `- **${k}**`).join("\n");
+}
+
+function connectorInstructions(answers: Answers): string {
+  const packs = new Set(answers.capabilities.map((c) => c.pack));
+  if (
+    !packs.has("@render-harness/cap-webhook-generic") &&
+    !packs.has("@render-harness/cap-github") &&
+    !packs.has("@render-harness/cap-linear")
+  ) {
+    return "";
+  }
+  const lines = [
+    "",
+    "## Connector webhooks",
+    "",
+    "Connector packs mount under `/connectors/:key` on the web service and enqueue work for the worker runtime.",
+    "",
+  ];
+  if (packs.has("@render-harness/cap-github")) {
+    lines.push(
+      "- GitHub webhook URL: `/connectors/github`. Configure the same secret as `GITHUB_WEBHOOK_SECRET` and select the events your agent should monitor.",
+    );
+  }
+  if (packs.has("@render-harness/cap-linear")) {
+    lines.push(
+      "- Linear webhook URL: `/connectors/linear`. Configure the same secret as `LINEAR_WEBHOOK_SECRET`.",
+    );
+  }
+  if (packs.has("@render-harness/cap-webhook-generic")) {
+    lines.push(
+      "- Generic webhook URL: `/connectors/webhook-generic`. Configure the same HMAC secret as `WEBHOOK_SECRET`.",
+    );
+  }
+  lines.push(
+    "",
+    "By default, provider packs use `accessMode: read`. Set `accessMode: read_write` in `render-harness.yaml` only when you want mutation tools to be available.",
+    "",
+  );
+  return lines.join("\n");
 }

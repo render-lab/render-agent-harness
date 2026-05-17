@@ -124,6 +124,7 @@ export async function runWizard(options: {
     options.gallery.capabilities,
     template?.capabilities ?? [],
   );
+  ensureConnectorRuntimes(runtimes, capabilities, agentName);
 
   const gitInit = await promptConfirm({
     message: "Initialize a git repo?",
@@ -456,4 +457,29 @@ function sanitizeName(raw: string): string {
     .replace(/^-+|-+$/g, "")
     .replace(/-+/g, "-");
   return cleaned || "my-agent";
+}
+
+const CONNECTOR_CAPABILITIES = new Set([
+  "@render-harness/cap-webhook-generic",
+  "@render-harness/cap-github",
+  "@render-harness/cap-linear",
+  "@render-harness/cap-slack",
+]);
+
+function ensureConnectorRuntimes(
+  runtimes: RuntimeSelection[],
+  capabilities: CapabilityPick[],
+  agentName: string,
+): void {
+  if (!capabilities.some((c) => CONNECTOR_CAPABILITIES.has(c.pack))) return;
+  const hasWeb = runtimes.some((r) => r.kind === "web");
+  const hasWorker = runtimes.some((r) => r.kind === "worker");
+  if (!hasWeb) runtimes.push({ kind: "web" });
+  if (!hasWorker) runtimes.push({ kind: "worker", queue: `${agentName}-runs` });
+  if (!hasWeb || !hasWorker) {
+    note(
+      "Connector packs receive webhooks on the web service and enqueue runs for a worker to process. Adding the missing web/worker runtime.",
+      "Connectors",
+    );
+  }
 }

@@ -383,6 +383,28 @@ describe("buildFileMap", () => {
     expect(multi.scripts["dev:web"]).toBeDefined();
     expect(multi.scripts["dev:worker"]).toBeDefined();
   });
+
+  it("uses serveWeb and connector env docs when connector capabilities are selected", () => {
+    const map = buildFileMap({
+      ...BASE,
+      directory: "/tmp/connectors",
+      runtimes: [{ kind: "web" }, { kind: "worker", queue: "work-runs" }],
+      capabilities: [
+        { pack: "@render-harness/cap-github" },
+        { pack: "@render-harness/cap-linear" },
+      ],
+    });
+    const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies["@render-harness/web"]).toBeDefined();
+    expect(pkg.dependencies["@render-harness/runtime-web"]).toBeUndefined();
+    expect(map.get("src/web.ts")).toContain('connectors: "from-config"');
+    expect(map.get(".env.example")).toContain("GITHUB_WEBHOOK_SECRET=");
+    expect(map.get(".env.example")).toContain("LINEAR_WEBHOOK_SECRET=");
+    expect(map.get("README.md")).toContain("/connectors/github");
+    expect(map.get("README.md")).toContain("/connectors/linear");
+  });
 });
 
 describe("generate", () => {

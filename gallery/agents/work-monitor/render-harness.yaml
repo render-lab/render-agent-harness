@@ -1,0 +1,75 @@
+schemaVersion: 1
+name: work-monitor
+description: GitHub and Linear monitoring agent. Watches work events and summarizes what changed.
+harnessVersion: "^0.1"
+license: MIT
+categories: [work, github, linear]
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    allowedTools:
+      - cap-github__github_get_issue
+      - cap-github__github_get_pull_request
+      - cap-github__github_list_pull_request_files
+      - cap-github__github_list_pull_request_reviews
+      - cap-github__github_list_pull_request_commits
+      - cap-github__github_list_issue_comments
+      - cap-github__github_get_content
+      - cap-github__github_list_checks
+      - cap-github__github_list_workflow_runs
+      - cap-github__github_get_workflow_run
+      - cap-github__github_list_workflow_run_jobs
+      - cap-linear__linear_get_issue
+      - cap-linear__linear_search_issues
+      - cap-linear__linear_list_comments
+      - cap-linear__linear_list_teams
+      - cap-linear__linear_list_projects
+      - cap-linear__linear_list_workflow_states
+      - cap-linear__linear_list_users
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: work-monitor
+      accessMode: read
+      webhookSecretEnv: GITHUB_WEBHOOK_SECRET
+      tokenEnv: GITHUB_TOKEN
+      events:
+        - issues
+        - issue_comment
+        - pull_request
+        - pull_request_review
+        - pull_request_review_comment
+        - check_run
+        - workflow_run
+  - pack: "@render-harness/cap-linear"
+    config:
+      agent: work-monitor
+      accessMode: read
+      webhookSecretEnv: LINEAR_WEBHOOK_SECRET
+      apiKeyEnv: LINEAR_API_KEY
+
+agents:
+  - id: work-monitor
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You monitor engineering and product work across GitHub and Linear.
+
+        Each run is triggered by a webhook event. Use the available read-only
+        tools to fetch the current state before summarizing what changed.
+        Be concise, include links when available, and call out anything that
+        appears blocked, risky, failing, or ready for review.
+
+        Do not mutate provider state unless the deployment explicitly enables
+        read_write mode and grants mutation tools.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: work-monitor-runs

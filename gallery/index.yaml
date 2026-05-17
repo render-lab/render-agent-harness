@@ -33,6 +33,17 @@ agents:
     capabilities: []
     author: "render-harness"
 
+  - slug: work-monitor
+    name: "Work monitor"
+    description: "GitHub + Linear work monitor that watches PRs, issues, checks, projects, and comments."
+    path: ./agents/work-monitor
+    categories: ["work", "github", "linear"]
+    runtimeKinds: ["web", "worker"]
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-linear"
+    author: "render-harness"
+
   - slug: research-cron
     name: "Research cron"
     description: "Scheduled research agent that runs on a cron and uses Exa web search."

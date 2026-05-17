@@ -17,7 +17,9 @@ import type { Answers, RuntimeSelection } from "../types.js";
 export function runtimeEntry(runtime: RuntimeSelection, answers: Answers): string {
   switch (runtime.kind) {
     case "web":
-      return answers.ui ? webEntryWithUi(answers) : webEntry();
+      return answers.ui || hasConnectorCapabilities(answers)
+        ? webEntryWithQueue(answers)
+        : webEntry();
     case "cron":
       return cronEntry();
     case "worker":
@@ -38,20 +40,21 @@ await serveAgent({ agent });
 `;
 }
 
-function webEntryWithUi(answers: Answers): string {
+function webEntryWithQueue(answers: Answers): string {
   // Find the worker queue so the web service enqueues onto the same one
   // the paired worker drains. The wizard guarantees a worker runtime
   // exists whenever ui is true.
   const worker = answers.runtimes.find((r) => r.kind === "worker");
   const defaultQueue = worker && worker.kind === "worker" ? worker.queue : "agent-runs";
   return `/**
- * Web runtime entrypoint with the operator UI mounted at /.
+ * Web runtime entrypoint backed by the worker queue.
  *
  * serveWeb() pairs with a worker runtime: HTTP requests enqueue jobs on
  * the pg-boss queue, the worker drains them, and the UI streams progress
- * back via Server-Sent Events.
+ * back via Server-Sent Events when enabled.
  *
- * Visit http://127.0.0.1:8080/login and sign in with WEB_API_KEY.
+ * Connector webhooks mount at /connectors/:key when connector packs are
+ * configured in render-harness.yaml.
  */
 
 import { serveWeb } from "@render-harness/web";
@@ -63,10 +66,22 @@ loadEnv({ quiet: true });
 await serveWeb({
   agent,
   queue: process.env.WORKER_QUEUE ?? ${JSON.stringify(defaultQueue)},
-  ui: { path: "/" },
+  ui: ${answers.ui ? '{ path: "/" }' : "false"},
+  ${hasConnectorCapabilities(answers) ? 'connectors: "from-config",' : ""}
   deployment,
 });
 `;
+}
+
+function hasConnectorCapabilities(answers: Answers): boolean {
+  return answers.capabilities.some((c) =>
+    [
+      "@render-harness/cap-webhook-generic",
+      "@render-harness/cap-github",
+      "@render-harness/cap-linear",
+      "@render-harness/cap-slack",
+    ].includes(c.pack),
+  );
 }
 
 function cronEntry(): string {
