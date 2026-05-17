@@ -9,7 +9,7 @@ import { type GenerateResult, generate } from "./generate.js";
 import { runWizard } from "./prompts.js";
 import { type Answers, type PackageManager, scriptRunner } from "./types.js";
 
-const USAGE = `Usage: create-render-agent [directory] [--harness-root <path>]
+const USAGE = `Usage: create-render-agent [directory] [--harness-root <path>] [--capability-catalog <path>]
 
 Scaffolds a new Render agent harness project. If [directory] is given, it
 is used as the target; otherwise the wizard prompts for it.
@@ -24,6 +24,7 @@ Options:
                           loads from the live repo instead of the
                           bundled snapshot. Use this until the harness
                           is published to npm.
+  --capability-catalog    Optional path to a capability catalog YAML/JSON file.
 `;
 
 async function main(): Promise<void> {
@@ -42,6 +43,10 @@ async function main(): Promise<void> {
   const harnessRootIdx = args.indexOf("--harness-root");
   const harnessRootRaw = harnessRootIdx >= 0 ? args[harnessRootIdx + 1] : undefined;
   const harnessRoot = harnessRootRaw ? resolve(harnessRootRaw) : null;
+  const capabilityCatalogIdx = args.indexOf("--capability-catalog");
+  const capabilityCatalogRaw =
+    capabilityCatalogIdx >= 0 ? args[capabilityCatalogIdx + 1] : undefined;
+  const capabilityCatalogPath = capabilityCatalogRaw ? resolve(capabilityCatalogRaw) : undefined;
   // --harness-root uses `link:<absolute-path>` deps in package.json. Only
   // pnpm honors that protocol correctly; npm interprets it differently
   // and `npm install` fails on the workspace links. Force pnpm in this
@@ -53,13 +58,14 @@ async function main(): Promise<void> {
     );
   }
 
-  const gallery = await resolveGallery(harnessRoot ? { liveSourceRoot: harnessRoot } : {}).catch(
-    (err) => {
-      stderr.write(`failed to load gallery: ${describeError(err)}\n`);
-      exit(2);
-      throw err; // unreachable, but appeases TS
-    },
-  );
+  const gallery = await resolveGallery({
+    ...(harnessRoot ? { liveSourceRoot: harnessRoot } : {}),
+    ...(capabilityCatalogPath ? { capabilityCatalogPath } : {}),
+  }).catch((err) => {
+    stderr.write(`failed to load gallery: ${describeError(err)}\n`);
+    exit(2);
+    throw err; // unreachable, but appeases TS
+  });
 
   let answers: Answers;
   try {

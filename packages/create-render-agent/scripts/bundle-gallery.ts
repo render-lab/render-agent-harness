@@ -19,17 +19,27 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadCapabilityCatalog } from "@render-harness/registry/capability-index";
 import { loadGalleryFromSource, serializeGallery } from "@render-harness/registry/gallery";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = resolve(HERE, "..");
 const HARNESS_ROOT = resolve(CLI_ROOT, "..", "..");
 const BUNDLE_PATH = resolve(CLI_ROOT, "bundled-gallery", "gallery.json");
+const CAPABILITY_CATALOG_BUNDLE_PATH = resolve(
+  CLI_ROOT,
+  "bundled-gallery",
+  "capability-catalog.json",
+);
 
 async function main(): Promise<void> {
   const gallery = await loadGalleryFromSource({ root: HARNESS_ROOT });
+  const catalog = await loadCapabilityCatalog(
+    resolve(HARNESS_ROOT, "capability-catalog", "index.yaml"),
+  );
   await mkdir(dirname(BUNDLE_PATH), { recursive: true });
   await writeFile(BUNDLE_PATH, serializeGallery(gallery), "utf8");
+  await writeFile(CAPABILITY_CATALOG_BUNDLE_PATH, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
   process.stdout.write(
     `bundled-gallery: ${gallery.agents.length} agents, ${gallery.capabilities.length} capabilities → ${BUNDLE_PATH}\n`,
   );
