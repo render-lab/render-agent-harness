@@ -14,6 +14,7 @@ import {
 import { type Context, Hono } from "hono";
 import { PgBoss } from "pg-boss";
 import { defaultApiKeyAuth } from "./auth.js";
+import { type ConnectorMountConfig, mountConnectorsIfAvailable } from "./connector-mount.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
@@ -30,6 +31,7 @@ import {
   wrapWithUiSessionIfAvailable,
 } from "./ui-mount.js";
 
+export type { ConnectorMountConfig } from "./connector-mount.js";
 export type { DiagnosticCheck } from "./routes/diagnostics.js";
 export type { UiMountConfig } from "./ui-mount.js";
 
@@ -115,6 +117,12 @@ export interface ServeWebOpts {
    * optional — services that don't want it don't pay the bundle cost.
    */
   ui?: boolean | UiMountConfig;
+  /**
+   * Mount inbound connector webhooks at `/connectors/:key`. Pass explicit
+   * capability refs, `"from-config"` to read `render-harness.yaml`, or an
+   * object for custom entry root / env handling.
+   */
+  connectors?: ConnectorMountConfig;
   /**
    * Bundle metadata returned by `GET /deployment`. The operator UI uses
    * this to label the header and template the in-product Guide against
@@ -217,6 +225,19 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
   registerScheduleRoutes(app, { pool, auth, pathPrefix });
   registerDiagnosticsRoutes(app, { pool, auth, agents, queue, pathPrefix });
   registerBlueprintRoutes(app, { auth, agents, queue, pathPrefix });
+
+  if (opts.connectors) {
+    await mountConnectorsIfAvailable({
+      app,
+      connectors: opts.connectors,
+      pool,
+      boss,
+      queue,
+      logger,
+      agents,
+      pathPrefix,
+    });
+  }
 
   if (opts.ui) {
     const uiCfg: UiMountConfig = typeof opts.ui === "object" ? opts.ui : {};

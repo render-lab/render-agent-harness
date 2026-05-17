@@ -32,7 +32,19 @@
  * default export against {@link CapabilityPackSchema}.
  */
 
-import type { LocalToolHandler, McpServerConfig, SkillMetadata } from "@render-harness/core";
+import type {
+  AgentDefinition,
+  AgentRun,
+  ContentBlock,
+  ConversationId,
+  LocalToolHandler,
+  Logger,
+  McpServerConfig,
+  Pool,
+  RunId,
+  SkillMetadata,
+  UserId,
+} from "@render-harness/core";
 import { z } from "zod";
 import { type EnvVarSpec, EnvVarSpecSchema } from "./schema.js";
 
@@ -116,6 +128,56 @@ export interface PackContext {
 }
 
 // ----------------------------------------------------------------------
+// Connector contributions
+// ----------------------------------------------------------------------
+
+export interface ConnectorEnqueueRunArgs {
+  agentName: string;
+  agentVersion: string;
+  userId?: UserId | null;
+  conversationId?: ConversationId | null;
+  initialContent?: ContentBlock[];
+  metadata?: Record<string, unknown>;
+  runId?: RunId;
+}
+
+export interface ConnectorEnqueueConversationArgs extends ConnectorEnqueueRunArgs {
+  conversationId: ConversationId;
+  title?: string | null;
+  conversationMetadata?: Record<string, unknown>;
+}
+
+export type ConnectorEnqueueResult =
+  | { status: "enqueued"; runId: RunId; conversationId?: ConversationId }
+  | { status: "duplicate"; runId: RunId; existing: AgentRun }
+  | { status: "active_run_exists"; conversationId: ConversationId; activeRun: AgentRun };
+
+export interface ConnectorWebCtx {
+  pool: Pool;
+  logger: Logger;
+  /** Pack config from render-harness.yaml. Packs own their config validation. */
+  config: Record<string, unknown>;
+  /** Resolve the configured target agent, or throw a clear connector error. */
+  resolveAgent: (agentName?: string) => AgentDefinition;
+  /** Enqueue a one-shot run, usually for webhook deliveries. */
+  enqueueRun: (args: ConnectorEnqueueRunArgs) => Promise<ConnectorEnqueueResult>;
+  /** Create/load a conversation and enqueue a run unless another turn is active. */
+  enqueueIntoConversation: (
+    args: ConnectorEnqueueConversationArgs,
+  ) => Promise<ConnectorEnqueueResult>;
+}
+
+export interface ConnectorContribution {
+  /** URL segment under /connectors/. Defaults to the pack's name. */
+  key?: string;
+  /**
+   * Mounted at POST and GET /connectors/<key>. The connector verifies
+   * provider auth, normalizes the event, enqueues work, and returns quickly.
+   */
+  webhook: (req: Request, ctx: ConnectorWebCtx) => Promise<Response>;
+}
+
+// ----------------------------------------------------------------------
 // Pack contract
 // ----------------------------------------------------------------------
 
@@ -145,6 +207,8 @@ export interface CapabilityPack {
    * Called at build time only — the runtime library never invokes this.
    */
   renderServices?: (ctx: PackContext) => RenderServiceSpec[] | Promise<RenderServiceSpec[]>;
+  /** Inbound webhook/event receivers mounted by @render-harness/web. */
+  connectors?: (ctx: PackContext) => ConnectorContribution[] | Promise<ConnectorContribution[]>;
 }
 
 /**
@@ -173,6 +237,7 @@ const PackShapeSchema = z
     mcpServers: z.unknown().optional(),
     skills: z.unknown().optional(),
     renderServices: z.unknown().optional(),
+    connectors: z.unknown().optional(),
   })
   .passthrough();
 
