@@ -223,7 +223,14 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
   });
   registerUsageRoutes(app, { pool, auth, pathPrefix });
   registerScheduleRoutes(app, { pool, auth, pathPrefix });
-  registerDiagnosticsRoutes(app, { pool, auth, agents, queue, pathPrefix });
+  registerDiagnosticsRoutes(app, {
+    pool,
+    auth,
+    agents,
+    queue,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
   registerBlueprintRoutes(app, { auth, agents, queue, pathPrefix });
 
   if (opts.connectors) {

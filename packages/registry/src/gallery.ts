@@ -30,7 +30,12 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { flattenRuntimeKinds, type HarnessConfig, HarnessConfigSchema } from "./schema.js";
+import {
+  flattenRuntimeKinds,
+  type HarnessConfig,
+  HarnessConfigSchema,
+  SemverRangeSchema,
+} from "./schema.js";
 
 // ----------------------------------------------------------------------
 // Raw index schema (gallery/index.yaml)
@@ -59,6 +64,8 @@ export const GalleryAgentEntrySchema = z
     categories: z.array(slugSchema).max(20).optional(),
     /** Runtime kinds declared by the entry's render-harness.yaml. Cross-checked at load time. */
     runtimeKinds: z.array(runtimeKindSchema).min(1).max(4),
+    /** Harness version range required by this gallery entry. */
+    requiresHarness: SemverRangeSchema.optional(),
     /** npm package names of capability packs the entry pre-selects. */
     capabilities: z.array(z.string().min(1)).max(20).optional(),
     author: z.string().min(1).max(128).optional(),
@@ -105,6 +112,7 @@ const ResolvedAgentEntrySchema = z
     description: z.string().min(1).max(280),
     categories: z.array(slugSchema).max(20),
     runtimeKinds: z.array(runtimeKindSchema).min(1).max(4),
+    requiresHarness: SemverRangeSchema.nullable(),
     capabilities: z.array(z.string().min(1)).max(20),
     author: z.string().min(1).max(128).nullable(),
     /**
@@ -153,6 +161,7 @@ export interface ResolvedAgentEntry {
   description: string;
   categories: string[];
   runtimeKinds: GalleryRuntimeKind[];
+  requiresHarness: string | null;
   capabilities: string[];
   author: string | null;
   kind: GalleryEntryKind;
@@ -224,6 +233,7 @@ export async function loadGalleryFromSource(
       description: entry.description,
       categories: entry.categories ?? [],
       runtimeKinds: entry.runtimeKinds,
+      requiresHarness: entry.requiresHarness ?? null,
       capabilities: entry.capabilities ?? [],
       author: entry.author ?? null,
       kind,

@@ -25,6 +25,7 @@ describe("GalleryIndexSchema", () => {
           description: "x",
           path: "./agents/chat",
           runtimeKinds: ["web"],
+          requiresHarness: "^0.1",
         },
       ],
     });
@@ -62,6 +63,7 @@ describe("loadGalleryFromSource", () => {
     for (const a of gallery.agents) {
       expect(a.manifest.name).toBeTruthy();
       expect(a.manifest.agents.length).toBeGreaterThan(0);
+      expect(a.requiresHarness).toBeTruthy();
       expect(a.kind).toMatch(/^(agent|bundle)$/);
       expect(a.sourceFiles).toBeDefined();
     }
@@ -87,6 +89,7 @@ agents:
     description: drifted entry
     path: ./agents/wrong
     runtimeKinds: [web, worker]   # declared
+    requiresHarness: "^0.1"
 `,
         "utf8",
       );
@@ -156,6 +159,7 @@ describe("bundle round-trip", () => {
           description: "x",
           categories: [],
           runtimeKinds: ["web"],
+          requiresHarness: "^0.1",
           capabilities: [],
           author: null,
           kind: "agent",

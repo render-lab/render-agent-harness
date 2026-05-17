@@ -21,6 +21,7 @@ agents:
     path: ./agents/chat
     categories: ["starter"]
     runtimeKinds: ["web"]
+    requiresHarness: "^0.1"
     capabilities: []
     author: "render-harness"
 
@@ -30,6 +31,7 @@ agents:
     path: ./agents/support-bot
     categories: ["support", "queue"]
     runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.1"
     capabilities: []
     author: "render-harness"
 
@@ -39,6 +41,7 @@ agents:
     path: ./agents/work-monitor
     categories: ["work", "github", "linear"]
     runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.1"
     capabilities:
       - "@render-harness/cap-github"
       - "@render-harness/cap-linear"
@@ -50,6 +53,7 @@ agents:
     path: ./agents/research-cron
     categories: ["research", "scheduled"]
     runtimeKinds: ["cron"]
+    requiresHarness: "^0.1"
     capabilities:
       - "@render-harness/cap-search-exa"
     author: "render-harness"
@@ -60,6 +64,7 @@ agents:
     path: ./agents/chief-of-staff
     categories: ["bundle", "personal", "hiring"]
     runtimeKinds: ["web", "worker", "cron", "workflows"]
+    requiresHarness: "^0.1"
     capabilities:
       - "@render-harness/cap-memory-pg"
     author: "render-harness"

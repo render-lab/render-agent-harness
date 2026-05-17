@@ -1,4 +1,4 @@
-import type { DiagnosticCheck } from "@render-harness/contracts";
+import type { DeploymentInfo, DiagnosticCheck } from "@render-harness/contracts";
 import type { AgentDefinition, Pool, UserId } from "@render-harness/core";
 import type { Hono } from "hono";
 
@@ -10,16 +10,22 @@ export interface DiagnosticsRouteContext {
   agents: Record<string, AgentDefinition>;
   queue: string;
   pathPrefix: string;
+  deployment?: DeploymentInfo;
 }
 
 export function registerDiagnosticsRoutes(app: Hono, ctx: DiagnosticsRouteContext): void {
-  const { pool, auth, agents, queue, pathPrefix } = ctx;
+  const { pool, auth, agents, queue, pathPrefix, deployment } = ctx;
   const r = (path: string) => `${pathPrefix}${path}`;
 
   app.get(r("/diagnostics"), async (c) => {
     const userId = await auth(c.req.raw);
     if (!userId) return c.json({ error: "unauthorized" }, 401);
-    const checks = await runDiagnostics({ pool, agents, queue });
+    const checks = await runDiagnostics({
+      pool,
+      agents,
+      queue,
+      ...(deployment ? { deployment } : {}),
+    });
     return c.json({ checks });
   });
 }
@@ -28,6 +34,7 @@ interface RunDiagnosticsArgs {
   pool: Pool;
   agents: Record<string, AgentDefinition>;
   queue: string;
+  deployment?: DeploymentInfo;
 }
 
 /**
@@ -37,6 +44,28 @@ interface RunDiagnosticsArgs {
  */
 async function runDiagnostics(args: RunDiagnosticsArgs): Promise<DiagnosticCheck[]> {
   const checks: DiagnosticCheck[] = [];
+  if (args.deployment?.harness) {
+    const harness = args.deployment.harness;
+    const check: DiagnosticCheck = {
+      id: "harness_version",
+      level: harness.status === "ok" ? "ok" : harness.status === "incompatible" ? "error" : "warn",
+      title:
+        harness.status === "ok"
+          ? "Harness version is coherent"
+          : harness.status === "unknown"
+            ? "Harness version is unknown"
+            : "Harness version needs attention",
+      message:
+        harness.messages.length > 0
+          ? harness.messages.join(" ")
+          : `Running ${Object.values(harness.running)[0] ?? "unknown"} for declared range ${harness.declaredRange ?? "unknown"}.`,
+    };
+    if (harness.status !== "ok") {
+      check.hint =
+        "Check the Config tab's Harness Version panel and update first-party packages together.";
+    }
+    checks.push(check);
+  }
 
   // Auth: web's bearer auth fails closed without WEB_API_KEY.
   if (!process.env.WEB_API_KEY) {

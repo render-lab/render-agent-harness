@@ -39,6 +39,7 @@ describe("CapabilityCatalogSchema", () => {
             name: "Thing",
             description: "Adds thing tools.",
             versionRange: "^0.1",
+            requiresHarness: "^0.1",
             features: ["tools"],
           },
           {
@@ -46,6 +47,7 @@ describe("CapabilityCatalogSchema", () => {
             name: "Thing again",
             description: "Duplicate.",
             versionRange: "^0.1",
+            requiresHarness: "^0.1",
             features: ["skills"],
           },
         ],
@@ -65,6 +67,7 @@ describe("capability catalog fixture", () => {
       "@render-harness/cap-linear",
     ]);
     expect(catalog.capabilities[1]?.connectors[0]?.key).toBe("github");
+    expect(catalog.capabilities[1]?.requiresHarness).toBe("^0.1");
   });
 
   it("round-trips through YAML serialization", () => {
@@ -74,6 +77,7 @@ capabilities:
     name: Thing
     description: Adds thing tools.
     versionRange: "^0.1"
+    requiresHarness: "^0.1"
     features: [tools]
 `);
     expect(parseCapabilityCatalogYaml(serializeCapabilityCatalog(catalog))).toEqual(catalog);

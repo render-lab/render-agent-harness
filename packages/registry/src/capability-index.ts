@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { z } from "zod";
-import { EnvVarSpecSchema } from "./schema.js";
+import { EnvVarSpecSchema, SemverRangeSchema } from "./schema.js";
 
 const slugSchema = z
   .string()
@@ -82,7 +82,8 @@ export const CapabilityCatalogEntrySchema = z
     docs: urlSchema.optional(),
     license: z.string().min(1).max(64).optional(),
     maintainer: z.string().min(1).max(128).optional(),
-    versionRange: z.string().min(1).max(64),
+    versionRange: SemverRangeSchema,
+    requiresHarness: SemverRangeSchema.optional(),
     features: z.array(CapabilityFeatureSchema).min(1).max(5),
     envVars: z.array(EnvVarSpecSchema).default([]),
     permissions: CapabilityPermissionProfileSchema.optional(),

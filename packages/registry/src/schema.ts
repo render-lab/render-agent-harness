@@ -28,10 +28,11 @@ const slugSchema = z
   .max(63)
   .regex(/^[a-z0-9][a-z0-9-]*$/, "must match [a-z0-9][a-z0-9-]*");
 
-const semverRangeSchema = z
+export const SemverRangeSchema = z
   .string()
   .min(1)
   .max(64)
+  .regex(/^[~^<>=*xX0-9a-zA-Z._| -]+$/, "must be an npm-style semver range")
   .describe("npm-style semver range, e.g. ^0.1 or 0.2.x");
 
 const sha40Schema = z
@@ -300,7 +301,7 @@ export const CapabilityRefSchema = z
         "must be a valid npm package name",
       ),
     /** npm-style semver range. Optional — the entry's package.json is the source of truth. */
-    version: semverRangeSchema.optional(),
+    version: SemverRangeSchema.optional(),
     /** Free-form user config object passed to the pack at load time. */
     config: z.record(z.string(), z.unknown()).optional(),
   })
@@ -393,7 +394,7 @@ export const HarnessConfigSchema = z
     name: slugSchema,
     description: z.string().min(1).max(280),
     /** Compatible @render-harness/core version range. */
-    harnessVersion: semverRangeSchema,
+    harnessVersion: SemverRangeSchema,
     license: z.string().min(1).max(64).optional(),
     author: z.string().min(1).max(128).optional(),
     categories: z.array(slugSchema).max(20).optional(),
