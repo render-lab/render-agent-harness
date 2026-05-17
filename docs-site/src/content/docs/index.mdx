@@ -5,7 +5,9 @@ description: Build, deploy, and operate agents on Render primitives.
 
 Render Harness is a TypeScript framework for building agents that run on Render primitives: Web Services, Workers, Cron Jobs, Workflows, Postgres, and Key Value.
 
-Render Harness gives agent projects a shared execution loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI.
+The harness model is designed and optimized for Render service shapes. It maps agent work to the Render service that fits it: request entrypoints run through web services, queue-backed work runs on workers, scheduled work runs on Cron Jobs, durable long-running work runs on Workflows, and shared state lives in Render Postgres and Key Value.
+
+Render Harness gives agent projects a shared execution loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI without asking authors to reassemble those Render services by hand.
 
 Render Harness is extensible by design. The included agents, templates, examples, and capability packs are starting points: useful as shipped when they match your use case, and meant to be copied, edited, combined, or replaced when they do not. Your product logic lives in agents and capabilities; the harness supplies the production substrate around them.
 
@@ -187,9 +189,9 @@ If you want to run or change code, start here:
 - [Web API](/web-api/): Integrate custom frontends, bots, webhooks, and internal tools.
 - [Operator UI](/operator-ui/): Operate a deployed harness.
 - [Capabilities](/capabilities/): Add tools and integration packs.
-- [Registry publishing](/registry-publishing/): Publish an entry with a generated Blueprint and pinned SHA.
+- [Template catalog](/template-catalog/): Add scaffoldable starters to the CLI and wizard.
+- [Registry publishing](/registry-publishing/): Publish a finished deployable repo with a generated Blueprint and pinned SHA.
 - [Authoring capability packs](/authoring-capability-packs/): Ship reusable tools, MCP servers, and setup requirements.
-- [Authoring bundle templates](/authoring-bundle-templates/): Add multi-agent starters to the template catalog.
 - [Built-in tools](/built-in-tools/): Understand the tools core can add automatically.
 - [State and streaming](/state-and-streaming/): Understand persistence, cancellation, and SSE updates.
 - [Operations](/operations/): Debug deployed harnesses and common failure modes.

@@ -256,6 +256,41 @@ export interface UsageRow {
   outputTokens: number;
 }
 
+export type VitalsMetricKind = "cpu" | "memory" | "httpLatencyP95";
+
+export interface VitalsMetricPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface VitalsMetricSeries {
+  kind: VitalsMetricKind;
+  label: string;
+  unit: "percent" | "bytes" | "milliseconds";
+  points: VitalsMetricPoint[];
+}
+
+export interface VitalsInstance {
+  id: string;
+  name: string | null;
+  status: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface VitalsLogEntry {
+  id: string;
+  timestamp: string;
+  message: string;
+  level: string | null;
+  type: string | null;
+  resource: string | null;
+  instance: string | null;
+  method: string | null;
+  path: string | null;
+  statusCode: string | null;
+}
+
 // --------------------------------------------------------------------
 // Scheduled runs
 // --------------------------------------------------------------------
@@ -436,6 +471,16 @@ export interface DeploymentInfo {
     /** Whether `RENDER_API_KEY` is set on this service. */
     apiKeyConfigured: boolean;
   };
+  /**
+   * Optional operator UI feature flags. These gate high-privilege or
+   * Render-API-backed UI surfaces without exposing secrets to the browser.
+   */
+  operatorFeatures?: {
+    vitals: {
+      enabled: boolean;
+      missing: string[];
+    };
+  };
 }
 
 export type HarnessCompatibilityStatus = "ok" | "warning" | "incompatible" | "unknown";
@@ -488,6 +533,22 @@ export interface DiagnosticsResp {
 
 export interface UsageResp {
   rollups: UsageRow[];
+}
+
+export interface VitalsResp {
+  serviceId: string;
+  range: {
+    startTime: string;
+    endTime: string;
+    resolutionSeconds: number;
+  };
+  instances: VitalsInstance[];
+  metrics: VitalsMetricSeries[];
+}
+
+export interface VitalsLogsResp {
+  logs: VitalsLogEntry[];
+  nextCursor: string | null;
 }
 
 export interface ListSchedulesResp {

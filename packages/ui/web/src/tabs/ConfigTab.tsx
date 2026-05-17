@@ -49,6 +49,15 @@ export function ConfigTab() {
   return (
     <div className="space-y-6">
       <HarnessVersionPanel deployment={deployment} />
+      <FeatureTogglePanel
+        deployment={deployment}
+        canWrite={canWrite}
+        renderServiceId={renderServiceId}
+        onSaved={() => {
+          void refresh();
+          window.setTimeout(() => void refresh(), 5_000);
+        }}
+      />
 
       <section>
         <SectionHeader title="ENV VARS" />
@@ -86,6 +95,84 @@ export function ConfigTab() {
         />
       ) : null}
     </div>
+  );
+}
+
+function FeatureTogglePanel({
+  deployment,
+  canWrite,
+  renderServiceId,
+  onSaved,
+}: {
+  deployment: ReturnType<typeof useDeployment>;
+  canWrite: boolean;
+  renderServiceId: string | null;
+  onSaved: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const vitals = deployment?.operatorFeatures?.vitals;
+  if (!deployment) return null;
+
+  const enabled = vitals?.enabled === true;
+  const missing = vitals?.missing ?? [];
+  const dashboardUrl = renderServiceId
+    ? `https://dashboard.render.com/services/${encodeURIComponent(renderServiceId)}/env`
+    : "https://dashboard.render.com";
+
+  const toggleVitals = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await setEnvVar("RENDER_HARNESS_VITALS_ENABLED", enabled ? "0" : "1");
+      if (res.ok || res.restart) {
+        onSaved();
+        return;
+      }
+      setError(res.details ?? res.error ?? "save failed");
+    } catch (err) {
+      if (err instanceof TypeError) {
+        onSaved();
+        return;
+      }
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section>
+      <SectionHeader title="FEATURES" />
+      <div className="panel flex flex-wrap items-start gap-3 p-3 text-xs">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm">Vitals</span>
+            <span className={`badge ${enabled ? "badge-fill" : ""}`}>
+              {enabled ? "enabled" : "disabled"}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            Shows Render instances, CPU, memory, HTTP latency, and logs in the operator UI.
+          </p>
+          {missing.length > 0 ? (
+            <p className="mt-1 text-[11px] text-muted">
+              Missing: <span className="font-mono">{missing.join(", ")}</span>
+            </p>
+          ) : null}
+          {error ? <p className="mt-2 text-[11px] text-err">{error}</p> : null}
+        </div>
+        {canWrite ? (
+          <button type="button" className="btn" onClick={toggleVitals} disabled={submitting}>
+            {submitting ? "saving" : enabled ? "disable" : "enable"}
+          </button>
+        ) : (
+          <a className="btn" href={dashboardUrl} target="_blank" rel="noreferrer">
+            open env
+          </a>
+        )}
+      </div>
+    </section>
   );
 }
 

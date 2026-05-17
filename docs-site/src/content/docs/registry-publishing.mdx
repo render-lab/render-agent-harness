@@ -1,18 +1,22 @@
 ---
 title: Registry Publishing
-description: Publish an agent entry so others can deploy it from the registry.
+description: Publish a pinned deployable repo so others can deploy it from the registry.
 ---
 
-Use the registry publishing flow when you have a working harness project and want other people to deploy it with a Deploy to Render button.
+Use the registry publishing flow when you have a working harness project in its own Git repository and want other people to deploy that exact project with a Deploy to Render button.
+
+Registry publishing is not the starter-template workflow. If you are adding a scaffoldable starter to this repository, use [Template catalog](/template-catalog/) instead. If that starter is a multi-agent bundle, use [Authoring bundle templates](/authoring-bundle-templates/) as the bundle-specific subcase.
+
+The registry website is [render-agent-harness-r5pq.onrender.com](https://render-agent-harness-r5pq.onrender.com/). It points at external, immutable deployable repos. Each entry is pinned to a Git commit SHA so the generated Render Blueprint and source code are reproducible.
 
 ## Publishing flow
 
-1. Scaffold or create a project with `render-harness.yaml`.
-2. Add any custom agent code, MCP servers, capabilities, and environment schema.
+1. Scaffold or create a working project in its own Git repo.
+2. Add `render-harness.yaml`, custom agent code, MCP servers, capabilities, and environment schema.
 3. Generate `render.yaml` from the manifest.
 4. Commit the manifest, generated Blueprint, source files, and README.
 5. Pin the registry entry to a Git commit SHA.
-6. Submit the entry to `registry-index/index.json`.
+6. Submit the entry through the registry website.
 
 ## Generate the Blueprint
 
@@ -42,9 +46,13 @@ git rev-parse HEAD
 
 Registry entries should point at an immutable SHA, not a floating branch. This makes Deploy to Render links reproducible.
 
-## Submit to the index
+## Submit to the registry
 
-Add an object to `registry-index/index.json`:
+Use the registry website to submit the pinned repo:
+
+[Open the registry](https://render-agent-harness-r5pq.onrender.com/)
+
+The registry records entries with this shape:
 
 ```json
 {

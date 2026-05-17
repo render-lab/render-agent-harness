@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiagnosticsBanner } from "./components/DiagnosticsBanner.js";
 import {
   DeploymentProvider,
+  useDeployment,
   useDeploymentName,
   useHarnessVersionLabel,
 } from "./deployment-context.js";
@@ -14,8 +15,18 @@ import { type GuideSectionId, GuideTab, isGuideSectionId } from "./tabs/GuideTab
 import { RunsTab } from "./tabs/RunsTab.js";
 import { ScheduledTab } from "./tabs/ScheduledTab.js";
 import { UsageTab } from "./tabs/UsageTab.js";
+import { VitalsTab } from "./tabs/VitalsTab.js";
 
-type TabId = "chat" | "runs" | "agents" | "scheduled" | "config" | "usage" | "guide" | "docs";
+type TabId =
+  | "chat"
+  | "runs"
+  | "agents"
+  | "scheduled"
+  | "config"
+  | "usage"
+  | "vitals"
+  | "guide"
+  | "docs";
 
 interface Route {
   tab: TabId;
@@ -43,6 +54,7 @@ const NAV_SECTIONS: {
       { id: "scheduled", label: "Cron", mark: "()" },
       { id: "agents", label: "Agents", mark: "{}" },
       { id: "usage", label: "Usage", mark: "%%" },
+      { id: "vitals", label: "Vitals", mark: "~~" },
       { id: "config", label: "Config", mark: "##" },
     ],
   },
@@ -79,8 +91,11 @@ export function App() {
 
 function AppInner() {
   const [route, setRoute] = useState<Route>(() => parseHash());
+  const deployment = useDeployment();
   const deploymentName = useDeploymentName();
   const harnessVersion = useHarnessVersionLabel();
+  const vitalsEnabled = deployment?.operatorFeatures?.vitals.enabled === true;
+  const activeTab = route.tab === "vitals" && !vitalsEnabled ? "config" : route.tab;
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -154,21 +169,23 @@ function AppInner() {
                   {section.label}
                 </div>
               )}
-              {section.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left text-xs uppercase tracking-[0.18em] transition ${
-                    route.tab === item.id
-                      ? "bg-accent text-canvas"
-                      : "text-muted hover:bg-code-bg hover:text-ink"
-                  }`}
-                  onClick={() => navigate(item.id)}
-                >
-                  <span className="w-6 font-mono text-[10px]">{item.mark}</span>
-                  <span>{item.label}</span>
-                </button>
-              ))}
+              {section.items
+                .filter((item) => item.id !== "vitals" || vitalsEnabled)
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left text-xs uppercase tracking-[0.18em] transition ${
+                      activeTab === item.id
+                        ? "bg-accent text-canvas"
+                        : "text-muted hover:bg-code-bg hover:text-ink"
+                    }`}
+                    onClick={() => navigate(item.id)}
+                  >
+                    <span className="w-6 font-mono text-[10px]">{item.mark}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
             </div>
           ))}
         </nav>
@@ -186,23 +203,23 @@ function AppInner() {
 
       <main
         className={
-          route.tab === "docs"
+          activeTab === "docs"
             ? "min-w-0 flex-1 lg:h-screen lg:overflow-hidden"
             : "min-w-0 flex-1 px-4 py-6 lg:max-h-screen lg:overflow-y-auto"
         }
       >
-        {route.tab === "docs" ? (
+        {activeTab === "docs" ? (
           <DocsTab />
         ) : (
           <div className="mx-auto w-full max-w-6xl">
             <DiagnosticsBanner />
-            {route.tab === "chat" && (
+            {activeTab === "chat" && (
               <ChatTab
                 conversationId={route.conversationId}
                 onConversationChange={onChatConversationChange}
               />
             )}
-            {route.tab === "runs" && (
+            {activeTab === "runs" && (
               <RunsTab
                 runId={route.runId}
                 onSelectRun={(id) => navigate("runs", id)}
@@ -210,11 +227,12 @@ function AppInner() {
                 onOpenInChat={(conversationId) => navigate("chat", conversationId)}
               />
             )}
-            {route.tab === "agents" && <AgentsTab />}
-            {route.tab === "scheduled" && <ScheduledTab />}
-            {route.tab === "config" && <ConfigTab />}
-            {route.tab === "usage" && <UsageTab />}
-            {route.tab === "guide" && (
+            {activeTab === "agents" && <AgentsTab />}
+            {activeTab === "scheduled" && <ScheduledTab />}
+            {activeTab === "config" && <ConfigTab />}
+            {activeTab === "usage" && <UsageTab />}
+            {activeTab === "vitals" && <VitalsTab />}
+            {activeTab === "guide" && (
               <GuideTab section={route.guideSection} onSectionChange={onGuideSectionChange} />
             )}
           </div>

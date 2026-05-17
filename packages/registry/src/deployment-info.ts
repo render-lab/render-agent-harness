@@ -123,6 +123,18 @@ export async function enrichDeploymentInfo(
     out.renderService = { serviceId, apiKeyConfigured };
   }
 
+  const vitalsEnabled = isTruthy(env.RENDER_HARNESS_VITALS_ENABLED);
+  out.operatorFeatures = {
+    vitals: {
+      enabled: vitalsEnabled,
+      missing: [
+        ...(serviceId ? [] : ["RENDER_SERVICE_ID"]),
+        ...(apiKeyConfigured ? [] : ["RENDER_API_KEY"]),
+        ...(env.RENDER_OWNER_ID ? [] : ["RENDER_OWNER_ID"]),
+      ],
+    },
+  };
+
   return out;
 }
 
@@ -251,7 +263,22 @@ function implicitOperationalVars(config: HarnessConfig): EnvVarSpec[] {
       required: false,
       secret: true,
       description:
-        "Workspace-scoped Render API key. Required to let the Config tab write env vars back via the Render API.",
+        "Workspace-scoped Render API key. Required to let the Config tab write env vars and to let the Vitals tab query Render metrics.",
+    },
+    {
+      name: "RENDER_OWNER_ID",
+      required: false,
+      secret: false,
+      description:
+        "Render workspace ID. Required by the Vitals tab to query logs through the Render API.",
+    },
+    {
+      name: "RENDER_HARNESS_VITALS_ENABLED",
+      required: false,
+      secret: false,
+      default: "0",
+      description:
+        "Set to 1 to show the Vitals tab in the operator UI. Requires RENDER_API_KEY and RENDER_OWNER_ID for full metrics and logs.",
     },
     {
       name: "RENDER_HARNESS_WIZARD_URL",
@@ -288,6 +315,11 @@ function annotate(
   if (spec.default !== undefined) out.default = spec.default;
   if (extras.packName) out.packName = extras.packName;
   return out;
+}
+
+function isTruthy(value: string | undefined): boolean {
+  if (!value) return false;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
 function toRuntime(rt: RuntimeBlockInput): DeploymentAgentRuntime {

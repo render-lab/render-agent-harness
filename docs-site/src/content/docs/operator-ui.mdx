@@ -16,6 +16,7 @@ flowchart LR
     agents["Agents"]
     config["Config"]
     usage["Usage"]
+    vitals["Vitals"]
     guide["Guide"]
   end
 
@@ -29,7 +30,7 @@ flowchart LR
 
   class operator role
   class ui,api surface
-  class chat,runs,agents,config,usage,guide surfaceDetail
+  class chat,runs,agents,config,usage,vitals,guide surfaceDetail
   class harness central
   classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
   classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
@@ -80,8 +81,9 @@ The UI package is loaded dynamically, so services that do not enable the UI do n
 | Chat | Start or resume conversations with deployed agents. |
 | Runs | Inspect runs, messages, tool calls, tool results, and statuses. |
 | Agents | View loaded agent definitions, tools, MCP servers, budgets, and skipped built-ins. |
-| Config | Edit supported deployed config such as model settings. |
+| Config | Edit supported deployed config such as model settings, environment variables, and feature toggles. |
 | Usage | View token, cost, and run usage rollups. |
+| Vitals | View Render service instances, metrics, and logs when enabled. |
 | Guide | Read deployment-specific guide content inside the running app. |
 
 ## Chat tab
@@ -123,7 +125,30 @@ This helps distinguish “the manifest declares it” from “the running servic
 
 The Config tab is for supported deployed configuration edits. It relies on deployment metadata and wizard integration for write paths.
 
-Use the Config tab for runtime-visible edits such as model changes. Structural changes, new runtimes, and Cron schedule changes still belong in source control and redeploys.
+Use the Config tab for runtime-visible edits such as model changes, environment variable updates, and operator UI feature toggles. Structural changes, new runtimes, and Cron schedule changes still belong in source control and redeploys.
+
+## Vitals tab
+
+The Vitals tab is an opt-in Render observability surface. It shows Render service instances, CPU, memory, HTTP p95 latency, and recent logs for the current web service.
+
+Enable it from the Config tab, or set this environment variable on the web service:
+
+```sh
+RENDER_HARNESS_VITALS_ENABLED=1
+```
+
+Vitals uses these environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `RENDER_HARNESS_VITALS_ENABLED` | Shows the Vitals tab when set to `1`, `true`, `yes`, or `on`. |
+| `RENDER_SERVICE_ID` | Identifies the current Render service. Render injects this automatically on deployed services. |
+| `RENDER_API_KEY` | Authenticates the web service to the Render API for metrics, instances, and logs. |
+| `RENDER_OWNER_ID` | Identifies the workspace for log queries. Required by `GET /v1/logs`. |
+
+The browser never receives `RENDER_API_KEY`. The operator UI calls `@render-harness/web`, and the web service proxies Render API responses into normalized `/vitals` JSON.
+
+When Vitals is disabled, the tab is hidden from the sidebar and the `/vitals` endpoints return `vitals_disabled`. Enabling or disabling the feature through Config writes `RENDER_HARNESS_VITALS_ENABLED` via the Render API, so the service restarts before the new sidebar state appears.
 
 ## Guide tab
 

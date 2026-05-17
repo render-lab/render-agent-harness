@@ -15,7 +15,7 @@ The web service:
 - Starts pg-boss.
 - Creates the run queue.
 - Authenticates requests.
-- Registers run, conversation, agent, usage, diagnostics, deployment, Blueprint, config, and model routes.
+- Registers run, conversation, agent, usage, diagnostics, deployment, Blueprint, config, Vitals, and model routes.
 - Optionally mounts the operator UI at `/ui`.
 
 `serveWeb()` requires `DATABASE_URL`. The default auth checks `Authorization: Bearer <WEB_API_KEY>`.
@@ -60,6 +60,8 @@ Only one run in a conversation can be pending, running, or paused at a time. `PO
 | `GET /deployment` | Return bundle/deployment metadata for the UI. |
 | `GET /diagnostics` | Return health checks for primitives and agents. |
 | `GET /blueprint` | Return deployment Blueprint details. |
+| `GET /vitals` | Return Render instances, CPU, memory, and HTTP latency. Requires `RENDER_HARNESS_VITALS_ENABLED=1`. |
+| `GET /vitals/logs` | Return recent Render logs with level, type, and text filters. Requires `RENDER_OWNER_ID`. |
 | `GET /healthz` | Liveness check. |
 
 The config/model routes support in-product edits where the deployment has enough metadata and wizard integration configured.

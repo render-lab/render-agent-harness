@@ -47,6 +47,11 @@ import type {
   SendInputResp,
   ToolCallRecord,
   UsageRow,
+  VitalsInstance,
+  VitalsLogEntry,
+  VitalsLogsResp,
+  VitalsMetricSeries,
+  VitalsResp,
 } from "@render-harness/contracts";
 import { uiPath } from "./lib/mount.js";
 
@@ -71,6 +76,9 @@ export type {
   ScheduleSummary,
   ToolCallRecord,
   UsageRow,
+  VitalsInstance,
+  VitalsLogEntry,
+  VitalsMetricSeries,
 };
 
 export class ApiError extends Error {
@@ -327,6 +335,32 @@ export function getUsage(opts?: {
   if (opts?.allUsers) usp.set("allUsers", "1");
   const qs = usp.toString();
   return request<{ rollups: UsageRow[] }>(`/usage${qs ? `?${qs}` : ""}`);
+}
+
+export function getVitals(opts?: {
+  rangeMinutes?: number;
+  resolutionSeconds?: number;
+}): Promise<VitalsResp> {
+  const usp = new URLSearchParams();
+  if (opts?.rangeMinutes) usp.set("rangeMinutes", String(opts.rangeMinutes));
+  if (opts?.resolutionSeconds) usp.set("resolutionSeconds", String(opts.resolutionSeconds));
+  const qs = usp.toString();
+  return request<VitalsResp>(`/vitals${qs ? `?${qs}` : ""}`);
+}
+
+export function listVitalsLogs(opts?: {
+  limit?: number;
+  level?: string[];
+  type?: string[];
+  text?: string;
+}): Promise<VitalsLogsResp> {
+  const usp = new URLSearchParams();
+  if (opts?.limit) usp.set("limit", String(opts.limit));
+  for (const level of opts?.level ?? []) usp.append("level", level);
+  for (const type of opts?.type ?? []) usp.append("type", type);
+  if (opts?.text) usp.append("text", opts.text);
+  const qs = usp.toString();
+  return request<VitalsLogsResp>(`/vitals/logs${qs ? `?${qs}` : ""}`);
 }
 
 // --------------------------------------------------------------------

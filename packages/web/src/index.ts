@@ -26,6 +26,7 @@ import { registerDiagnosticsRoutes } from "./routes/diagnostics.js";
 import { registerRunRoutes } from "./routes/runs.js";
 import { registerScheduleRoutes } from "./routes/schedules.js";
 import { registerUsageRoutes } from "./routes/usage.js";
+import { registerVitalsRoutes } from "./routes/vitals.js";
 import {
   mountUiIfAvailable,
   type UiMountConfig,
@@ -224,6 +225,11 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
   });
   registerConfigRoutes(app, {
+    auth,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+  });
+  registerVitalsRoutes(app, {
     auth,
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),

@@ -110,3 +110,4 @@ A skipped builtin (missing env, missing primitive) is recorded in `agent_runs.me
 - `core` exports its public surface from `packages/core/src/index.ts` — when adding new public symbols, export them there or runtime adapters won't see them.
 - The cron runtime's default budget caps wall time at 11 hours so it can flush state before the platform's 12-hour kill. Cron is single-shot — never poll a queue inside a cron, use the worker runtime.
 - Multi-turn chat is conversation-backed: create an `agent_conversations` row and enqueue each user turn as a new run with `conversationId`. Runs complete normally; `paused` is reserved for HITL (`ask_user`, approval gates).
+- Public documentation lives in `docs-site/src/content/docs/`. Keep `docs/` for internal plans, design notes, and architecture scratch docs only.

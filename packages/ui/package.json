@@ -38,7 +38,8 @@
     "@render-harness/core": "workspace:*",
     "hono": "^4.12.18",
     "mermaid": "^11.15.0",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.7",
