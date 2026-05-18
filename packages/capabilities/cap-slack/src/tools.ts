@@ -205,10 +205,51 @@ function jsonTool(
       try {
         return { content: JSON.stringify(await call(input), null, 2) };
       } catch (err) {
-        return { content: err instanceof Error ? err.message : String(err), isError: true };
+        return { content: formatSlackError(err), isError: true };
       }
     },
   };
+}
+
+/**
+ * Rewrite `@slack/web-api`'s generic `"An API error occurred:
+ * missing_scope"` errors into something an agent (and the operator
+ * reading logs) can act on. The Slack response carries the needed
+ * scope under `err.data.needed` and what the bot currently has under
+ * `err.data.provided` — surface both, plus a one-line fix instruction.
+ *
+ * Other Slack platform errors (e.g. `not_in_channel`, `channel_not_found`,
+ * `invalid_auth`) get a hint appended where useful but otherwise pass
+ * through verbatim.
+ */
+function formatSlackError(err: unknown): string {
+  if (!err || typeof err !== "object") return String(err);
+  const e = err as { message?: unknown; code?: unknown; data?: Record<string, unknown> };
+  const code = typeof e.data?.error === "string" ? e.data.error : undefined;
+  if (!code) {
+    return typeof e.message === "string" ? e.message : String(err);
+  }
+  if (code === "missing_scope") {
+    const needed = typeof e.data?.needed === "string" ? e.data.needed : "?";
+    const provided = typeof e.data?.provided === "string" ? e.data.provided : "?";
+    return [
+      `Slack missing_scope: '${needed}' needed (bot currently has: '${provided}').`,
+      `Add '${needed}' to the bot's OAuth scopes in the Slack app config (api.slack.com → OAuth & Permissions → Bot Token Scopes), reinstall the app to the workspace, and redeploy.`,
+    ].join(" ");
+  }
+  if (code === "not_in_channel") {
+    return "Slack not_in_channel: the bot must be a member of the channel before it can post. Invite it with `/invite @<bot-name>` in the channel.";
+  }
+  if (code === "channel_not_found") {
+    return "Slack channel_not_found: the channel ID is invalid, the bot doesn't have permission to see it, or it has been archived.";
+  }
+  if (code === "invalid_auth" || code === "token_revoked") {
+    return `Slack ${code}: SLACK_BOT_TOKEN is invalid or has been revoked. Re-issue the token from the Slack app config and redeploy.`;
+  }
+  // Pass through any other Slack platform code so the agent can decide
+  // (e.g. rate_limited, account_inactive, internal_error).
+  const message = typeof e.message === "string" ? e.message : String(err);
+  return `${message} (slack.${code})`;
 }
 
 function assertAllowedChannel(channel: string, allowedChannels: string[] | undefined): void {
@@ -244,35 +285,67 @@ function createResolver(client: WebClient): SlackResolver {
   let usersIndex: Promise<Map<string, string>> | null = null;
   const dmByUserId = new Map<string, string>();
 
+  // Drain `conversations.list` for one channel kind, paging through all
+  // results. Each kind requires a different OAuth scope on the bot:
+  //   public_channel  → channels:read
+  //   private_channel → groups:read
+  //   mpim            → mpim:read
+  //   im              → im:read
+  // The previous implementation requested every kind in a single call,
+  // which made the whole index unbuildable for bots that only had
+  // `channels:read` — Slack refuses `types=public_channel,private_channel`
+  // with `missing_scope: groups:read` unless both scopes are granted, even
+  // when the caller only cares about public channels. Now we list each
+  // kind independently and aggregate results from whichever succeeded;
+  // bots that only granted `channels:read` get a working name → id index
+  // for public channels and a clear error for private ones.
+  const drainChannelsByType = async (type: string, byName: Map<string, string>): Promise<void> => {
+    let cursor: string | undefined;
+    do {
+      const resp = (await client.conversations.list({
+        limit: 1000,
+        types: type,
+        exclude_archived: true,
+        ...(cursor ? { cursor } : {}),
+      })) as unknown as {
+        channels?: Array<{ id?: unknown; name?: unknown; is_private?: unknown }>;
+        response_metadata?: { next_cursor?: unknown };
+      };
+      for (const c of resp.channels ?? []) {
+        if (typeof c.id === "string" && typeof c.name === "string") {
+          byName.set(c.name.toLowerCase(), c.id);
+          if (!channels.has(c.id)) {
+            const cached: ResolvedChannel = { id: c.id, name: c.name };
+            if (c.is_private === true) cached.is_private = true;
+            channels.set(c.id, cached);
+          }
+        }
+      }
+      cursor =
+        typeof resp.response_metadata?.next_cursor === "string" &&
+        resp.response_metadata.next_cursor.length > 0
+          ? resp.response_metadata.next_cursor
+          : undefined;
+    } while (cursor);
+  };
+
   const ensureChannelsIndex = (): Promise<Map<string, string>> => {
     if (channelsIndex) return channelsIndex;
     channelsIndex = (async () => {
       const byName = new Map<string, string>();
-      let cursor: string | undefined;
-      do {
-        const resp = (await client.conversations.list({
-          limit: 1000,
-          types: "public_channel,private_channel",
-          exclude_archived: true,
-          ...(cursor ? { cursor } : {}),
-        })) as unknown as {
-          channels?: Array<{ id?: unknown; name?: unknown }>;
-          response_metadata?: { next_cursor?: unknown };
-        };
-        for (const c of resp.channels ?? []) {
-          if (typeof c.id === "string" && typeof c.name === "string") {
-            byName.set(c.name.toLowerCase(), c.id);
-            // Also warm the by-ID resolver cache so a later
-            // `slack.get_channel_info` lookup is a hit.
-            if (!channels.has(c.id)) channels.set(c.id, { id: c.id, name: c.name });
-          }
-        }
-        cursor =
-          typeof resp.response_metadata?.next_cursor === "string" &&
-          resp.response_metadata.next_cursor.length > 0
-            ? resp.response_metadata.next_cursor
-            : undefined;
-      } while (cursor);
+      // Try each channel kind independently. A bot with only
+      // `channels:read` succeeds on public and fails on private (caught,
+      // ignored). A bot with both scopes succeeds on both. A bot with
+      // neither fails on both, surfacing the first missing scope error.
+      const attempts = await Promise.allSettled([
+        drainChannelsByType("public_channel", byName),
+        drainChannelsByType("private_channel", byName),
+      ]);
+      const allFailed = attempts.every((r) => r.status === "rejected");
+      if (allFailed) {
+        const first = attempts.find((r): r is PromiseRejectedResult => r.status === "rejected");
+        throw first?.reason ?? new Error("Slack conversations.list failed for all channel types");
+      }
       return byName;
     })().catch((err) => {
       // Reset on failure so a subsequent lookup retries (e.g. once

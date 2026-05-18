@@ -1,5 +1,24 @@
 # @render-harness/cap-slack
 
+## 0.5.2
+
+### Patch Changes
+
+- cap-slack: name → id lookup now works with `channels:read` alone (no `groups:read` required), and Slack errors get rewritten with actionable hints instead of `An API error occurred: missing_scope`.
+
+  Two fixes that together unblock the most common Slack scope footgun:
+  - **Split `conversations.list` by channel kind.** The resolver used to request `types: "public_channel,private_channel"` in a single call. Slack returns `missing_scope: groups:read` for the whole call when any of the requested types is out of scope, even if you only care about the in-scope ones. So bots with the documented `channels:read` scope hit `missing_scope` on every `#channel-name` lookup. Now each kind is requested in a separate call and aggregated with `Promise.allSettled` — public channels resolve fine for bots with `channels:read`, private channels additionally resolve when `groups:read` is granted, and a bot with neither still gets a clean error (now with the actionable formatting below).
+  - **`formatSlackError`** rewrites generic `@slack/web-api` platform errors into operator-actionable text:
+    - `missing_scope` → `"Slack missing_scope: 'X' needed (bot currently has: 'Y'). Add 'X' to the bot's OAuth scopes in the Slack app config (api.slack.com → OAuth & Permissions → Bot Token Scopes), reinstall the app to the workspace, and redeploy."`
+    - `not_in_channel` → `"the bot must be a member of the channel before it can post. Invite it with /invite @<bot-name>"`
+    - `channel_not_found` → `"the channel ID is invalid, the bot doesn't have permission to see it, or it has been archived"`
+    - `invalid_auth` / `token_revoked` → `"SLACK_BOT_TOKEN is invalid or has been revoked. Re-issue the token from the Slack app config and redeploy."`
+    - Any other Slack platform code passes through with the `slack.<code>` suffix appended so the agent can branch on it.
+
+  Regression tests pin both: a bot with `channels:read` only still resolves `#public-channel`, a bot with no read scopes gets the actionable `missing_scope` message naming the missing scope, and `not_in_channel` on `chat.postMessage` rewrites to the invite hint.
+
+  No agent code changes required — both fixes apply automatically on redeploy.
+
 ## 0.5.1
 
 ### Patch Changes

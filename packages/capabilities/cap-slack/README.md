@@ -72,7 +72,13 @@ Every tool that takes a `channel` parameter (`slack.send_message`, `slack.get_th
 
 `allowedChannels` is enforced **after** resolution, against the canonical channel ID. So `allowedChannels: ["C0AQ…"]` correctly accepts `slack.send_message({ channel: "#that-channels-name" })` because the resolver returns `C0AQ…` before the gate check fires.
 
-If the bot lacks the lookup scope, the tool returns a clear error naming the scope (`Slack channel "#general" not found. Check the name, or ensure the bot has 'channels:read' / 'groups:read' scope and is a member of the channel.`) instead of failing silently. Agents that only ever address channels by ID don't need the read scopes; the resolver fast-paths `C…` / `G…` / `D…` / `U…` inputs without any API call.
+If the bot lacks the lookup scope, the tool returns an actionable error naming the scope (e.g. `Slack missing_scope: 'channels:read' needed (bot currently has: 'chat:write'). Add 'channels:read' to the bot's OAuth scopes in the Slack app config (api.slack.com → OAuth & Permissions → Bot Token Scopes), reinstall the app to the workspace, and redeploy.`) instead of failing silently. Agents that only ever address channels by ID don't need the read scopes; the resolver fast-paths `C…` / `G…` / `D…` / `U…` inputs without any API call.
+
+### Scope coverage for name lookups
+
+The resolver lists public and private channels in **separate** `conversations.list` calls and aggregates results from whichever succeeds. A bot with only `channels:read` gets a working name → id index for public channels; the private-channel call fails (caught, ignored). A bot with both scopes indexes both. A bot with neither sees the actionable `missing_scope` error above with the first missing scope named.
+
+Other common Slack errors are also rewritten with hints: `not_in_channel` → "invite the bot with `/invite @<bot>`", `channel_not_found` → "ID invalid, archived, or not visible to the bot", `invalid_auth` / `token_revoked` → "reissue `SLACK_BOT_TOKEN`". Any other Slack platform code passes through verbatim with the `slack.<code>` annotation appended so the agent can branch on it.
 
 Set `accessMode: read_write` to enable write tools:
 

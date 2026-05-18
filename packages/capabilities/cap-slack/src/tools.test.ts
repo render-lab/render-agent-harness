@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import pack from "./index.js";
 import { slackTools } from "./tools.js";
 
@@ -10,9 +10,39 @@ const slackMocks = vi.hoisted(() => {
   const fn = () => vi.fn();
   return {
     chat: { postMessage: fn(), update: fn() },
-    conversations: { open: fn() },
+    conversations: { open: fn(), list: fn() },
     reactions: { add: fn() },
   };
+});
+
+// Reset every shared slackMock back to its default behavior after each
+// test so tests that swap in failure-case implementations (missing_scope,
+// not_in_channel, etc.) don't leak into subsequent assertions.
+afterEach(() => {
+  slackMocks.conversations.list.mockReset();
+  slackMocks.conversations.list.mockImplementation(async ({ types }: { types?: string } = {}) => {
+    if (types === "private_channel") {
+      return { ok: true, channels: [] };
+    }
+    return {
+      ok: true,
+      channels: [
+        { id: "C123", name: "raph-agent-build-diagnostics" },
+        { id: "C999", name: "other-channel" },
+      ],
+    };
+  });
+  slackMocks.conversations.open.mockReset();
+  slackMocks.conversations.open.mockImplementation(async ({ users: u }: { users: string }) => ({
+    ok: true,
+    channel: { id: `D-${u}` },
+  }));
+  slackMocks.chat.postMessage.mockReset();
+  slackMocks.chat.postMessage.mockResolvedValue({ ok: true, ts: "1.0", channel: "C123" });
+  slackMocks.chat.update.mockReset();
+  slackMocks.chat.update.mockResolvedValue({ ok: true, ts: "1.0" });
+  slackMocks.reactions.add.mockReset();
+  slackMocks.reactions.add.mockResolvedValue({ ok: true });
 });
 
 vi.mock("@slack/web-api", () => {
@@ -47,10 +77,16 @@ vi.mock("@slack/web-api", () => {
     ok: true,
     channel: CHANNEL_FIXTURES[channel] ?? { id: channel },
   }));
-  const channelsList = vi.fn(async () => ({
-    ok: true,
-    channels: Object.values(CHANNEL_FIXTURES),
-  }));
+  // Per-type-list mock so tests can simulate bots that have channels:read
+  // (public_channel succeeds) but not groups:read (private_channel throws
+  // missing_scope). Tests override slackMocks.conversations.list to swap
+  // in failure cases.
+  slackMocks.conversations.list.mockImplementation(async ({ types }: { types?: string } = {}) => {
+    if (types === "private_channel") {
+      return { ok: true, channels: [] };
+    }
+    return { ok: true, channels: Object.values(CHANNEL_FIXTURES) };
+  });
   slackMocks.conversations.open.mockImplementation(async ({ users: u }: { users: string }) => ({
     ok: true,
     channel: { id: `D-${u}` },
@@ -62,7 +98,7 @@ vi.mock("@slack/web-api", () => {
     users = { info: usersInfo, list: usersList };
     conversations = {
       info: channelsInfo,
-      list: channelsList,
+      list: slackMocks.conversations.list,
       open: slackMocks.conversations.open,
       history: vi.fn(async () => ({
         ok: true,
@@ -247,6 +283,98 @@ describe("name → id resolution", () => {
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/not found/);
     expect(result.content).toMatch(/channels:read/);
+  });
+
+  // Regression: bots with only `channels:read` (not `groups:read`) used
+  // to get missing_scope on every name lookup because the resolver
+  // requested both channel kinds in a single `conversations.list` call.
+  // Now we list each kind independently; the public_channel call
+  // succeeds, the private_channel call fails (caught), and the public
+  // channel name still resolves to its ID. See May 2026 incident
+  // documented in AGENTS.md "Things that bit us recently".
+  it("name lookup succeeds for public channels when private_channel list fails (channels:read only)", async () => {
+    slackMocks.conversations.list.mockReset();
+    slackMocks.conversations.list.mockImplementation(async ({ types }: { types?: string } = {}) => {
+      if (types === "private_channel") {
+        const err = new Error("An API error occurred: missing_scope") as Error & {
+          data?: Record<string, unknown>;
+        };
+        err.data = {
+          ok: false,
+          error: "missing_scope",
+          needed: "groups:read",
+          provided: "chat:write,channels:read",
+        };
+        throw err;
+      }
+      return {
+        ok: true,
+        channels: [{ id: "C123", name: "raph-agent-build-diagnostics" }],
+      };
+    });
+    const tools = slackTools({ botToken: "xoxb-test", accessMode: "read" });
+    const lookup = tools.find((t) => t.definition.name === "slack.get_channel_info");
+    if (!lookup) throw new Error("missing slack.get_channel_info");
+    const result = await lookup.handler({
+      input: { channel: "#raph-agent-build-diagnostics" },
+      ctx: {},
+    } as never);
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(result.content)).toEqual({
+      id: "C123",
+      name: "raph-agent-build-diagnostics",
+    });
+  });
+
+  it("surfaces an actionable missing_scope error when ALL channel kinds fail", async () => {
+    slackMocks.conversations.list.mockReset();
+    slackMocks.conversations.list.mockImplementation(async () => {
+      const err = new Error("An API error occurred: missing_scope") as Error & {
+        data?: Record<string, unknown>;
+      };
+      err.data = {
+        ok: false,
+        error: "missing_scope",
+        needed: "channels:read",
+        provided: "chat:write",
+      };
+      throw err;
+    });
+    const tools = slackTools({ botToken: "xoxb-test", accessMode: "read" });
+    const lookup = tools.find((t) => t.definition.name === "slack.get_channel_info");
+    if (!lookup) throw new Error("missing slack.get_channel_info");
+    const result = await lookup.handler({
+      input: { channel: "#anything" },
+      ctx: {},
+    } as never);
+    expect(result.isError).toBe(true);
+    // formatSlackError rewrites the generic message into an
+    // operator-actionable hint that names the scope to enable.
+    expect(result.content).toMatch(/missing_scope/);
+    expect(result.content).toMatch(/channels:read/);
+    expect(result.content).toMatch(/Add 'channels:read'/);
+    expect(result.content).toMatch(/api\.slack\.com/);
+  });
+
+  it("formatSlackError rewrites not_in_channel into an invite hint", async () => {
+    slackMocks.chat.postMessage.mockReset();
+    slackMocks.chat.postMessage.mockImplementation(async () => {
+      const err = new Error("An API error occurred: not_in_channel") as Error & {
+        data?: Record<string, unknown>;
+      };
+      err.data = { ok: false, error: "not_in_channel" };
+      throw err;
+    });
+    const tools = slackTools({ botToken: "xoxb-test", accessMode: "read_write" });
+    const send = tools.find((t) => t.definition.name === "slack.send_message");
+    if (!send) throw new Error("missing slack.send_message");
+    const result = await send.handler({
+      input: { channel: "C123", text: "x" },
+      ctx: {},
+    } as never);
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/not_in_channel/);
+    expect(result.content).toMatch(/\/invite/);
   });
 
   it("allowedChannels gate runs against the *resolved* ID, not the raw input", async () => {
