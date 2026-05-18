@@ -231,7 +231,10 @@ class RenderVitalsClient {
   }
 
   async listInstances(serviceId: string): Promise<VitalsInstance[]> {
-    const raw = await this.fetchJson<unknown>("/v1/instances", { serviceId });
+    const raw = await this.fetchJson<unknown>(
+      `/v1/services/${encodeURIComponent(serviceId)}/instances`,
+      {},
+    );
     return asArray(raw)
       .map(normalizeInstance)
       .filter((i): i is VitalsInstance => i !== null);

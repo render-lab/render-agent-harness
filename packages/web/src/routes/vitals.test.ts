@@ -37,19 +37,13 @@ describe("GET /vitals", () => {
   it("proxies instances and metrics from the Render API", async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input));
-      if (url.pathname === "/v1/instances") {
-        return jsonResponse({
-          instances: [
-            {
-              instance: {
-                id: "inst-1",
-                name: "web-1",
-                status: "running",
-                createdAt: "2026-05-17T10:00:00.000Z",
-              },
-            },
-          ],
-        });
+      if (url.pathname === "/v1/services/srv-abc123/instances") {
+        return jsonResponse([
+          {
+            id: "inst-1",
+            createdAt: "2026-05-17T10:00:00.000Z",
+          },
+        ]);
       }
       return jsonResponse({
         data: [
@@ -65,16 +59,19 @@ describe("GET /vitals", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       serviceId: string;
-      instances: Array<{ id: string; status: string }>;
+      instances: Array<{ id: string; createdAt: string | null }>;
       metrics: Array<{ kind: string; points: Array<{ value: number }> }>;
     };
     expect(body.serviceId).toBe("srv-abc123");
-    expect(body.instances[0]).toMatchObject({ id: "inst-1", status: "running" });
+    expect(body.instances[0]).toMatchObject({
+      id: "inst-1",
+      createdAt: "2026-05-17T10:00:00.000Z",
+    });
     expect(body.metrics.map((m) => m.kind)).toEqual(["cpu", "memory", "httpLatencyP95"]);
     expect(body.metrics[0]?.points[0]?.value).toBe(42);
 
     const urls = fetchImpl.mock.calls.map((call) => new URL(String(call[0])));
-    expect(urls.some((url) => url.pathname === "/v1/instances")).toBe(true);
+    expect(urls.some((url) => url.pathname === "/v1/services/srv-abc123/instances")).toBe(true);
     expect(urls.some((url) => url.pathname === "/v1/metrics/cpu")).toBe(true);
     expect(urls.some((url) => url.searchParams.get("resource") === "srv-abc123")).toBe(true);
   });
