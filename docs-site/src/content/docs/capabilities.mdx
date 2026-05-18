@@ -39,7 +39,9 @@ To publish your own pack, see [Authoring capability packs](/authoring-capability
 
 ## Declaring a capability
 
-```yaml
+Capabilities are declared in your bundle's `render-harness.yaml` at the repo root:
+
+```yaml title="render-harness.yaml"
 capabilities:
   - pack: "@render-harness/cap-memory-pg"
   - pack: "@render-harness/cap-search-exa"
@@ -48,6 +50,12 @@ capabilities:
 ```
 
 The `config` object is pack-specific. Keep configuration small and move secret values into `envSchema`.
+
+You also need the packs in your dependencies. Add them with pnpm/npm so they exist in `node_modules` at build and runtime:
+
+```sh
+pnpm add @render-harness/cap-memory-pg @render-harness/cap-search-exa
+```
 
 ## Tool names
 
@@ -59,13 +67,16 @@ Capability tools are namespaced when they reach the model. The scope is stripped
 | `@render-harness/cap-github` | `github.get_issue` | `cap-github__github_get_issue` |
 | `@render-harness/cap-slack` | `slack.send_message` | `cap-slack__slack_send_message` |
 
-Use the namespaced form in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval`:
+Use the namespaced form in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval` inside `render-harness.yaml`:
 
-```yaml
-permissions:
-  requireApproval:
-    - cap-memory-pg__memory_write
-    - cap-slack__slack_send_message
+```yaml title="render-harness.yaml"
+agents:
+  - id: chat
+    # ...
+    permissions:
+      requireApproval:
+        - cap-memory-pg__memory_write
+        - cap-slack__slack_send_message
 ```
 
 Use `requireApproval` for tools that write durable state, trigger external work, or perform actions the user should review.
