@@ -14,16 +14,20 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { resolveGallery } from "create-render-agent";
 import { Hono } from "hono";
+import { applyWizardMigrations, createWizardPool } from "./db.js";
 import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { registerAgentAddRoute } from "./routes/agent-add.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { registerBrowseRoute } from "./routes/browse.js";
 import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
 import { registerGalleryRoute } from "./routes/gallery.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerInstallsRoute } from "./routes/installs.js";
+import { registerMyRoutes } from "./routes/my.js";
 import { registerScaffoldRoute } from "./routes/scaffold.js";
+import { createPgStore, type WizardStore } from "./store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // `dist/main.js` lives next to `dist/static/`; the bundled SPA is one
@@ -34,6 +38,17 @@ const DEFAULT_REGISTRY_INDEX_PATH = resolve(HERE, "..", "..", "..", "registry-in
 async function main(): Promise<void> {
   const env = parseEnv(process.env);
   const gallery = await resolveGallery();
+
+  // Optional Postgres + ownership store. Without DATABASE_URL the
+  // wizard runs in "stateless" mode: bearer-secret routes work,
+  // session-cookie auth + /my routes return 503.
+  let store: WizardStore | null = null;
+  if (env.databaseUrl) {
+    const pool = createWizardPool({ connectionString: env.databaseUrl });
+    const applied = await applyWizardMigrations(pool);
+    process.stdout.write(`wizard migrations applied: ${applied.join(", ")}\n`);
+    store = createPgStore(pool);
+  }
 
   const app = new Hono();
 
@@ -51,7 +66,26 @@ async function main(): Promise<void> {
     gallery,
     rateLimiter: createRateLimiter({ capacity: 20, windowMs: 60 * 60 * 1_000 }),
     mockScaffold: env.mockScaffold,
+    ...(store ? { store } : {}),
+    sessionSecret: env.sessionSecret,
+    publicUrl: env.publicUrl,
   });
+  if (store) {
+    registerAuthRoutes(app, {
+      store,
+      sessionSecret: env.sessionSecret,
+      clientId: env.oauthClientId,
+      clientSecret: env.oauthClientSecret,
+      publicUrl: env.publicUrl,
+    });
+    registerMyRoutes(app, {
+      store,
+      sessionSecret: env.sessionSecret,
+      claimSecret: env.sessionSecret,
+      github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+      publicUrl: env.publicUrl,
+    });
+  }
 
   // Phase 2: in-UI model edits. The deployed worker's proxy route
   // calls this with WIZARD_SHARED_SECRET in the Authorization header.
@@ -67,6 +101,8 @@ async function main(): Promise<void> {
     sharedSecret: env.wizardSharedSecret,
     github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
     gallery,
+    ...(store ? { store } : {}),
+    sessionSecret: env.sessionSecret,
   });
 
   // GitHub App install flow for CLI-scaffolded agents.

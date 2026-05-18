@@ -19,6 +19,83 @@ export async function fetchBrowse(): Promise<BrowseResponse> {
   return (await res.json()) as BrowseResponse;
 }
 
+export interface AuthMe {
+  githubUserId: number;
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+export async function fetchMe(): Promise<AuthMe | null> {
+  const res = await fetch("/api/auth/me", { credentials: "include" });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`auth/me failed: ${res.status}`);
+  return (await res.json()) as AuthMe;
+}
+
+export interface MyHarness {
+  org: string;
+  repo: string;
+  installationId: string;
+  agentSlug: string | null;
+  role: "owner" | "collaborator";
+  createdAt: string;
+}
+
+export async function fetchMyHarnesses(): Promise<MyHarness[]> {
+  const res = await fetch("/api/my/harnesses", { credentials: "include" });
+  if (!res.ok) throw new Error(`my/harnesses failed: ${res.status}`);
+  const json = (await res.json()) as { harnesses: MyHarness[] };
+  return json.harnesses;
+}
+
+export interface AddableAgent {
+  bundleSlug: string;
+  bundleName: string;
+  agentId: string;
+  description: string;
+  runtimeKinds: string[];
+  capabilities: string[];
+  envVars: string[];
+  workflowTask: boolean;
+}
+
+export async function fetchCatalog(): Promise<AddableAgent[]> {
+  const res = await fetch("/api/agents/catalog");
+  if (!res.ok) throw new Error(`catalog fetch failed: ${res.status}`);
+  const json = (await res.json()) as { agents: AddableAgent[] };
+  return json.agents;
+}
+
+export interface AddAgentResult {
+  ok?: boolean;
+  unchanged?: boolean;
+  commitSha?: string | null;
+  changedFiles?: string[];
+  warnings?: string[];
+  error?: string;
+  details?: string;
+}
+
+export async function postAddAgent(args: {
+  bundleSlug: string;
+  agentId: string;
+  targetOrg: string;
+  targetRepo: string;
+}): Promise<AddAgentResult> {
+  const res = await fetch("/api/agents/add", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  return (await res.json()) as AddAgentResult;
+}
+
+export async function postLogout(): Promise<void> {
+  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+}
+
 export async function postScaffold(args: {
   state: WizardState;
   turnstileToken: string;

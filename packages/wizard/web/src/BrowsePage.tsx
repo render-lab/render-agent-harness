@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBrowse } from "./lib/api.js";
+import {
+  type AddableAgent,
+  fetchBrowse,
+  fetchCatalog,
+  fetchMe,
+  fetchMyHarnesses,
+  type MyHarness,
+  postAddAgent,
+} from "./lib/api.js";
 import type { BrowseItem, BrowseResponse } from "./lib/types.js";
 
 type FilterKey = "sources" | "runtimeKinds" | "categories" | "capabilities" | "kinds";
@@ -23,11 +31,31 @@ export function BrowsePage() {
     capabilities: "",
     kinds: "",
   });
+  const [signedIn, setSignedIn] = useState(false);
+  const [myHarnesses, setMyHarnesses] = useState<MyHarness[]>([]);
+  const [catalog, setCatalog] = useState<AddableAgent[]>([]);
+  const [addingFor, setAddingFor] = useState<BrowseItem | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBrowse()
       .then(setBrowse)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const me = await fetchMe().catch(() => null);
+      if (!me) return;
+      setSignedIn(true);
+      try {
+        const [harnesses, catalogList] = await Promise.all([fetchMyHarnesses(), fetchCatalog()]);
+        setMyHarnesses(harnesses);
+        setCatalog(catalogList);
+      } catch {
+        // Best-effort: if these fail we just hide the inline CTA.
+      }
+    })();
   }, []);
 
   const filtered = useMemo(() => {
@@ -128,20 +156,54 @@ export function BrowsePage() {
         </p>
       ) : null}
 
+      {notice ? (
+        <p className="border border-line p-3 text-[11px] text-muted">{notice}</p>
+      ) : null}
+
       {filtered.length === 0 ? (
         <EmptyState query={query} communityEntries={browse.community.entryCount} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => (
-            <BrowseCard key={item.id} item={item} />
+            <BrowseCard
+              key={item.id}
+              item={item}
+              canAddToExisting={signedIn && myHarnesses.length > 0 && isBundle(item)}
+              onAddToExisting={() => setAddingFor(item)}
+            />
           ))}
         </div>
       )}
+
+      {addingFor ? (
+        <AddToExistingPicker
+          item={addingFor}
+          harnesses={myHarnesses}
+          catalog={catalog}
+          onClose={() => setAddingFor(null)}
+          onAdded={(message) => {
+            setNotice(message);
+            setAddingFor(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function BrowseCard({ item }: { item: BrowseItem }) {
+function isBundle(item: BrowseItem): boolean {
+  return item.source === "official" && item.kind === "bundle";
+}
+
+function BrowseCard({
+  item,
+  canAddToExisting,
+  onAddToExisting,
+}: {
+  item: BrowseItem;
+  canAddToExisting: boolean;
+  onAddToExisting: () => void;
+}) {
   const kind = itemKind(item);
   return (
     <article className="panel flex min-h-72 flex-col p-4">
@@ -208,8 +270,154 @@ function BrowseCard({ item }: { item: BrowseItem }) {
             </a>
           </>
         )}
+        {canAddToExisting ? (
+          <button type="button" className="btn" onClick={onAddToExisting}>
+            Add to existing
+          </button>
+        ) : null}
       </div>
     </article>
+  );
+}
+
+function AddToExistingPicker({
+  item,
+  harnesses,
+  catalog,
+  onClose,
+  onAdded,
+}: {
+  item: BrowseItem;
+  harnesses: MyHarness[];
+  catalog: AddableAgent[];
+  onClose: () => void;
+  onAdded: (message: string) => void;
+}) {
+  const bundleSlug = item.source === "official" ? item.templateSlug : "";
+  // Restrict the agent picker to the agents inside this bundle.
+  const bundleAgents = useMemo(
+    () => catalog.filter((a) => a.bundleSlug === bundleSlug),
+    [catalog, bundleSlug],
+  );
+  const [agentId, setAgentId] = useState<string>(bundleAgents[0]?.agentId ?? "");
+  const [harnessKey, setHarnessKey] = useState<string>(
+    harnesses[0] ? `${harnesses[0].org}/${harnesses[0].repo}` : "",
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedHarness = useMemo(
+    () => harnesses.find((h) => `${h.org}/${h.repo}` === harnessKey) ?? null,
+    [harnesses, harnessKey],
+  );
+
+  const submit = async () => {
+    if (!agentId || !selectedHarness) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await postAddAgent({
+        bundleSlug,
+        agentId,
+        targetOrg: selectedHarness.org,
+        targetRepo: selectedHarness.repo,
+      });
+      if (res.ok) {
+        onAdded(
+          `Added ${agentId} to ${selectedHarness.org}/${selectedHarness.repo}. Changed files: ${(
+            res.changedFiles ?? []
+          ).join(", ") || "none"}.`,
+        );
+        return;
+      }
+      setError(res.details ?? res.error ?? "add failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <div
+        className="panel relative w-full max-w-lg bg-canvas p-5 text-xs"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wide">
+            add agent from {item.name}
+          </h2>
+          <button type="button" onClick={onClose} className="border border-line px-2 py-1 text-xs">
+            close
+          </button>
+        </header>
+
+        {bundleAgents.length === 0 ? (
+          <p className="text-muted">
+            This entry has no addable agents yet (single-agent gallery entries aren't supported as
+            v1 add units).
+          </p>
+        ) : (
+          <>
+            <label className="label block" htmlFor="picker-agent-id">
+              pick an agent
+            </label>
+            <select
+              id="picker-agent-id"
+              className="mt-1 w-full border border-line bg-canvas p-2"
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+            >
+              {bundleAgents.map((a) => (
+                <option key={a.agentId} value={a.agentId}>
+                  {a.agentId} ({a.runtimeKinds.join(", ")})
+                </option>
+              ))}
+            </select>
+
+            <label className="label mt-3 block" htmlFor="picker-harness">
+              target harness
+            </label>
+            <select
+              id="picker-harness"
+              className="mt-1 w-full border border-line bg-canvas p-2"
+              value={harnessKey}
+              onChange={(e) => setHarnessKey(e.target.value)}
+            >
+              {harnesses.map((h) => (
+                <option key={`${h.org}/${h.repo}`} value={`${h.org}/${h.repo}`}>
+                  {h.org}/{h.repo}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+
+        {error ? <p className="mt-3 border border-line p-2 text-[11px]">{error}</p> : null}
+
+        <footer className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="border border-line px-3 py-1.5">
+            cancel
+          </button>
+          <button
+            type="button"
+            disabled={submitting || !agentId || !selectedHarness}
+            onClick={submit}
+            className="border border-accent bg-accent px-3 py-1.5 text-canvas disabled:opacity-50"
+          >
+            {submitting ? "adding…" : "commit add"}
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

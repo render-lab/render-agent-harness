@@ -7,7 +7,16 @@ import {
   useState,
 } from "react";
 import { BrowsePage } from "./BrowsePage.js";
-import { fetchGallery, postBundleScaffold, postScaffold, watchScaffoldJob } from "./lib/api.js";
+import { MyHarnessesPage } from "./MyHarnesses.js";
+import {
+  type AuthMe,
+  fetchGallery,
+  fetchMe,
+  postBundleScaffold,
+  postLogout,
+  postScaffold,
+  watchScaffoldJob,
+} from "./lib/api.js";
 import { DEFAULT_STATE, seedFromTemplate } from "./lib/state.js";
 import type {
   Gallery,
@@ -49,12 +58,15 @@ const STEP_TITLES = [
   "Review",
 ] as const;
 
-type PublicRoute = "browse" | "new";
+type PublicRoute = "browse" | "new" | "my";
 
 const DOCS_URL = "https://render-agent-harness.onrender.com/";
 
 function parseRoute(): PublicRoute {
-  return window.location.pathname === "/new" ? "new" : "browse";
+  const path = window.location.pathname;
+  if (path === "/new") return "new";
+  if (path === "/my" || path.startsWith("/my/")) return "my";
+  return "browse";
 }
 
 function initialNewPhase(gallery: Gallery): Phase {
@@ -72,11 +84,18 @@ export function App() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [me, setMe] = useState<AuthMe | null>(null);
 
   useEffect(() => {
     const onPopState = () => setRoute(parseRoute());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    fetchMe()
+      .then((res) => setMe(res))
+      .catch(() => setMe(null));
   }, []);
 
   useEffect(() => {
@@ -86,7 +105,7 @@ export function App() {
   }, []);
 
   const navigate = useCallback((next: PublicRoute) => {
-    const path = next === "new" ? "/new" : "/browse";
+    const path = next === "new" ? "/new" : next === "my" ? "/my" : "/browse";
     if (window.location.pathname !== path) {
       window.history.pushState(null, "", path);
     }
@@ -108,22 +127,30 @@ export function App() {
 
   if (route === "browse") {
     return (
-      <PublicShell route={route} onNavigate={navigate}>
+      <PublicShell route={route} onNavigate={navigate} me={me}>
         <BrowsePage />
+      </PublicShell>
+    );
+  }
+
+  if (route === "my") {
+    return (
+      <PublicShell route={route} onNavigate={navigate} me={me}>
+        <MyHarnessesPage />
       </PublicShell>
     );
   }
 
   if (galleryError) {
     return (
-      <PublicShell route={route} onNavigate={navigate}>
+      <PublicShell route={route} onNavigate={navigate} me={me}>
         <ErrorScreen message={`Could not load gallery: ${galleryError}`} onHome={goHome} />
       </PublicShell>
     );
   }
   if (!gallery || phase.kind === "loading") {
     return (
-      <PublicShell route={route} onNavigate={navigate}>
+      <PublicShell route={route} onNavigate={navigate} me={me}>
         <CenteredMessage onHome={goHome}>Loading…</CenteredMessage>
       </PublicShell>
     );
@@ -251,12 +278,18 @@ export function App() {
 function PublicShell({
   route,
   onNavigate,
+  me,
   children,
 }: {
   route: PublicRoute;
   onNavigate: (route: PublicRoute) => void;
+  me: AuthMe | null;
   children: React.ReactNode;
 }) {
+  const onLogout = async () => {
+    await postLogout();
+    window.location.reload();
+  };
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
@@ -275,7 +308,7 @@ function PublicShell({
               public catalog
             </div>
           </button>
-          <nav className="flex flex-wrap gap-2">
+          <nav className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className={`btn ${route === "browse" ? "btn-active" : ""}`}
@@ -290,9 +323,30 @@ function PublicShell({
             >
               New
             </button>
+            {me ? (
+              <button
+                type="button"
+                className={`btn ${route === "my" ? "btn-active" : ""}`}
+                onClick={() => onNavigate("my")}
+              >
+                My harnesses
+              </button>
+            ) : null}
             <a className="btn" href={DOCS_URL}>
               Docs
             </a>
+            {me ? (
+              <div className="flex items-center gap-2 border border-line px-2 py-1 text-[11px]">
+                <span className="text-muted">@{me.login}</span>
+                <button type="button" className="text-accent" onClick={onLogout}>
+                  sign out
+                </button>
+              </div>
+            ) : (
+              <a className="btn" href="/api/auth/login?next=/my">
+                Sign in
+              </a>
+            )}
           </nav>
         </div>
       </header>
