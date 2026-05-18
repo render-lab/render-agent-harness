@@ -111,6 +111,24 @@
     caret-color: var(--color-accent);
   }
 
+  /* Strip native select chrome; draw our own chevron with breathing
+   * room on the right (see wizard index.css for the same pattern). */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23888' stroke-width='1.5'><path d='M1 1L5 5L9 1'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 10px 6px;
+    padding-right: 2.25rem;
+  }
+
+  select option {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {

@@ -102,6 +102,29 @@
     caret-color: var(--color-accent);
   }
 
+  /* Strip the OS-native select chrome and draw a brutalist chevron in
+   * its place. `appearance: none` removes the platform arrow on all
+   * three engines; the background-image is a small inline SVG with a
+   * neutral gray stroke that reads correctly in both light and dark
+   * themes. Right padding leaves the chevron clear of the value. */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23888' stroke-width='1.5'><path d='M1 1L5 5L9 1'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 10px 6px;
+    padding-right: 2.25rem;
+  }
+
+  /* Style the option list itself where the browser allows it. Most
+   * engines ignore option styling, but Firefox respects bg + color. */
+  select option {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
