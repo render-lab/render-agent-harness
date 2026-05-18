@@ -35,6 +35,12 @@ export interface ScaffoldResponse {
   deployUrl: string;
   /** Random slug used for the managed repo (e.g. "my-agent-7af3"). */
   repoSlug: string;
+  /**
+   * When the scaffold was anonymous (no session cookie), the success
+   * screen shows this URL so the user can sign in later and link the
+   * harness to their account. Absent when the scaffold was authenticated.
+   */
+  claimUrl?: string;
 }
 
 export interface ScaffoldJobResponse {

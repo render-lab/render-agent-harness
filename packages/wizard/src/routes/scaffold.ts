@@ -1,7 +1,8 @@
 import type { ResolvedGallery } from "@render-harness/registry/gallery";
 import type { Answers } from "create-render-agent";
 import { addBlueprintFilesToMap, buildFileMap, removeLocalEnvFile } from "create-render-agent";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
+import { readSessionCookie } from "../auth.js";
 import {
   buildDeployUrl,
   buildScaffoldRepoName,
@@ -10,6 +11,7 @@ import {
   type GithubAppCreds,
 } from "../github-app.js";
 import type { RateLimiter } from "../rate-limit.js";
+import type { WizardStore } from "../store.js";
 import { verifyTurnstile } from "../turnstile.js";
 import type {
   ErrorResponse,
@@ -18,6 +20,7 @@ import type {
   ScaffoldRequest,
   ScaffoldResponse,
 } from "../types.js";
+import { signClaimToken } from "./my.js";
 
 /**
  * Indirection for the Octokit-creating side effect so tests can inject
@@ -43,6 +46,17 @@ export interface RegisterScaffoldRouteOpts {
    * never set in production.
    */
   mockScaffold?: boolean;
+  /**
+   * Optional ownership tracking. When provided, scaffolds initiated
+   * with a session cookie are linked to the user (collaborator-add +
+   * `wizard_user_repos` row). Anonymous scaffolds get a `claimUrl` in
+   * the success response.
+   */
+  store?: WizardStore;
+  /** HMAC secret used to sign session cookies + claim tokens. */
+  sessionSecret?: string | null;
+  /** Public origin of the wizard, used to embed the claim URL. */
+  publicUrl?: string;
   deps?: Partial<ScaffoldDeps>;
 }
 
@@ -122,8 +136,11 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
     }
 
     const answers = buildAnswers({ body, template, bundleEntry });
+    // Read the session cookie before kicking off the async job (the
+    // request context isn't available inside runScaffoldJob).
+    const sessionUserId = readSessionUserId(c, opts.sessionSecret ?? null);
     const job = createScaffoldJob();
-    void runScaffoldJob({ job, body, answers, opts, deps });
+    void runScaffoldJob({ job, body, answers, opts, deps, sessionUserId });
     return c.json<ScaffoldJobResponse>({ jobId: job.id }, 202);
   });
 
@@ -197,8 +214,9 @@ async function runScaffoldJob(args: {
   answers: Answers;
   opts: RegisterScaffoldRouteOpts;
   deps: ScaffoldDeps;
+  sessionUserId: number | null;
 }): Promise<void> {
-  const { job, body, answers, opts, deps } = args;
+  const { job, body, answers, opts, deps, sessionUserId } = args;
   try {
     emitProgress(job, "building_file_map", "Preparing the scaffolded file tree");
     const desiredName = applyRepoPrefix(opts.repoPrefix, body.agentName);
@@ -258,10 +276,49 @@ async function runScaffoldJob(args: {
     });
 
     emitProgress(job, "creating_repo", "Building the Deploy to Render link");
+
+    // Link the new repo to the authenticated user (collaborator-add +
+    // wizard_user_repos row), or fall through to anonymous-claim URL.
+    let claimUrl: string | undefined;
+    if (opts.store && sessionUserId !== null) {
+      try {
+        const user = await opts.store.getUser(sessionUserId);
+        if (user) {
+          await octokit.repos.addCollaborator({
+            owner: opts.org,
+            repo: result.repoName,
+            username: user.login,
+            permission: "push",
+          });
+          await opts.store.addUserRepo({
+            githubUserId: sessionUserId,
+            org: opts.org,
+            repo: result.repoName,
+            installationId,
+            agentSlug,
+            role: "owner",
+          });
+        }
+      } catch (_err) {
+        // Linking is best-effort; never fail the scaffold over it.
+        // (The user can still claim later via the claim URL.)
+      }
+    } else if (opts.store && opts.sessionSecret) {
+      claimUrl = buildClaimUrl({
+        publicUrl: opts.publicUrl ?? "",
+        sessionSecret: opts.sessionSecret,
+        org: opts.org,
+        repo: result.repoName,
+        installationId,
+        agentSlug,
+      });
+    }
+
     emitDone(job, {
       repoUrl: result.repoUrl,
       deployUrl: buildDeployUrl(result.repoUrl),
       repoSlug: result.repoName,
+      ...(claimUrl ? { claimUrl } : {}),
     });
   } catch (err) {
     const details =
@@ -279,6 +336,30 @@ async function runScaffoldJob(args: {
           : String(err);
     emitError(job, "scaffold_failed", details);
   }
+}
+
+function readSessionUserId(c: Context, secret: string | null): number | null {
+  if (!secret) return null;
+  const claims = readSessionCookie(c, secret);
+  return claims?.githubUserId ?? null;
+}
+
+function buildClaimUrl(args: {
+  publicUrl: string;
+  sessionSecret: string;
+  org: string;
+  repo: string;
+  installationId: string;
+  agentSlug: string;
+}): string {
+  const token = signClaimToken(args.sessionSecret, {
+    org: args.org,
+    repo: args.repo,
+    installationId: args.installationId,
+    agentSlug: args.agentSlug,
+  });
+  const base = args.publicUrl.replace(/\/+$/, "") || "";
+  return `${base}/api/harnesses/claim?token=${encodeURIComponent(token)}`;
 }
 
 function createScaffoldJob(): ScaffoldJob {
