@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type AgentSummary, installCapability } from "../api.js";
+import { Select } from "../components/Select.js";
 
 export function InstallCapabilityModal({
   agents,
@@ -72,47 +73,51 @@ export function InstallCapabilityModal({
             close
           </button>
         </header>
-        <label className="label block" htmlFor="capability-pack">
+        <span className="label block" id="capability-pack-label">
           capability
-        </label>
-        <select
-          id="capability-pack"
-          className="mt-1 w-full border border-line bg-bg p-2"
-          value={pack}
-          onChange={(e) => setPack(e.target.value)}
-        >
-          <option value="@render-harness/cap-slack">Slack</option>
-          <option value="@render-harness/cap-github">GitHub</option>
-          <option value="@render-harness/cap-linear">Linear</option>
-          <option value="@render-harness/cap-webhook-generic">Generic webhook</option>
-        </select>
-        <label className="label mt-3 block" htmlFor="capability-agent">
+        </span>
+        <div className="mt-1">
+          <Select
+            id="capability-pack"
+            value={pack}
+            onChange={setPack}
+            ariaLabel="capability pack"
+            options={[
+              { value: "@render-harness/cap-slack", label: "Slack" },
+              { value: "@render-harness/cap-github", label: "GitHub" },
+              { value: "@render-harness/cap-linear", label: "Linear" },
+              { value: "@render-harness/cap-webhook-generic", label: "Generic webhook" },
+            ]}
+          />
+        </div>
+        <span className="label mt-3 block" id="capability-agent-label">
           target agent
-        </label>
-        <select
-          id="capability-agent"
-          className="mt-1 w-full border border-line bg-bg p-2"
-          value={agentId}
-          onChange={(e) => setAgentId(e.target.value)}
-        >
-          {agents.map((agent) => (
-            <option key={agent.name} value={agent.name}>
-              {agent.name}
-            </option>
-          ))}
-        </select>
-        <label className="label mt-3 block" htmlFor="capability-access-mode">
+        </span>
+        <div className="mt-1">
+          <Select
+            id="capability-agent"
+            value={agentId}
+            onChange={setAgentId}
+            ariaLabel="target agent"
+            placeholder={agents.length === 0 ? "no agents available" : "select agent"}
+            options={agents.map((agent) => ({ value: agent.name, label: agent.name }))}
+          />
+        </div>
+        <span className="label mt-3 block" id="capability-access-mode-label">
           access mode
-        </label>
-        <select
-          id="capability-access-mode"
-          className="mt-1 w-full border border-line bg-bg p-2"
-          value={accessMode}
-          onChange={(e) => setAccessMode(e.target.value as "read" | "read_write")}
-        >
-          <option value="read">read</option>
-          <option value="read_write">read_write</option>
-        </select>
+        </span>
+        <div className="mt-1">
+          <Select<"read" | "read_write">
+            id="capability-access-mode"
+            value={accessMode}
+            onChange={setAccessMode}
+            ariaLabel="access mode"
+            options={[
+              { value: "read", label: "read" },
+              { value: "read_write", label: "read_write" },
+            ]}
+          />
+        </div>
         {pack === "@render-harness/cap-slack" ? (
           <>
             <label className="label mt-3 block" htmlFor="capability-allowed-channels">

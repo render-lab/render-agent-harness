@@ -624,24 +624,59 @@ function normalizeInstance(raw: unknown): VitalsInstance | null {
   };
 }
 
+/**
+ * Render's `/v1/logs` returns each entry as
+ *
+ *   { timestamp, message, labels: [{ name, value }, ...] }
+ *
+ * with `level`, `type`, `instance`, `host`, `method`, `statusCode`, and
+ * `path` living inside `labels` rather than at the top level. The
+ * fallbacks to top-level keys keep the test fixtures (and any future
+ * shape change) working without losing data.
+ */
 function normalizeLog(raw: unknown): VitalsLogEntry | null {
   const value = unwrapResource(raw, "log");
   if (!isRecord(value)) return null;
   const timestamp = readStringField(value, ["timestamp", "time", "createdAt", "created_at"]);
   const message = readStringField(value, ["message", "text", "line"]);
   if (!timestamp || !message) return null;
+  const labels = readLabels(value.labels);
+  const labelOrField = (labelKeys: string[], fieldKeys: string[] = labelKeys): string | null => {
+    for (const key of labelKeys) {
+      const v = labels.get(key);
+      if (v) return v;
+    }
+    return readStringField(value, fieldKeys);
+  };
   return {
     id: readStringField(value, ["id"]) ?? `${timestamp}:${message.slice(0, 80)}`,
     timestamp,
     message,
-    level: readStringField(value, ["level", "severity"]),
-    type: readStringField(value, ["type"]),
-    resource: readStringField(value, ["resource", "resourceId"]),
-    instance: readStringField(value, ["instance", "instanceId"]),
-    method: readStringField(value, ["method"]),
-    path: readStringField(value, ["path"]),
-    statusCode: readStatusCode(value),
+    level: labelOrField(["level", "severity"]),
+    type: labelOrField(["type"]),
+    resource: labelOrField(["resource"], ["resource", "resourceId"]),
+    instance: labelOrField(["instance"], ["instance", "instanceId"]),
+    method: labelOrField(["method"]),
+    path: labelOrField(["path"]),
+    statusCode: labels.get("statusCode") ?? labels.get("status_code") ?? readStatusCode(value),
   };
+}
+
+/**
+ * Render's `labels` field is an array of `{ name, value }` pairs. We
+ * fold it into a `Map<string, string>` once per log entry so the
+ * downstream lookups stay O(1) and don't have to re-scan the array.
+ */
+function readLabels(raw: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!Array.isArray(raw)) return out;
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const name = readStringField(item, ["name", "key"]);
+    const value = readStringField(item, ["value"]);
+    if (name && value && !out.has(name)) out.set(name, value);
+  }
+  return out;
 }
 
 function extractMetricPoints(raw: unknown): VitalsMetricPoint[] {

@@ -23,6 +23,7 @@ import {
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { formatDateTime, formatRelative } from "../components/format.js";
 import { SectionHeader } from "../components/SectionHeader.js";
+import { Select } from "../components/Select.js";
 
 const RANGES: { id: number; label: string; resolutionSeconds: number }[] = [
   { id: 30, label: "30m", resolutionSeconds: 30 },
@@ -219,18 +220,22 @@ export function VitalsTab() {
           setLogQuery({ level: logLevel, text: logText });
         }}
       >
-        <label className="grid gap-1">
-          <span className="label">level</span>
-          <select
+        <div className="grid w-32 gap-1">
+          <span className="label" id="vitals-log-level-label">
+            level
+          </span>
+          <Select<LogLevel>
             value={logLevel}
-            onChange={(event) => setLogLevel(event.target.value as LogLevel)}
-          >
-            <option value="all">all</option>
-            <option value="error">error</option>
-            <option value="warn">warn</option>
-            <option value="info">info</option>
-          </select>
-        </label>
+            onChange={setLogLevel}
+            ariaLabel="log level"
+            options={[
+              { value: "all", label: "all" },
+              { value: "error", label: "error" },
+              { value: "warn", label: "warn" },
+              { value: "info", label: "info" },
+            ]}
+          />
+        </div>
         <label className="grid min-w-56 flex-1 gap-1">
           <span className="label">text</span>
           <input

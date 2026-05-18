@@ -206,19 +206,26 @@ describe("GET /vitals/logs", () => {
     delete process.env.RENDER_OWNER_ID;
   });
 
-  it("proxies logs from the Render API", async () => {
+  it("proxies logs from the Render API and unpacks the `labels` array", async () => {
+    // Render's /v1/logs response keeps level/type/method/path/statusCode
+    // inside labels rather than at the top level; verify we surface
+    // them through to the operator UI.
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         logs: [
           {
             id: "log-1",
             timestamp: "2026-05-17T10:00:00.000Z",
-            message: "hello",
-            level: "info",
-            type: "app",
-            method: "GET",
-            path: "/healthz",
-            statusCode: 200,
+            message: "GET /healthz 200",
+            labels: [
+              { name: "level", value: "info" },
+              { name: "type", value: "request" },
+              { name: "method", value: "GET" },
+              { name: "path", value: "/healthz" },
+              { name: "statusCode", value: "200" },
+              { name: "instance", value: "srv-abc123-7gx2" },
+              { name: "resource", value: "srv-abc123" },
+            ],
           },
         ],
         nextCursor: "next",
@@ -228,10 +235,28 @@ describe("GET /vitals/logs", () => {
     const res = await app.request("/vitals/logs?level=info&text=hello&limit=10");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      logs: Array<{ id: string; statusCode: string }>;
+      logs: Array<{
+        id: string;
+        level: string | null;
+        type: string | null;
+        method: string | null;
+        path: string | null;
+        statusCode: string | null;
+        instance: string | null;
+        resource: string | null;
+      }>;
       nextCursor: string | null;
     };
-    expect(body.logs[0]).toMatchObject({ id: "log-1", statusCode: "200" });
+    expect(body.logs[0]).toMatchObject({
+      id: "log-1",
+      level: "info",
+      type: "request",
+      method: "GET",
+      path: "/healthz",
+      statusCode: "200",
+      instance: "srv-abc123-7gx2",
+      resource: "srv-abc123",
+    });
     expect(body.nextCursor).toBe("next");
 
     const url = new URL(String(fetchImpl.mock.calls[0]?.[0]));
@@ -240,6 +265,30 @@ describe("GET /vitals/logs", () => {
     expect(url.searchParams.get("resource")).toBe("srv-abc123");
     expect(url.searchParams.get("level")).toBe("info");
     expect(url.searchParams.get("text")).toBe("hello");
+  });
+
+  it("falls back to top-level fields when Render returns them flat", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        logs: [
+          {
+            id: "log-2",
+            timestamp: "2026-05-17T10:00:00.000Z",
+            message: "hello",
+            level: "warn",
+            type: "app",
+            statusCode: 500,
+          },
+        ],
+      }),
+    );
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/vitals/logs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      logs: Array<{ level: string | null; type: string | null; statusCode: string | null }>;
+    };
+    expect(body.logs[0]).toMatchObject({ level: "warn", type: "app", statusCode: "500" });
   });
 
   it("503s when RENDER_OWNER_ID is missing", async () => {

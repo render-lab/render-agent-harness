@@ -13,6 +13,7 @@ import { type AgentSummary, ApiError, listAgents } from "../api.js";
 import { useConversationSession } from "../chat/runtime.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { Markdown } from "../components/Markdown.js";
+import { Select } from "../components/Select.js";
 
 interface ChatTabProps {
   /** When set, hydrate this specific conversation; otherwise start blank. */
@@ -188,17 +189,18 @@ function ChatToolbar({
           {agents[0]?.name} <span className="text-muted">v{agents[0]?.version}</span>
         </span>
       ) : (
-        <select
-          value={selectedAgent ?? ""}
-          onChange={(e) => onSelectAgent(e.target.value)}
-          className="px-1 py-0.5"
-        >
-          {agents.map((a) => (
-            <option key={a.name} value={a.name}>
-              {a.name} v{a.version}
-            </option>
-          ))}
-        </select>
+        <div className="min-w-44">
+          <Select
+            value={selectedAgent ?? ""}
+            onChange={onSelectAgent}
+            ariaLabel="agent"
+            options={agents.map((a) => ({
+              value: a.name,
+              label: a.name,
+              hint: `v${a.version}`,
+            }))}
+          />
+        </div>
       )}
 
       {status && (

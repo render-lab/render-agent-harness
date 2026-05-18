@@ -6,6 +6,7 @@ import {
   type ModelPreset,
   normalizeSpec,
 } from "../lib/model-presets.js";
+import { Select } from "./Select.js";
 
 /**
  * Flat radio list of model presets plus a "custom" sub-form. Shared
@@ -91,14 +92,15 @@ function CustomFields({
   return (
     <div className="space-y-2 border border-line p-3 text-xs">
       <Field label="Provider">
-        <select
-          className="w-full border border-line bg-transparent p-1.5 text-xs"
+        <Select<AgentModelSummary["provider"]>
           value={spec.provider}
-          onChange={(e) => update({ provider: e.target.value as AgentModelSummary["provider"] })}
-        >
-          <option value="anthropic">anthropic</option>
-          <option value="openai-compat">openai-compat</option>
-        </select>
+          onChange={(provider) => update({ provider })}
+          ariaLabel="provider"
+          options={[
+            { value: "anthropic", label: "anthropic" },
+            { value: "openai-compat", label: "openai-compat" },
+          ]}
+        />
       </Field>
       <Field label="Model id">
         <input
