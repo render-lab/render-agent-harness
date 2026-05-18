@@ -42,27 +42,31 @@ export function buildHarnessVersionInfo(args: {
   const firstPartyVersions = Object.entries(running).filter(([name]) =>
     name.startsWith(FIRST_PARTY_PREFIX),
   );
-  const uniqueVersions = new Set(firstPartyVersions.map(([, version]) => version));
-  if (uniqueVersions.size > 1) {
-    messages.push(
-      `First-party harness packages are running mixed versions: ${[...uniqueVersions].join(", ")}.`,
-    );
-    return { declaredRange, running, status: "warning", messages };
-  }
+  const uniqueVersions = [...new Set(firstPartyVersions.map(([, version]) => version))];
 
-  const runningVersion = [...uniqueVersions][0];
   if (declaredRange && !parsedRange) {
     return { declaredRange, running, status: "warning", messages };
   }
-  if (runningVersion && !valid(runningVersion)) {
-    messages.push(`Running harness version "${runningVersion}" is not valid semver.`);
+
+  const invalid = uniqueVersions.filter((v) => !valid(v));
+  if (invalid.length > 0) {
+    messages.push(`Running harness version "${invalid[0]}" is not valid semver.`);
     return { declaredRange, running, status: "warning", messages };
   }
-  if (runningVersion && parsedRange && !satisfies(runningVersion, parsedRange)) {
-    messages.push(
-      `Running harness version ${runningVersion} does not satisfy declared range ${declaredRange}.`,
-    );
-    return { declaredRange, running, status: "incompatible", messages };
+
+  // Check each installed first-party version against the declared
+  // range. Patch-level drift inside the range is fine — different
+  // packages publish on different tracks (caps live on their own
+  // versions, dependents like @render-harness/web get cascade-bumped
+  // when an internal dep changes). The check only fires when at least
+  // one running version actually falls outside the declared range.
+  if (parsedRange) {
+    const outOfRange = firstPartyVersions.filter(([, v]) => !satisfies(v, parsedRange));
+    if (outOfRange.length > 0) {
+      const offenders = outOfRange.map(([name, v]) => `${name}@${v}`).join(", ");
+      messages.push(`Running ${offenders} does not satisfy declared range ${declaredRange}.`);
+      return { declaredRange, running, status: "incompatible", messages };
+    }
   }
 
   if (messages.length > 0) return { declaredRange, running, status: "warning", messages };

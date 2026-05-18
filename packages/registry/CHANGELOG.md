@@ -1,5 +1,11 @@
 # @render-harness/registry
 
+## 0.2.2
+
+### Patch Changes
+
+- Relax `buildHarnessVersionInfo`'s mixed-version check. Patch-level drift across the harness family is expected: `@render-harness/web` cascade-bumps when its internal `@render-harness/ui` dep patches, and capability packs version on their own tracks. The previous logic flagged any unique-version count > 1 as a warning, which made the operator UI show "First-party harness packages are running mixed versions" even when every installed version still satisfied the declared range. The check now only warns when at least one running version falls outside the declared range.
+
 ## 0.2.1
 
 ### Patch Changes

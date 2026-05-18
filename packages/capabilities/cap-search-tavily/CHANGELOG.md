@@ -1,5 +1,12 @@
 # @render-harness/cap-search-tavily
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/registry@0.2.2
+
 ## 0.1.5
 
 ### Patch Changes

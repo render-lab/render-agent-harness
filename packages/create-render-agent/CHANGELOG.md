@@ -1,5 +1,12 @@
 # create-render-agent
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/registry@0.2.2
+
 ## 0.2.2
 
 ### Patch Changes
