@@ -45,9 +45,39 @@ const BUNDLE_ENTRY: ResolvedAgentEntry = {
   },
 };
 
+const SINGLE_AGENT_MANIFEST: HarnessConfig = {
+  schemaVersion: 1,
+  name: "chat",
+  description: "Single-turn HTTP chat.",
+  harnessVersion: "^0.2",
+  shared: { model: { provider: "anthropic", model: "claude-sonnet-4-6" } },
+  agents: [
+    {
+      id: "chat-agent",
+      agent: { kind: "builtin", ref: "chat", systemPrompt: "hi" },
+      runtimes: [{ kind: "web" }],
+    },
+  ],
+} as unknown as HarnessConfig;
+
+const SINGLE_AGENT_ENTRY: ResolvedAgentEntry = {
+  slug: "chat",
+  name: "Chat",
+  description: "Single-turn HTTP chat.",
+  categories: [],
+  runtimeKinds: ["web"],
+  requiresHarness: "^0.2",
+  capabilities: [],
+  author: "render-harness",
+  kind: "agent",
+  manifest: SINGLE_AGENT_MANIFEST,
+  readme: null,
+  sourceFiles: {},
+};
+
 const GALLERY: ResolvedGallery = {
   schemaVersion: 1,
-  agents: [BUNDLE_ENTRY],
+  agents: [BUNDLE_ENTRY, SINGLE_AGENT_ENTRY],
   capabilities: [
     {
       pack: "@render-harness/cap-memory-pg",
@@ -263,6 +293,33 @@ describe("POST /api/agents/add", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { ok: boolean };
     expect(json.ok).toBe(true);
+  });
+
+  it("commits a single-agent (builtin) gallery entry without touching src/", async () => {
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": TARGET_YAML,
+      "package.json": TARGET_PKG,
+      "render.yaml": TARGET_RENDER,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify({
+        ...BODY,
+        bundleSlug: "chat",
+        agentId: "chat-agent",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; changedFiles: string[] };
+    expect(json.ok).toBe(true);
+    expect(json.changedFiles).toContain("render-harness.yaml");
+    // No source file was written — the agent is a builtin reference.
+    expect(json.changedFiles).not.toContain("src/chat-agent.ts");
+    expect(json.changedFiles).not.toContain("src/chat.ts");
+    // Each written path was committed exactly once.
+    const paths = createOrUpdateFileContents.mock.calls.map((c) => (c[0] as { path: string }).path);
+    expect(paths.filter((p) => p.startsWith("src/"))).toEqual([]);
   });
 
   it("returns 401 with no auth at all (no bearer, no session)", async () => {

@@ -228,7 +228,11 @@ export async function loadGalleryFromSource(
 
     const readme = await readFileSafe(join(absPath, "README.md"));
     const kind = deriveEntryKind(manifest);
-    const sourceFiles = kind === "bundle" ? await collectBundleSources(absPath) : {};
+    // Single-agent gallery entries don't typically ship a src/ tree (they're
+    // seed-templates around a builtin agent), but they CAN — kind: custom
+    // agents reference a `./src/<id>.ts` entrypoint. Walking unconditionally
+    // returns `{}` when there's no src/ directory, so it's safe either way.
+    const sourceFiles = await collectEntrySources(absPath);
 
     agents.push({
       slug: entry.slug,
@@ -311,11 +315,13 @@ function deriveEntryKind(manifest: HarnessConfig): GalleryEntryKind {
 
 /**
  * Walk an entry directory and collect every file under `src/`. Used
- * only for `kind: "bundle"` entries — the scaffolder copies these
- * verbatim into the user's project. Skips dot-files, build artifacts,
- * and `node_modules` defensively.
+ * by both `kind: "bundle"` entries (where the scaffolder copies sources
+ * verbatim) and by `kind: "agent"` entries that happen to ship custom
+ * source (rare; most reference a builtin). Skips dot-files, build
+ * artifacts, and `node_modules` defensively. Returns `{}` when the
+ * entry has no `src/` tree.
  */
-async function collectBundleSources(absPath: string): Promise<Record<string, string>> {
+async function collectEntrySources(absPath: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   const srcRoot = join(absPath, "src");
   await walkDirectory(srcRoot, async (filePath) => {

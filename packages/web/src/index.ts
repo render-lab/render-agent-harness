@@ -212,21 +212,33 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
   });
+  // Default the wizard URL server-side so the operator UI's add-agent /
+  // install-capability / edit-model flows work without per-deployment
+  // env-var configuration. `RENDER_HARNESS_WIZARD_URL` remains an
+  // override for self-hosted wizards and local dev. See
+  // `enrichDeploymentInfo` in @render-harness/registry for the matching
+  // default on the `DeploymentInfo.wizardServiceUrl` field.
+  const wizardServiceUrl =
+    process.env.RENDER_HARNESS_WIZARD_URL ??
+    opts.deployment?.wizardServiceUrl ??
+    "https://render-agent-harness-wiz.onrender.com";
+  const wizardSharedSecret = process.env.WIZARD_SHARED_SECRET ?? null;
+
   registerCapabilityInstallRoute(app, {
     auth,
     agents,
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
-    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
-    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
+    wizardServiceUrl,
+    wizardSharedSecret,
   });
   registerAgentAddRoute(app, {
     auth,
     agents,
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
-    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
-    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
+    wizardServiceUrl,
+    wizardSharedSecret,
   });
   registerDeploymentRoutes(app, {
     auth,
@@ -239,8 +251,8 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     agents,
     pathPrefix,
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
-    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
-    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
+    wizardServiceUrl,
+    wizardSharedSecret,
   });
   registerConfigRoutes(app, {
     auth,

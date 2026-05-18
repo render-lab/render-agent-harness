@@ -12,6 +12,14 @@ import type { AgentEntryInput, EnvVarSpec, HarnessConfig, RuntimeBlockInput } fr
 import { isWorkflowTaskAgent } from "./schema.js";
 
 /**
+ * Production wizard service. The deployed harness's web layer talks to
+ * this for the agent catalog and add-agent commits when the operator
+ * hasn't set `RENDER_HARNESS_WIZARD_URL`. Self-hosted harnesses + local
+ * dev override via that env var.
+ */
+const DEFAULT_WIZARD_URL = "https://render-agent-harness-wiz.onrender.com";
+
+/**
  * Translate a loaded {@link HarnessConfig} into the wire-shape consumed
  * by the operator UI (`GET /deployment`). The bundle entrypoints feed
  * this to `serveWeb({ deployment })` so the UI header and Guide template
@@ -87,8 +95,12 @@ export async function enrichDeploymentInfo(
   const env = opts.env ?? process.env;
   const out: DeploymentInfo = { ...base };
 
-  const wizardUrl = env.RENDER_HARNESS_WIZARD_URL;
-  if (wizardUrl && wizardUrl.length > 0) out.wizardServiceUrl = wizardUrl;
+  // Always set wizardServiceUrl so in-UI affordances (add agent, edit
+  // model, install capability) work out of the box. Operators only need
+  // to override when running a self-hosted wizard or doing local dev.
+  const wizardOverride = env.RENDER_HARNESS_WIZARD_URL;
+  out.wizardServiceUrl =
+    wizardOverride && wizardOverride.length > 0 ? wizardOverride : DEFAULT_WIZARD_URL;
 
   const metadataPath = resolve(dirname(configPath), ".render-harness", "agent.json");
   try {
@@ -285,14 +297,14 @@ function implicitOperationalVars(config: HarnessConfig): EnvVarSpec[] {
       required: false,
       secret: false,
       description:
-        "Origin of the wizard service. Required for the Agents tab's in-UI model edit button.",
+        "Override the default wizard URL (https://render-agent-harness-wiz.onrender.com). Only set this when running a self-hosted wizard or pointing at local dev.",
     },
     {
       name: "WIZARD_SHARED_SECRET",
       required: false,
       secret: true,
       description:
-        "Shared secret for server-to-server PATCH calls into the wizard. Must match the wizard's value.",
+        "Shared secret for server-to-server commits into the wizard (add agent, install capability, edit model). The managed-repo flow injects this for you; self-hosted operators wire it manually.",
     },
   );
   return out;

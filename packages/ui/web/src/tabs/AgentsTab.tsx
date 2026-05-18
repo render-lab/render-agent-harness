@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   type AgentModelSummary,
   type AgentSummary,
@@ -10,14 +10,17 @@ import {
   listConnectors,
 } from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
+import { useToast } from "../components/Toaster.js";
 import { useDeployment } from "../deployment-context.js";
+import { useDeployWatch } from "../lib/useDeployWatch.js";
 import { AddAgentModal } from "./AddAgentModal.js";
 import { EditModelModal } from "./EditModelModal.js";
 import { InstallCapabilityModal } from "./InstallCapabilityModal.js";
 
+const ADD_AGENT_TOAST_ID = "agents-add";
+
 export function AgentsTab() {
   const deployment = useDeployment();
-  const wizardUrl = deployment?.wizardServiceUrl ?? null;
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
@@ -26,6 +29,7 @@ export function AgentsTab() {
   const [installingCapability, setInstallingCapability] = useState(false);
   const [addingAgent, setAddingAgent] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const startRedeployWatch = useRedeployFlow();
 
   useEffect(() => {
     let cancelled = false;
@@ -73,18 +77,24 @@ export function AgentsTab() {
           connectors={connectors}
           onAdd={() => setInstallingCapability(true)}
         />
-        {wizardUrl ? (
-          <div className="panel p-4 text-xs">
-            <div className="label mb-2">add another agent</div>
-            <p className="text-muted">
-              Pull an agent in from a gallery bundle. The wizard commits the agents[] entry, source
-              file, and re-emitted render.yaml to your managed repo.
+        <div className="panel p-4 text-xs">
+          <div className="label mb-2">add another agent</div>
+          <p className="text-muted">
+            Pull an agent in from the gallery. The wizard commits the agents[] entry, source file
+            (if any), capability dependencies, and re-emitted render.yaml to your managed repo;
+            Render auto-deploys with the new agent.
+          </p>
+          {deployment?.repoLocator?.installationId ? null : (
+            <p className="mt-2 text-[11px] text-muted">
+              {
+                "// commits require a managed-repo deployment (.render-harness/agent.json + WIZARD_SHARED_SECRET). The catalog is browsable either way."
+              }
             </p>
-            <button type="button" className="btn mt-3" onClick={() => setAddingAgent(true)}>
-              Add agent
-            </button>
-          </div>
-        ) : null}
+          )}
+          <button type="button" className="btn mt-3" onClick={() => setAddingAgent(true)}>
+            Add agent
+          </button>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           {agents.map((agent) => (
             <AgentCard
@@ -106,14 +116,66 @@ export function AgentsTab() {
           onInstalled={setNotice}
         />
       ) : null}
-      {addingAgent && wizardUrl ? (
+      {addingAgent ? (
         <AddAgentModal
-          wizardUrl={wizardUrl}
           onClose={() => setAddingAgent(false)}
-          onAdded={setNotice}
+          onAdded={(message) => {
+            setNotice(message);
+            startRedeployWatch(message);
+          }}
         />
       ) : null}
     </AsyncBoundary>
+  );
+}
+
+/**
+ * After the wizard commits a new agent, Render auto-deploys the service.
+ * Mirrors `useRestartFlow` from `ConfigTab` so the operator gets the
+ * same committed → restarting → restored toast chain, with a Reload
+ * action at the end (the SPA bundle stays cached after the redeploy and
+ * needs a refresh to pull in the new agents[]).
+ */
+function useRedeployFlow(): (committedMessage: string) => void {
+  const toast = useToast();
+  const [watching, setWatching] = useState(false);
+  const state = useDeployWatch({ enabled: watching });
+
+  useEffect(() => {
+    if (!watching) return;
+    if (state === "restarting") {
+      toast.show({
+        id: ADD_AGENT_TOAST_ID,
+        intent: "info",
+        duration: 0,
+        title: "Service restarting",
+        message: "Render is rolling out the new agent. Hang on…",
+      });
+    } else if (state === "restored") {
+      toast.show({
+        id: ADD_AGENT_TOAST_ID,
+        intent: "success",
+        duration: 0,
+        title: "Agent live",
+        message: "Reload the page to pick up the new agent.",
+        action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+      setWatching(false);
+    }
+  }, [state, watching, toast]);
+
+  return useCallback(
+    (message: string) => {
+      toast.show({
+        id: ADD_AGENT_TOAST_ID,
+        intent: "info",
+        duration: 0,
+        title: "Agent committed",
+        message: `${message} Waiting for Render to redeploy…`,
+      });
+      setWatching(true);
+    },
+    [toast],
   );
 }
 

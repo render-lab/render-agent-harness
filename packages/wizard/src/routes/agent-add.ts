@@ -117,7 +117,9 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       const renderYaml = await readRepoFile(octokit, locator, RENDER_YAML_PATH, branch, false);
 
       // Source file path is plan-time; read existing content so we can
-      // detect collisions without committing on conflict.
+      // detect collisions without committing on conflict. For builtin
+      // agents there's no source file at all — `sourceFilePath` is
+      // null and we skip the probe.
       const plan = planAgentAdd({
         gallery: opts.gallery,
         source: { bundleSlug: body.bundleSlug, agentId: body.agentId },
@@ -125,13 +127,9 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         existingSourceFileText: null, // probe below
       });
 
-      const existingSource = await readRepoFile(
-        octokit,
-        locator,
-        plan.spec.sourceFilePath,
-        branch,
-        false,
-      );
+      const existingSource = plan.spec.sourceFilePath
+        ? await readRepoFile(octokit, locator, plan.spec.sourceFilePath, branch, false)
+        : null;
       // Re-plan with the discovered source file. If a collision exists
       // the planner throws AgentAddError("source_file_conflict").
       const finalPlan = planAgentAdd({
@@ -186,13 +184,16 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       writes.set(PACKAGE_PATH, { text: nextPkg, sha: pkg.sha });
       if (nextEnv && env) writes.set(ENV_EXAMPLE_PATH, { text: nextEnv, sha: env.sha });
       // Always write the source file if its contents differ (planner
-      // already rejected hard conflicts).
-      const existingSourceText = existingSource?.text ?? null;
-      if (existingSourceText !== finalPlan.spec.sourceFileContent) {
-        writes.set(finalPlan.spec.sourceFilePath, {
-          text: finalPlan.spec.sourceFileContent,
-          sha: existingSource?.sha ?? null,
-        });
+      // already rejected hard conflicts). Builtin-only agents have a
+      // null sourceFilePath and skip this entirely.
+      if (finalPlan.spec.sourceFilePath && finalPlan.spec.sourceFileContent !== null) {
+        const existingSourceText = existingSource?.text ?? null;
+        if (existingSourceText !== finalPlan.spec.sourceFileContent) {
+          writes.set(finalPlan.spec.sourceFilePath, {
+            text: finalPlan.spec.sourceFileContent,
+            sha: existingSource?.sha ?? null,
+          });
+        }
       }
       if (nextRenderYaml && nextRenderYaml !== renderYaml?.text) {
         writes.set(RENDER_YAML_PATH, {
@@ -229,9 +230,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
     } catch (err) {
       if (err instanceof AgentAddError) {
         const status =
-          err.code === "agent_id_exists" ||
-          err.code === "source_file_conflict" ||
-          err.code === "not_a_bundle"
+          err.code === "agent_id_exists" || err.code === "source_file_conflict"
             ? 409
             : err.code === "bundle_not_found" || err.code === "agent_not_found_in_bundle"
               ? 404

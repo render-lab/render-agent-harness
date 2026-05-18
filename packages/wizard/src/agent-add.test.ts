@@ -56,9 +56,47 @@ const BUNDLE_ENTRY: ResolvedAgentEntry = {
   },
 };
 
+const SINGLE_AGENT_MANIFEST: HarnessConfig = {
+  schemaVersion: 1,
+  name: "chat",
+  description: "A minimal single-turn HTTP chat agent.",
+  harnessVersion: "^0.2",
+  shared: {
+    model: { provider: "anthropic", model: "claude-sonnet-4-6" },
+  },
+  agents: [
+    {
+      id: "chat-agent",
+      agent: {
+        kind: "builtin",
+        ref: "chat",
+        systemPrompt: "You are a helpful assistant.",
+      },
+      runtimes: [{ kind: "web" }],
+    },
+  ],
+} as unknown as HarnessConfig;
+
+const SINGLE_AGENT_ENTRY: ResolvedAgentEntry = {
+  slug: "chat",
+  name: "Chat",
+  description: "A minimal single-turn HTTP chat agent.",
+  categories: [],
+  runtimeKinds: ["web"],
+  requiresHarness: "^0.2",
+  capabilities: [],
+  author: "render-harness",
+  kind: "agent",
+  manifest: SINGLE_AGENT_MANIFEST,
+  readme: null,
+  // Single-agent gallery entries don't ship a src/ tree — the agent
+  // references a builtin (chat) shipped by @render-harness/registry.
+  sourceFiles: {},
+};
+
 const GALLERY: ResolvedGallery = {
   schemaVersion: 1,
-  agents: [BUNDLE_ENTRY],
+  agents: [BUNDLE_ENTRY, SINGLE_AGENT_ENTRY],
   capabilities: [
     {
       pack: "@render-harness/cap-memory-pg",
@@ -88,13 +126,26 @@ agents:
 describe("listAddableAgents", () => {
   it("flattens bundle agents into per-agent units", () => {
     const units = listAddableAgents(GALLERY);
-    expect(units).toHaveLength(2);
-    expect(units.map((u) => u.agentId).sort()).toEqual(["chat", "meeting-prep"]);
-    expect(units[0]).toMatchObject({
+    expect(units.map((u) => u.agentId).sort()).toEqual(["chat", "chat-agent", "meeting-prep"]);
+    const meeting = units.find((u) => u.agentId === "meeting-prep");
+    expect(meeting).toMatchObject({
       bundleSlug: "chief-of-staff",
       bundleName: "Chief of Staff",
       capabilities: ["@render-harness/cap-memory-pg"],
       envVars: ["CALENDAR_ICS_URL"],
+    });
+  });
+
+  it("includes single-agent gallery entries with the entry description as fallback", () => {
+    const units = listAddableAgents(GALLERY);
+    const chat = units.find((u) => u.agentId === "chat-agent");
+    expect(chat).toMatchObject({
+      bundleSlug: "chat",
+      bundleName: "Chat",
+      agentId: "chat-agent",
+      description: "A minimal single-turn HTTP chat agent.",
+      runtimeKinds: ["web"],
+      capabilities: [],
     });
   });
 });
@@ -179,6 +230,22 @@ describe("planAgentAdd", () => {
     });
     expect(plan.warnings.some((w) => w.includes("identical content"))).toBe(true);
   });
+
+  it("plans a builtin-agent add with no source file to write", () => {
+    const plan = planAgentAdd({
+      gallery: GALLERY,
+      source: { bundleSlug: "chat", agentId: "chat-agent" },
+      manifestText: TARGET_YAML,
+      existingSourceFileText: null,
+    });
+    expect(plan.spec.sourceFilePath).toBeNull();
+    expect(plan.spec.sourceFileContent).toBeNull();
+    expect(plan.warnings).toEqual([]);
+    expect(plan.spec.agentEntry).toMatchObject({
+      id: "chat-agent",
+      agent: { kind: "builtin", ref: "chat" },
+    });
+  });
 });
 
 describe("mutateManifestForAgentAdd", () => {
@@ -195,6 +262,20 @@ describe("mutateManifestForAgentAdd", () => {
     expect(next).toContain("CALENDAR_ICS_URL");
     // Original agent untouched.
     expect(next).toContain("id: original-chat");
+  });
+
+  it("appends a builtin-agent entry without touching capabilities or envSchema", () => {
+    const plan = planAgentAdd({
+      gallery: GALLERY,
+      source: { bundleSlug: "chat", agentId: "chat-agent" },
+      manifestText: TARGET_YAML,
+      existingSourceFileText: null,
+    });
+    const next = mutateManifestForAgentAdd({ yamlText: TARGET_YAML, plan });
+    expect(next).toContain("id: chat-agent");
+    expect(next).toContain("id: original-chat");
+    expect(next).not.toContain("cap-memory-pg");
+    expect(next).not.toContain("CALENDAR_ICS_URL");
   });
 
   it("does not duplicate capabilities already present", () => {

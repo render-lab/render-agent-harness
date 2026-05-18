@@ -349,13 +349,13 @@ export interface AddAgentResp {
   installUrl?: string;
 }
 
-export function fetchAgentCatalog(wizardUrl: string): Promise<AgentCatalogResp> {
-  // The catalog lives on the wizard, not the deployed harness. Browser
-  // calls it directly via the operator UI's "wizard URL" hint.
-  return fetch(`${wizardUrl.replace(/\/+$/, "")}/api/agents/catalog`).then(async (res) => {
-    if (!res.ok) throw new ApiError(`catalog fetch failed: ${res.status}`, res.status, null);
-    return (await res.json()) as AgentCatalogResp;
-  });
+export function fetchAgentCatalog(): Promise<AgentCatalogResp> {
+  // The catalog lives on the wizard service, but the deployed harness
+  // proxies it through `/agents/catalog` so the browser only ever talks
+  // same-origin (the wizard has no CORS headers, so a direct cross-
+  // origin fetch from the browser would always fail). The proxy also
+  // owns the default wizard URL — operators don't need to configure it.
+  return request<AgentCatalogResp>("/agents/catalog");
 }
 
 export function addAgent(body: AddAgentBody): Promise<AddAgentResp> {
