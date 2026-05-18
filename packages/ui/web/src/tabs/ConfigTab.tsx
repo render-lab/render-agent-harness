@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { type DeploymentEnvVar, listEnvVars, setEnvVar } from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { SectionHeader } from "../components/SectionHeader.js";
+import { useToast } from "../components/Toaster.js";
 import { useDeployment } from "../deployment-context.js";
+import { useDeployWatch } from "../lib/useDeployWatch.js";
 
 /**
  * Config tab: lists every env var the running stack needs (from
@@ -25,6 +27,7 @@ export function ConfigTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [editing, setEditing] = useState<DeploymentEnvVar | null>(null);
+  const notifyRestart = useRestartFlow();
 
   const refresh = useCallback(async () => {
     try {
@@ -54,6 +57,7 @@ export function ConfigTab() {
         canWrite={canWrite}
         renderServiceId={renderServiceId}
         onSaved={() => {
+          notifyRestart();
           void refresh();
           window.setTimeout(() => void refresh(), 5_000);
         }}
@@ -87,6 +91,7 @@ export function ConfigTab() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
+            notifyRestart();
             // Render's redeploy may kill us; re-poll a couple times in case.
             void refresh();
             window.setTimeout(() => void refresh(), 5_000);
@@ -96,6 +101,64 @@ export function ConfigTab() {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Bridges an env-var save into the toaster. Returns a `notifyRestart`
+ * callback that:
+ *
+ *   1. enqueues a sticky toast ("service is restarting…")
+ *   2. starts polling `/healthz` via {@link useDeployWatch}
+ *   3. when the watch flips to `restored`, swaps the toast for a
+ *      success message with a "Reload" action button
+ *
+ * The toast uses a stable id (`config-restart`) so back-to-back saves
+ * collapse into one notification instead of stacking.
+ *
+ * Reload is the right call because the SPA bundle is served by the same
+ * service Render just restarted — the old bundle is still in the
+ * browser but the backend may have new builtins/agents/envSchema rows.
+ */
+const RESTART_TOAST_ID = "config-restart";
+
+function useRestartFlow(): () => void {
+  const toast = useToast();
+  const [watching, setWatching] = useState(false);
+  const state = useDeployWatch({ enabled: watching });
+
+  useEffect(() => {
+    if (!watching) return;
+    if (state === "restarting") {
+      toast.show({
+        id: RESTART_TOAST_ID,
+        intent: "info",
+        duration: 0,
+        title: "Service restarting",
+        message: "Render is rolling out the new value. Hang on…",
+      });
+    } else if (state === "restored") {
+      toast.show({
+        id: RESTART_TOAST_ID,
+        intent: "success",
+        duration: 0,
+        title: "Restart complete",
+        message: "Reload the page to pick up the new value.",
+        action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+      setWatching(false);
+    }
+  }, [state, watching, toast]);
+
+  return useCallback(() => {
+    toast.show({
+      id: RESTART_TOAST_ID,
+      intent: "info",
+      duration: 0,
+      title: "Saved — waiting on Render",
+      message: "Triggering a redeploy. We'll let you know once it's back.",
+    });
+    setWatching(true);
+  }, [toast]);
 }
 
 function FeatureTogglePanel({

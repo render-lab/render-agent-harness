@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiagnosticsBanner } from "./components/DiagnosticsBanner.js";
+import { ToastProvider } from "./components/Toaster.js";
 import {
   DeploymentProvider,
   useDeployment,
@@ -84,7 +85,9 @@ function parseHash(): Route {
 export function App() {
   return (
     <DeploymentProvider>
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </DeploymentProvider>
   );
 }
