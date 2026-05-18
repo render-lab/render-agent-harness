@@ -1,5 +1,10 @@
 import type { DeploymentInfo, DiagnosticCheck } from "@render-harness/contracts";
-import type { AgentDefinition, Pool, UserId } from "@render-harness/core";
+import {
+  type AgentDefinition,
+  listRegisteredOAuthProviders,
+  type Pool,
+  type UserId,
+} from "@render-harness/core";
 import type { Hono } from "hono";
 
 export type { DiagnosticCheck };
@@ -84,6 +89,51 @@ async function runDiagnostics(args: RunDiagnosticsArgs): Promise<DiagnosticCheck
       title: "WEB_API_KEY is set",
       message: "Bearer auth is configured.",
     });
+  }
+
+  // Per-end-user OAuth connections. Only surfaced when at least one
+  // capability pack has registered an OAuth provider — otherwise this
+  // env var is irrelevant for the deployment and would just create
+  // noise.
+  const oauthProviders = listRegisteredOAuthProviders();
+  if (oauthProviders.length > 0) {
+    if (!process.env.CONNECTIONS_ENCRYPTION_KEY) {
+      checks.push({
+        id: "connections_encryption_key",
+        level: "error",
+        title: "CONNECTIONS_ENCRYPTION_KEY is not set",
+        message: `${oauthProviders.length} OAuth provider${oauthProviders.length === 1 ? "" : "s"} (${oauthProviders.map((p) => p.id).join(", ")}) need a 32-byte secret to encrypt user refresh tokens at rest.`,
+        hint: "Generate one with `openssl rand -base64 32` and set it on the service.",
+      });
+    } else {
+      checks.push({
+        id: "connections_encryption_key",
+        level: "ok",
+        title: "CONNECTIONS_ENCRYPTION_KEY is set",
+        message: "Per-end-user OAuth connections can be stored encrypted.",
+      });
+    }
+    for (const provider of oauthProviders) {
+      const missing: string[] = [];
+      if (!process.env[provider.clientIdEnv]) missing.push(provider.clientIdEnv);
+      if (!process.env[provider.clientSecretEnv]) missing.push(provider.clientSecretEnv);
+      if (missing.length > 0) {
+        checks.push({
+          id: `oauth_provider_${provider.id}`,
+          level: "error",
+          title: `${provider.displayName} OAuth client credentials missing`,
+          message: `Provider "${provider.id}" needs ${missing.join(" and ")} to start the OAuth flow.`,
+          hint: `Register an OAuth client with the provider, then set ${missing.join(" and ")} on this service.`,
+        });
+      } else {
+        checks.push({
+          id: `oauth_provider_${provider.id}`,
+          level: "ok",
+          title: `${provider.displayName} OAuth is configured`,
+          message: `${provider.clientIdEnv} and ${provider.clientSecretEnv} are set.`,
+        });
+      }
+    }
   }
 
   // Cookie session secret. Falls back to ephemeral, which works but means

@@ -9,6 +9,8 @@ import {
   getPool,
   installShutdownHandlers,
   type Logger,
+  listRegisteredOAuthProviders,
+  type OAuthProviderConfig,
   type Pool,
 } from "@render-harness/core";
 import { type Context, Hono } from "hono";
@@ -22,6 +24,7 @@ import { registerBlueprintRoutes } from "./routes/blueprint.js";
 import { registerCapabilityRoutes } from "./routes/capabilities.js";
 import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
 import { registerConfigRoutes } from "./routes/config.js";
+import { registerConnectionsRoutes } from "./routes/connections.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
 import { registerDeploymentRoutes } from "./routes/deployment.js";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.js";
@@ -38,6 +41,22 @@ import {
 export type { ConnectorMountConfig } from "./connector-mount.js";
 export type { DiagnosticCheck } from "./routes/diagnostics.js";
 export type { UiMountConfig } from "./ui-mount.js";
+
+export interface ConnectionsMountConfig {
+  /**
+   * Explicit OAuth provider list. When omitted, the routes read from
+   * the global registry (populated by `defineFromConfig`).
+   */
+  providers?: OAuthProviderConfig[];
+  /** provider id → pack names that depend on it, for UI `requiredBy` labels. */
+  providerRequiredBy?: Map<string, string[]>;
+  /** Public origin used when building OAuth redirect URIs. */
+  publicUrl?: string;
+  /** Override the HMAC secret used to sign OAuth state. Defaults to `UI_COOKIE_SECRET`. */
+  stateSecret?: string;
+  /** Test injection point for the route's outbound fetch. */
+  fetchImpl?: typeof fetch;
+}
 
 /**
  * Multi-tenant public HTTP service. Sits in front of `runtime-worker` and
@@ -127,6 +146,20 @@ export interface ServeWebOpts {
    * object for custom entry root / env handling.
    */
   connectors?: ConnectorMountConfig;
+  /**
+   * Mount the per-end-user OAuth connection routes
+   * (`/connections/:provider/start|callback`, `GET /connections`,
+   * `DELETE /connections/:provider`).
+   *
+   *  - `true` (default): auto-mount, reading providers from the
+   *    process-level OAuth provider registry (populated by
+   *    `defineFromConfig`).
+   *  - `false`: don't mount.
+   *  - object: mount with the supplied options. `providers` overrides
+   *    the registry; `providerRequiredBy` annotates connections with
+   *    the pack names that need them.
+   */
+  connections?: boolean | ConnectionsMountConfig;
   /**
    * Bundle metadata returned by `GET /deployment`. The operator UI uses
    * this to label the header and template the in-product Guide against
@@ -290,6 +323,15 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     });
   }
 
+  mountConnectionsRoutes({
+    app,
+    opts,
+    auth,
+    pool,
+    logger,
+    pathPrefix,
+  });
+
   if (opts.ui) {
     const uiCfg: UiMountConfig = typeof opts.ui === "object" ? opts.ui : {};
     await mountUiIfAvailable(app, {
@@ -322,6 +364,46 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
   installShutdownHandlers(stop, logger, { service: "web" });
 
   return { server, boss, pool, stop };
+}
+
+interface MountConnectionsArgs {
+  app: Hono;
+  opts: ServeWebOpts;
+  auth: (req: Request) => Promise<import("@render-harness/core").UserId | null>;
+  pool: Pool;
+  logger: Logger;
+  pathPrefix: string;
+}
+
+/**
+ * Mount the connection routes when:
+ *  - `opts.connections !== false`, AND
+ *  - the OAuth provider registry has at least one provider (either
+ *    auto-populated by `defineFromConfig` or supplied via
+ *    `opts.connections.providers`).
+ *
+ * The route's own handlers refuse 503 when
+ * `CONNECTIONS_ENCRYPTION_KEY` is unset, so we mount even in that
+ * "not yet configured" state — the UI rendering improves when the
+ * tab can fetch `GET /connections` instead of getting a 404.
+ */
+function mountConnectionsRoutes(args: MountConnectionsArgs): void {
+  const { app, opts, auth, pool, logger, pathPrefix } = args;
+  if (opts.connections === false) return;
+  const cfg = typeof opts.connections === "object" ? opts.connections : {};
+  const providers = cfg.providers ?? listRegisteredOAuthProviders();
+  if (providers.length === 0) return;
+  registerConnectionsRoutes(app, {
+    pool,
+    auth,
+    logger,
+    pathPrefix,
+    providers,
+    ...(cfg.providerRequiredBy ? { providerRequiredBy: cfg.providerRequiredBy } : {}),
+    ...(cfg.publicUrl ? { publicUrl: cfg.publicUrl } : {}),
+    ...(cfg.stateSecret ? { stateSecret: cfg.stateSecret } : {}),
+    ...(cfg.fetchImpl ? { fetchImpl: cfg.fetchImpl } : {}),
+  });
 }
 
 function resolveAgents(opts: ServeWebOpts): Record<string, AgentDefinition> {
