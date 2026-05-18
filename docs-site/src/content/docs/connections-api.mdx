@@ -3,7 +3,7 @@ title: Connections API
 description: Per-end-user OAuth connections for capability packs (Google Workspace, Microsoft 365, Notion, etc.).
 ---
 
-The connection API lets capability packs use **per-end-user OAuth** instead of a single deployment-wide token. Each end user clicks "Connect <provider>" in the operator UI, the harness stores their refresh token encrypted, and pack tools fetch a fresh access token at call time.
+The connection API lets capability packs use **per-end-user OAuth** instead of a single deployment-wide token. Each end user clicks "Connect \<provider\>" in the operator UI, the harness stores their refresh token encrypted, and pack tools fetch a fresh access token at call time.
 
 Use it when the pack needs to read *the user's* mailbox, calendar, or workspace — not one shared service account.
 
