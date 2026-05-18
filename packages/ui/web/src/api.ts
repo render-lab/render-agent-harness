@@ -37,6 +37,7 @@ import type {
   ListSchedulesResp,
   MessageRecord,
   RunDetailResp,
+  RunPauseInfo,
   RunStatus,
   RunSummary,
   ScheduleHistoryItem,
@@ -72,6 +73,7 @@ export type {
   HealthInfo,
   InboxItem,
   MessageRecord,
+  RunPauseInfo,
   RunStatus,
   RunSummary,
   ScheduleHistoryItem,
@@ -255,6 +257,22 @@ export function sendInput(id: string, input: string): Promise<SendInputResp> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ input }),
+  });
+}
+
+/**
+ * Resume a run paused on `permissions.requireApproval` by listing the
+ * `tool_use_id`s the operator approves to execute. The web endpoint
+ * persists those ids into the pg-boss job payload; the worker threads
+ * them through `runAgent({ approvedToolCallIds })` so core's
+ * `requireApproval` gate lets them through this turn. To reject, call
+ * `cancelRun` instead.
+ */
+export function approveToolCalls(runId: string, toolUseIds: string[]): Promise<SendInputResp> {
+  return request(`/runs/${encodeURIComponent(runId)}/input`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ approvedToolCallIds: toolUseIds }),
   });
 }
 

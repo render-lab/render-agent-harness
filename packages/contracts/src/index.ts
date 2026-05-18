@@ -136,11 +136,36 @@ export interface RunSummary {
   totalCostUsd: number;
   cursor: RunCursor;
   metadata: Record<string, unknown>;
+  /**
+   * When `status === "paused"`, describes what the run is waiting on so the
+   * operator UI knows whether to render a text input (`ask_user`) or an
+   * Approve/Reject affordance (`requireApproval`). Derived from
+   * `metadata.pauseReason` / `metadata.askUser` / `metadata.awaitingApproval`
+   * by the serializer; consumers should branch on `pause.reason` rather than
+   * poking into `metadata` directly.
+   */
+  pause: RunPauseInfo | null;
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
 }
+
+/**
+ * Human-in-the-loop pause shape. Either the agent called the `ask_user`
+ * builtin and is waiting for a text answer, or the agent attempted a tool
+ * in `permissions.requireApproval` and is waiting for an explicit approval
+ * by `tool_use_id`.
+ */
+export type RunPauseInfo =
+  | {
+      reason: "awaiting_input";
+      payload: { question: string; options?: string[]; tool_use_id: string };
+    }
+  | {
+      reason: "awaiting_approval";
+      payload: { tool_use_id: string; name: string; input: unknown };
+    };
 
 /**
  * Wire shape of an `AgentConversation` row. Dates are ISO strings;
@@ -614,6 +639,20 @@ export interface SendInputResp {
   runId: RunId;
   status: RunStatus;
 }
+
+/**
+ * Wire shape for `POST /runs/:id/input`. The endpoint distinguishes between
+ * the two reasons a run can be paused:
+ *
+ * - `awaiting_input` (the `ask_user` builtin) — expects `{ input: string }`.
+ * - `awaiting_approval` (`permissions.requireApproval`) — expects
+ *   `{ approvedToolCallIds: string[] }` listing the `tool_use_id`s the
+ *   operator approves to execute.
+ *
+ * The endpoint validates the body shape against the current pause reason
+ * and returns `409 wrong_pause_reason` if they don't match.
+ */
+export type SendInputReq = { input: string } | { approvedToolCallIds: string[] };
 
 export interface HealthInfo {
   ok: boolean;

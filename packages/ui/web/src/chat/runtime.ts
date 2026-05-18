@@ -1,10 +1,13 @@
 import { useExternalStoreRuntime } from "@assistant-ui/react";
+import type { RunPauseInfo } from "@render-harness/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
+  approveToolCalls,
   cancelRun,
   createConversation,
   getConversation,
+  getRun,
   type MessageRecord,
   type RunStatus,
   type RunSummary,
@@ -49,12 +52,28 @@ export interface ConversationSessionState {
   status: RunStatus | null;
   /** True while a run is in flight (pending / running / paused-for-HITL). */
   isRunning: boolean;
+  /**
+   * Pause shape for the active run when it is paused for HITL, populated by
+   * a follow-up `GET /runs/:id` whenever status flips to `paused`. Null when
+   * the active run is not paused (or the lookup is still in flight, or the
+   * server returned no pause info).
+   */
+  pause: RunPauseInfo | null;
   /** Set when the most recent API call failed. */
   error: Error | null;
   /** True before the initial conversation fetch completes. */
   hydrating: boolean;
   /** Clear local state. The next send starts a fresh conversation. */
   reset: () => void;
+  /**
+   * Approve a pending `awaiting_approval` tool call by `tool_use_id`. Calls
+   * `POST /runs/:id/input` with `{ approvedToolCallIds }`; the worker
+   * resumes the run and the SSE stream picks up the resulting messages.
+   * No-ops if there is no active run.
+   */
+  approveToolCall: (toolUseId: string) => Promise<void>;
+  /** True while an `approveToolCall` request is in flight. */
+  approveBusy: boolean;
 }
 
 interface UseConversationSessionResult extends ConversationSessionState {
@@ -74,6 +93,8 @@ export function useConversationSession(
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [status, setStatus] = useState<RunStatus | null>(null);
+  const [pause, setPause] = useState<RunPauseInfo | null>(null);
+  const [approveBusy, setApproveBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [hydrating, setHydrating] = useState<boolean>(initialConversationId !== null);
   const [loadingTick, setLoadingTick] = useState(0);
@@ -103,6 +124,30 @@ export function useConversationSession(
     const id = window.setInterval(() => setLoadingTick((tick) => tick + 1), 1800);
     return () => window.clearInterval(id);
   }, [isRunning]);
+
+  // When the active run pauses, fetch the run row to pull its pause shape
+  // (which `tool_use_id` is awaiting approval, the question text for
+  // `ask_user`, etc.). Cleared whenever the run leaves the paused state so
+  // stale pause info from a prior turn never lights up the UI.
+  useEffect(() => {
+    if (status !== "paused" || !activeRunId) {
+      setPause(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await getRun(activeRunId);
+        if (cancelled) return;
+        setPause(detail.run.pause ?? null);
+      } catch {
+        // SSE will retry status flips; one missed pause lookup is fine.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, activeRunId]);
 
   // Hydrate when the URL conversationId changes (mount, back/forward,
   // explicit reset to a different one).
@@ -184,8 +229,28 @@ export function useConversationSession(
     setMessages([]);
     setActiveRunId(null);
     setStatus(null);
+    setPause(null);
     setError(null);
   }, [setConversationId]);
+
+  const approveToolCall = useCallback(
+    async (toolUseId: string) => {
+      if (!activeRunId) return;
+      setApproveBusy(true);
+      setError(null);
+      try {
+        await approveToolCalls(activeRunId, [toolUseId]);
+        // Optimistically clear pause; the SSE stream will refresh status as
+        // the worker re-enqueues, executes the tool, and emits new messages.
+        setPause(null);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error(String(err)));
+      } finally {
+        setApproveBusy(false);
+      }
+    },
+    [activeRunId],
+  );
 
   const onNew = useCallback(
     async (appendMessage: { content: readonly { type: string; text?: string }[] }) => {
@@ -245,9 +310,12 @@ export function useConversationSession(
     activeRunId,
     status,
     isRunning,
+    pause,
     error,
     hydrating,
     reset,
+    approveToolCall,
+    approveBusy,
   };
 }
 

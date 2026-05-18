@@ -172,6 +172,14 @@ export async function pauseForApproval(args: {
   logger: Logger;
 }): Promise<RunStepResult> {
   const { pool, runId, use, logger } = args;
+  // Persist pause shape into agent_runs.metadata so callers (operator UI,
+  // worker re-enqueue logic, integration tests) can read which tool_use_id
+  // is waiting for approval without re-walking the message log. Mirrors the
+  // `awaiting_input` pattern in pauseForAwaitingInput.
+  await mergeRunMetadata(pool, runId, {
+    pauseReason: "awaiting_approval",
+    awaitingApproval: { tool_use_id: use.id, name: use.name, input: use.input },
+  });
   await setRunStatus(pool, runId, "paused");
   logger.info({ tool: use.name, toolUseId: use.id }, "paused: awaiting_approval");
   return {

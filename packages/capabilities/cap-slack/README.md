@@ -59,6 +59,21 @@ Read tools are available when `SLACK_BOT_TOKEN` is set:
 
 User and channel lookups are cached for the lifetime of the agent process to keep enrichment cheap across turns.
 
+### Channel and user inputs
+
+Every tool that takes a `channel` parameter (`slack.send_message`, `slack.get_thread`, `slack.get_channel_history`, `slack.get_channel_info`, `slack.add_reaction`, `slack.update_message`) accepts any of:
+
+- A Slack channel ID — `C0AQHA6M3PS`, `G0…`, `D0…`. Used verbatim.
+- A `#channel-name` — resolved to a channel ID via `conversations.list` (cached for the agent process). Requires `channels:read` and/or `groups:read` scope on the bot token. The bot must also be a **member** of the channel for write actions.
+- An `@user-handle` — resolved to a user ID via `users.list` (cached) and opened as a DM channel via `conversations.open`. Requires `users:read` scope plus `im:write` (and `chat:write` for sending).
+- A Slack mention literal — `<#C0AQHA6M3PS|name>` or `<@U0B4357MH7H>`. The wrapping is stripped and the inner ID is used.
+
+`slack.get_user_info` accepts a user ID (`U0B4357MH7H`), an `@handle`, or a bare handle (`ada.lovelace`); the latter two require `users:read`.
+
+`allowedChannels` is enforced **after** resolution, against the canonical channel ID. So `allowedChannels: ["C0AQ…"]` correctly accepts `slack.send_message({ channel: "#that-channels-name" })` because the resolver returns `C0AQ…` before the gate check fires.
+
+If the bot lacks the lookup scope, the tool returns a clear error naming the scope (`Slack channel "#general" not found. Check the name, or ensure the bot has 'channels:read' / 'groups:read' scope and is a member of the channel.`) instead of failing silently. Agents that only ever address channels by ID don't need the read scopes; the resolver fast-paths `C…` / `G…` / `D…` / `U…` inputs without any API call.
+
 Set `accessMode: read_write` to enable write tools:
 
 - `slack.send_message`

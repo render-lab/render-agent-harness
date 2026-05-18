@@ -2,6 +2,7 @@ import type {
   ConversationSummary,
   InboxItem,
   MessageRecord,
+  RunPauseInfo,
   RunSummary,
   ScheduleSummary,
 } from "@render-harness/contracts";
@@ -34,11 +35,59 @@ export function serializeRun(run: AgentRun): RunSummary {
     cursor: run.cursor,
     totalCostUsd: run.totalCostUsd,
     metadata: run.metadata,
+    pause: derivePauseInfo(run),
     createdAt: run.createdAt.toISOString(),
     updatedAt: run.updatedAt.toISOString(),
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * Derive a typed `RunPauseInfo` from the run row's metadata. Core's
+ * `pauseForAwaitingInput` and `pauseForApproval` both write the pause shape
+ * into `metadata` so the operator UI can branch on `pause.reason` without
+ * having to walk the message log. Returns `null` for any run that isn't
+ * currently paused or has incomplete pause metadata (stale entries from a
+ * prior pause that has since resumed and completed).
+ */
+function derivePauseInfo(run: AgentRun): RunPauseInfo | null {
+  if (run.status !== "paused") return null;
+  const meta = (run.metadata ?? {}) as Record<string, unknown>;
+  const reason = meta.pauseReason;
+  if (reason === "awaiting_input") {
+    const askUser = meta.askUser as
+      | { question?: unknown; options?: unknown; tool_use_id?: unknown }
+      | undefined;
+    if (!askUser || typeof askUser.question !== "string" || typeof askUser.tool_use_id !== "string")
+      return null;
+    return {
+      reason: "awaiting_input",
+      payload: {
+        question: askUser.question,
+        tool_use_id: askUser.tool_use_id,
+        ...(Array.isArray(askUser.options) && askUser.options.every((o) => typeof o === "string")
+          ? { options: askUser.options as string[] }
+          : {}),
+      },
+    };
+  }
+  if (reason === "awaiting_approval") {
+    const approval = meta.awaitingApproval as
+      | { tool_use_id?: unknown; name?: unknown; input?: unknown }
+      | undefined;
+    if (!approval || typeof approval.tool_use_id !== "string" || typeof approval.name !== "string")
+      return null;
+    return {
+      reason: "awaiting_approval",
+      payload: {
+        tool_use_id: approval.tool_use_id,
+        name: approval.name,
+        input: approval.input,
+      },
+    };
+  }
+  return null;
 }
 
 export function serializeConversation(c: AgentConversation): ConversationSummary {

@@ -13,6 +13,7 @@ import {
   closeSharedPool,
   createPool,
   createRun,
+  mergeRunMetadata,
   type Pool,
   setRunStatus,
   type UserId,
@@ -257,6 +258,189 @@ describe("POST /runs/:id/cancel", () => {
       }),
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /runs/:id/input (HITL)", () => {
+  dbTest("rejects body on non-paused run with 409 not_paused", async (db) => {
+    const id = `input-running-${Date.now()}`;
+    await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+    await setRunStatus(db, id, "running");
+
+    const { app } = buildTestApp(db);
+    const res = await app.fetch(
+      new Request(`http://x/runs/${id}/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "u-input" },
+        body: JSON.stringify({ input: "hi" }),
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("not_paused");
+  });
+
+  dbTest(
+    "awaiting_input pause accepts { input: text } and re-enqueues without approvals",
+    async (db) => {
+      const id = `input-ask-${Date.now()}`;
+      await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+      await mergeRunMetadata(db, id, {
+        pauseReason: "awaiting_input",
+        askUser: { tool_use_id: "tu-ask-1", question: "color?", options: ["red", "blue"] },
+      });
+      await setRunStatus(db, id, "paused");
+
+      const { app, sentJobs } = buildTestApp(db);
+      const res = await app.fetch(
+        new Request(`http://x/runs/${id}/input`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-test-user": "u-input" },
+          body: JSON.stringify({ input: "red" }),
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(sentJobs).toHaveLength(1);
+      const job = sentJobs[0]?.data as { runId: string; approvedToolCallIds?: unknown };
+      expect(job.runId).toBe(id);
+      expect(job.approvedToolCallIds).toBeUndefined();
+    },
+  );
+
+  dbTest("awaiting_input rejects approval-shaped body with 400 invalid_input", async (db) => {
+    const id = `input-ask-wrong-${Date.now()}`;
+    await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+    await mergeRunMetadata(db, id, {
+      pauseReason: "awaiting_input",
+      askUser: { tool_use_id: "tu-ask-2", question: "color?" },
+    });
+    await setRunStatus(db, id, "paused");
+
+    const { app } = buildTestApp(db);
+    const res = await app.fetch(
+      new Request(`http://x/runs/${id}/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "u-input" },
+        body: JSON.stringify({ approvedToolCallIds: ["tu-ask-2"] }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("invalid_input");
+    expect(body.message).toMatch(/awaiting_input/);
+  });
+
+  dbTest(
+    "awaiting_approval accepts { approvedToolCallIds } and threads them into the re-enqueued job",
+    async (db) => {
+      const id = `input-approve-${Date.now()}`;
+      await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+      await mergeRunMetadata(db, id, {
+        pauseReason: "awaiting_approval",
+        awaitingApproval: {
+          tool_use_id: "tu-send-1",
+          name: "cap-slack__slack_send_message",
+          input: { channel: "C123", text: "Hello!" },
+        },
+      });
+      await setRunStatus(db, id, "paused");
+
+      const { app, sentJobs } = buildTestApp(db);
+      const res = await app.fetch(
+        new Request(`http://x/runs/${id}/input`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-test-user": "u-input" },
+          body: JSON.stringify({ approvedToolCallIds: ["tu-send-1"] }),
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(sentJobs).toHaveLength(1);
+      const job = sentJobs[0]?.data as {
+        runId: string;
+        agentName: string;
+        approvedToolCallIds?: string[];
+      };
+      expect(job.runId).toBe(id);
+      expect(job.approvedToolCallIds).toEqual(["tu-send-1"]);
+    },
+  );
+
+  dbTest("awaiting_approval rejects text-input body with 400 invalid_input", async (db) => {
+    const id = `input-approve-wrong-${Date.now()}`;
+    await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+    await mergeRunMetadata(db, id, {
+      pauseReason: "awaiting_approval",
+      awaitingApproval: { tool_use_id: "tu-1", name: "x", input: {} },
+    });
+    await setRunStatus(db, id, "paused");
+
+    const { app } = buildTestApp(db);
+    const res = await app.fetch(
+      new Request(`http://x/runs/${id}/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "u-input" },
+        body: JSON.stringify({ input: "yes please" }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("invalid_input");
+    expect(body.message).toMatch(/awaiting_approval/);
+  });
+
+  dbTest("awaiting_approval rejects stale tool_use_id with 409 stale_tool_use_id", async (db) => {
+    const id = `input-stale-${Date.now()}`;
+    await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-input" });
+    await mergeRunMetadata(db, id, {
+      pauseReason: "awaiting_approval",
+      awaitingApproval: { tool_use_id: "tu-pending", name: "x", input: {} },
+    });
+    await setRunStatus(db, id, "paused");
+
+    const { app } = buildTestApp(db);
+    const res = await app.fetch(
+      new Request(`http://x/runs/${id}/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "u-input" },
+        body: JSON.stringify({ approvedToolCallIds: ["tu-not-the-one"] }),
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string; pendingToolUseId: string };
+    expect(body.error).toBe("stale_tool_use_id");
+    expect(body.pendingToolUseId).toBe("tu-pending");
+  });
+});
+
+describe("GET /runs/:id surfaces pause info", () => {
+  dbTest("derives pause.reason and payload from agent_runs.metadata", async (db) => {
+    const id = `runs-pause-${Date.now()}`;
+    await createRun(db, { id, agentName: "x", agentVersion: "0", userId: "u-pause" });
+    await mergeRunMetadata(db, id, {
+      pauseReason: "awaiting_approval",
+      awaitingApproval: {
+        tool_use_id: "tu-9",
+        name: "cap-slack__slack_send_message",
+        input: { channel: "C0", text: "hi" },
+      },
+    });
+    await setRunStatus(db, id, "paused");
+
+    const { app } = buildTestApp(db);
+    const res = await app.fetch(
+      new Request(`http://x/runs/${id}`, { headers: { "x-test-user": "u-pause" } }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      run: {
+        status: string;
+        metadata: Record<string, unknown>;
+        pause: { reason: string; payload: { tool_use_id: string; name: string } } | null;
+      };
+    };
+    expect(body.run.status).toBe("paused");
+    expect(body.run.pause?.reason).toBe("awaiting_approval");
+    expect(body.run.pause?.payload.tool_use_id).toBe("tu-9");
+    expect(body.run.pause?.payload.name).toBe("cap-slack__slack_send_message");
   });
 });
 

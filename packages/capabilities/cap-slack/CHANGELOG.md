@@ -1,5 +1,24 @@
 # @render-harness/cap-slack
 
+## 0.4.2
+
+### Patch Changes
+
+- cap-slack: every tool that takes a channel now accepts `#channel-name` or `@user-handle` in addition to raw IDs.
+
+  Previously the agent had to know the literal `C0AQHA6M3PS` form for every channel; there was no way to translate "send to #general" into a real send because the pack had no reverse lookup. Now every tool that takes a `channel` parameter (`slack.send_message`, `slack.get_thread`, `slack.get_channel_history`, `slack.get_channel_info`, `slack.add_reaction`, `slack.update_message`) accepts any of:
+  - A Slack ID — `C0AQHA6M3PS` / `G…` / `D…` — used verbatim, no API call.
+  - A `#channel-name` — resolved via `conversations.list` (paged, cached for the agent process). Requires `channels:read` / `groups:read`.
+  - An `@user-handle` — resolved via `users.list` (cached) + `conversations.open` to a DM channel. Requires `users:read` + `im:write` + `chat:write`.
+  - A Slack mention literal — `<#C0…|name>`, `<@U0…>`. Unwrapped and used.
+
+  `slack.get_user_info` also accepts an `@handle` or bare handle (`ada.l`) in addition to the user ID.
+
+  `allowedChannels` config is enforced **after** resolution against the canonical channel ID, so `allowedChannels: ["C0AQ…"]` correctly accepts `{ channel: "#that-channels-name" }` because the resolver returns `C0AQ…` before the gate check fires.
+
+  When the bot is missing a lookup scope (e.g. `chat:write` only, no `channels:read`), the tool returns a clear error naming the missing scope instead of failing silently. Agents that only ever address channels by ID don't need the read scopes — the resolver fast-paths `C…` / `G…` / `D…` / `U…` inputs without any API call, so existing setups keep working unchanged.
+  - @render-harness/registry@0.4.1
+
 ## 0.4.1
 
 ### Patch Changes

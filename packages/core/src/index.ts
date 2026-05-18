@@ -104,6 +104,7 @@ export {
   loadRun,
   loadRunForUser,
   loadToolResult,
+  mergeRunMetadata,
   recordNotificationDelivery,
   recordScheduleRun,
   recordToolCall,

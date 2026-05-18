@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/runtime-workflows",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Render Workflows runtime for @render-harness/core. Each agent step = one Workflows task; soft checkpoint chains subtasks; HITL via approvedToolCallIds.",
   "type": "module",
   "license": "MIT",

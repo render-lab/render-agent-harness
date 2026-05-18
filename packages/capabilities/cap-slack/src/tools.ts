@@ -32,9 +32,33 @@ interface ResolvedChannel {
 }
 
 interface SlackResolver {
+  /** Look up a user by ID. Backed by `users.info`, cached for the agent process. */
   user: (id: string) => Promise<ResolvedUser>;
+  /** Look up a channel by ID. Backed by `conversations.info`, cached for the agent process. */
   channel: (id: string) => Promise<ResolvedChannel>;
+  /**
+   * Resolve a channel input — either a raw Slack ID (`C…` / `G…` / `D…`),
+   * a `#channel-name` string, or an `@user-handle` string (which opens or
+   * reuses a DM channel). Returns the canonical channel ID for `chat.*` /
+   * `conversations.*` calls. Lazy-fetches `conversations.list` and
+   * `users.list` and caches by name/handle for subsequent lookups.
+   */
+  channelInput: (input: string) => Promise<string>;
+  /**
+   * Resolve a user input — either a raw `U…` ID or an `@handle` string
+   * (with or without the leading `@`). Returns the user ID. Lazy-fetches
+   * `users.list` and caches by handle.
+   */
+  userInput: (input: string) => Promise<string>;
 }
+
+// Slack channel/user/DM IDs are always `<prefix><A-Z0-9>+`; channel names
+// are restricted to lowercase letters / digits / `-` / `_`, so an input
+// that matches one of these patterns is unambiguously an ID. The {2,}
+// lower bound is intentionally loose so short test fixtures (`C123`) work
+// the same as real-world ids (`C0AQHA6M3PS`).
+const CHANNEL_ID_PATTERN = /^[CGD][A-Z0-9]{2,}$/;
+const USER_ID_PATTERN = /^U[A-Z0-9]{2,}$/;
 
 export function slackTools(args: {
   botToken: string;
@@ -50,53 +74,60 @@ export function slackTools(args: {
   const tools: LocalToolHandler[] = [
     jsonTool(
       "slack.get_thread",
-      "Read a Slack thread's messages. Responses include resolved user display names and a rewritten text_resolved field.",
+      "Read a Slack thread's messages. `channel` accepts a Slack ID (C…/G…/D…), a `#channel-name`, or an `@user-handle` (opens a DM). Responses include resolved user display names and a rewritten text_resolved field.",
       objectSchema({
         channel: { type: "string" },
         thread_ts: { type: "string" },
       }),
       async (input) => {
         const { channel, thread_ts } = input as { channel: string; thread_ts: string };
-        assertAllowedChannel(channel, args.allowedChannels);
-        const resp = await client.conversations.replies({ channel, ts: thread_ts });
-        return enrichConversationResponse(resp, channel, resolver);
+        const channelId = await resolver.channelInput(channel);
+        assertAllowedChannel(channelId, args.allowedChannels);
+        const resp = await client.conversations.replies({ channel: channelId, ts: thread_ts });
+        return enrichConversationResponse(resp, channelId, resolver);
       },
     ),
     jsonTool(
       "slack.get_channel_history",
-      "Read recent Slack channel messages. Responses include resolved user display names and a rewritten text_resolved field.",
+      "Read recent Slack channel messages. `channel` accepts a Slack ID (C…/G…/D…), a `#channel-name`, or an `@user-handle` (opens a DM). Responses include resolved user display names and a rewritten text_resolved field.",
       objectSchema({
         channel: { type: "string" },
         limit: { type: "number", optional: true },
       }),
       async (input) => {
         const { channel, limit } = input as { channel: string; limit?: number };
-        assertAllowedChannel(channel, args.allowedChannels);
-        const resp = await client.conversations.history({ channel, limit: limit ?? 20 });
-        return enrichConversationResponse(resp, channel, resolver);
+        const channelId = await resolver.channelInput(channel);
+        assertAllowedChannel(channelId, args.allowedChannels);
+        const resp = await client.conversations.history({
+          channel: channelId,
+          limit: limit ?? 20,
+        });
+        return enrichConversationResponse(resp, channelId, resolver);
       },
     ),
     jsonTool(
       "slack.get_user_info",
-      "Resolve a Slack user ID (e.g. U0B4357MH7H) to a display name, real name, and handle.",
+      "Resolve a Slack user to display name, real name, and handle. Accepts a user ID (U0B4357MH7H), an `@handle`, or a bare handle.",
       objectSchema({
         user: { type: "string" },
       }),
       async (input) => {
         const { user } = input as { user: string };
-        return resolver.user(user);
+        const userId = await resolver.userInput(user);
+        return resolver.user(userId);
       },
     ),
     jsonTool(
       "slack.get_channel_info",
-      "Resolve a Slack channel ID (e.g. C0AQHA6M3PS) to a channel name and metadata.",
+      "Resolve a Slack channel to name and metadata. Accepts a channel ID (C0AQHA6M3PS), a `#channel-name`, or an `@user-handle` (opens a DM).",
       objectSchema({
         channel: { type: "string" },
       }),
       async (input) => {
         const { channel } = input as { channel: string };
-        assertAllowedChannel(channel, args.allowedChannels);
-        return resolver.channel(channel);
+        const channelId = await resolver.channelInput(channel);
+        assertAllowedChannel(channelId, args.allowedChannels);
+        return resolver.channel(channelId);
       },
     ),
   ];
@@ -105,7 +136,7 @@ export function slackTools(args: {
     tools.push(
       jsonTool(
         "slack.send_message",
-        "Send a Slack message, optionally as a thread reply.",
+        "Send a Slack message, optionally as a thread reply. `channel` accepts a Slack ID (C…/G…/D…), a `#channel-name`, or an `@user-handle` (opens a DM).",
         objectSchema({
           channel: { type: "string" },
           text: { type: "string" },
@@ -117,9 +148,10 @@ export function slackTools(args: {
             text: string;
             thread_ts?: string;
           };
-          assertAllowedChannel(channel, args.allowedChannels);
+          const channelId = await resolver.channelInput(channel);
+          assertAllowedChannel(channelId, args.allowedChannels);
           return client.chat.postMessage({
-            channel,
+            channel: channelId,
             text,
             ...(thread_ts ? { thread_ts } : {}),
           });
@@ -127,7 +159,7 @@ export function slackTools(args: {
       ),
       jsonTool(
         "slack.add_reaction",
-        "Add a reaction to a Slack message.",
+        "Add a reaction to a Slack message. `channel` accepts a Slack ID, a `#channel-name`, or an `@user-handle`.",
         objectSchema({
           channel: { type: "string" },
           ts: { type: "string" },
@@ -135,13 +167,14 @@ export function slackTools(args: {
         }),
         async (input) => {
           const { channel, ts, name } = input as { channel: string; ts: string; name: string };
-          assertAllowedChannel(channel, args.allowedChannels);
-          return client.reactions.add({ channel, timestamp: ts, name });
+          const channelId = await resolver.channelInput(channel);
+          assertAllowedChannel(channelId, args.allowedChannels);
+          return client.reactions.add({ channel: channelId, timestamp: ts, name });
         },
       ),
       jsonTool(
         "slack.update_message",
-        "Update a Slack message.",
+        "Update a Slack message. `channel` accepts a Slack ID, a `#channel-name`, or an `@user-handle`.",
         objectSchema({
           channel: { type: "string" },
           ts: { type: "string" },
@@ -149,8 +182,9 @@ export function slackTools(args: {
         }),
         async (input) => {
           const { channel, ts, text } = input as { channel: string; ts: string; text: string };
-          assertAllowedChannel(channel, args.allowedChannels);
-          return client.chat.update({ channel, ts, text });
+          const channelId = await resolver.channelInput(channel);
+          assertAllowedChannel(channelId, args.allowedChannels);
+          return client.chat.update({ channel: channelId, ts, text });
         },
       ),
     );
@@ -200,6 +234,163 @@ function createResolver(client: WebClient): SlackResolver {
   const pendingUsers = new Map<string, Promise<ResolvedUser>>();
   const pendingChannels = new Map<string, Promise<ResolvedChannel>>();
 
+  // Name → ID indexes for reverse lookup. Populated lazily by
+  // `ensureChannelsIndex` / `ensureUsersIndex` (which page through
+  // `conversations.list` / `users.list` once and cache the full map for
+  // the lifetime of this resolver — i.e. the agent process). DM channel
+  // ids opened via `conversations.open` are written back into `dmByUserId`
+  // so repeated `@handle` sends only hit the API once.
+  let channelsIndex: Promise<Map<string, string>> | null = null;
+  let usersIndex: Promise<Map<string, string>> | null = null;
+  const dmByUserId = new Map<string, string>();
+
+  const ensureChannelsIndex = (): Promise<Map<string, string>> => {
+    if (channelsIndex) return channelsIndex;
+    channelsIndex = (async () => {
+      const byName = new Map<string, string>();
+      let cursor: string | undefined;
+      do {
+        const resp = (await client.conversations.list({
+          limit: 1000,
+          types: "public_channel,private_channel",
+          exclude_archived: true,
+          ...(cursor ? { cursor } : {}),
+        })) as unknown as {
+          channels?: Array<{ id?: unknown; name?: unknown }>;
+          response_metadata?: { next_cursor?: unknown };
+        };
+        for (const c of resp.channels ?? []) {
+          if (typeof c.id === "string" && typeof c.name === "string") {
+            byName.set(c.name.toLowerCase(), c.id);
+            // Also warm the by-ID resolver cache so a later
+            // `slack.get_channel_info` lookup is a hit.
+            if (!channels.has(c.id)) channels.set(c.id, { id: c.id, name: c.name });
+          }
+        }
+        cursor =
+          typeof resp.response_metadata?.next_cursor === "string" &&
+          resp.response_metadata.next_cursor.length > 0
+            ? resp.response_metadata.next_cursor
+            : undefined;
+      } while (cursor);
+      return byName;
+    })().catch((err) => {
+      // Reset on failure so a subsequent lookup retries (e.g. once
+      // `channels:read` scope is added without the agent restarting).
+      channelsIndex = null;
+      throw err;
+    });
+    return channelsIndex;
+  };
+
+  const ensureUsersIndex = (): Promise<Map<string, string>> => {
+    if (usersIndex) return usersIndex;
+    usersIndex = (async () => {
+      const byHandle = new Map<string, string>();
+      let cursor: string | undefined;
+      do {
+        const resp = (await client.users.list({
+          limit: 200,
+          ...(cursor ? { cursor } : {}),
+        })) as unknown as {
+          members?: Array<{
+            id?: unknown;
+            name?: unknown;
+            real_name?: unknown;
+            profile?: { display_name?: unknown; display_name_normalized?: unknown };
+            deleted?: unknown;
+          }>;
+          response_metadata?: { next_cursor?: unknown };
+        };
+        for (const u of resp.members ?? []) {
+          if (typeof u.id !== "string" || u.deleted === true) continue;
+          // Index every name variant the agent might use. Slack handles
+          // are unique, but display names + real names can collide — last
+          // writer wins, which is acceptable for an LLM hint.
+          for (const candidate of [
+            u.name,
+            u.real_name,
+            u.profile?.display_name,
+            u.profile?.display_name_normalized,
+          ]) {
+            if (typeof candidate === "string" && candidate.length > 0) {
+              byHandle.set(candidate.toLowerCase(), u.id);
+            }
+          }
+          if (!users.has(u.id)) {
+            users.set(u.id, buildResolvedUser(u.id, u as unknown as Record<string, unknown>));
+          }
+        }
+        cursor =
+          typeof resp.response_metadata?.next_cursor === "string" &&
+          resp.response_metadata.next_cursor.length > 0
+            ? resp.response_metadata.next_cursor
+            : undefined;
+      } while (cursor);
+      return byHandle;
+    })().catch((err) => {
+      usersIndex = null;
+      throw err;
+    });
+    return usersIndex;
+  };
+
+  const openDmFor = async (userId: string): Promise<string> => {
+    const cached = dmByUserId.get(userId);
+    if (cached) return cached;
+    const resp = (await client.conversations.open({ users: userId })) as unknown as {
+      channel?: { id?: unknown };
+    };
+    const channelId = resp.channel?.id;
+    if (typeof channelId !== "string") {
+      throw new Error(`conversations.open for ${userId} returned no channel id`);
+    }
+    dmByUserId.set(userId, channelId);
+    return channelId;
+  };
+
+  const resolveUserInput = async (input: string): Promise<string> => {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) throw new Error("Slack user input is empty");
+    // Accept Slack's `<@U123>` mention wrapping verbatim.
+    const mention = /^<@(U[A-Z0-9]+)(?:\|[^>]+)?>$/.exec(trimmed);
+    if (mention?.[1]) return mention[1];
+    if (USER_ID_PATTERN.test(trimmed)) return trimmed;
+    const handle = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+    if (handle.length === 0) throw new Error("Slack user input has no handle after '@'");
+    const index = await ensureUsersIndex();
+    const id = index.get(handle.toLowerCase());
+    if (!id) {
+      throw new Error(
+        `Slack user "${input}" not found. Check the handle, or ensure the bot has 'users:read' scope.`,
+      );
+    }
+    return id;
+  };
+
+  const resolveChannelInput = async (input: string): Promise<string> => {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) throw new Error("Slack channel input is empty");
+    // Accept Slack's `<#C123|name>` mention wrapping verbatim.
+    const mention = /^<#([CGD][A-Z0-9]+)(?:\|[^>]+)?>$/.exec(trimmed);
+    if (mention?.[1]) return mention[1];
+    if (CHANNEL_ID_PATTERN.test(trimmed)) return trimmed;
+    if (trimmed.startsWith("@")) {
+      const userId = await resolveUserInput(trimmed);
+      return openDmFor(userId);
+    }
+    const name = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+    if (name.length === 0) throw new Error("Slack channel input has no name after '#'");
+    const index = await ensureChannelsIndex();
+    const id = index.get(name.toLowerCase());
+    if (!id) {
+      throw new Error(
+        `Slack channel "${input}" not found. Check the name, or ensure the bot has 'channels:read' / 'groups:read' scope and is a member of the channel.`,
+      );
+    }
+    return id;
+  };
+
   return {
     async user(id: string): Promise<ResolvedUser> {
       const cached = users.get(id);
@@ -247,6 +438,8 @@ function createResolver(client: WebClient): SlackResolver {
       pendingChannels.set(id, fetchOne);
       return fetchOne;
     },
+    channelInput: resolveChannelInput,
+    userInput: resolveUserInput,
   };
 }
 

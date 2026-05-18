@@ -103,6 +103,14 @@ export interface RunJob {
   initialContent?: ContentBlock[];
   /** Free-form metadata propagated onto the run row. */
   metadata?: Record<string, unknown>;
+  /**
+   * `tool_use_id`s a human reviewer approved for execution on this job
+   * cycle. Threaded straight into `runAgent({ approvedToolCallIds })` so
+   * core's `requireApproval` gate lets the listed tools through instead of
+   * pausing on them again. Set by `POST /runs/:id/input` when resuming an
+   * `awaiting_approval` pause.
+   */
+  approvedToolCallIds?: string[];
 }
 
 export interface WorkerHandle {
@@ -204,6 +212,9 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
             onToolCall: (t) => publishHook(pool, data.runId, "tool_call", t, log),
             onToolResult: (r) => publishHook(pool, data.runId, "tool_result", r, log),
           },
+          ...(data.approvedToolCallIds && data.approvedToolCallIds.length > 0
+            ? { approvedToolCallIds: new Set(data.approvedToolCallIds) }
+            : {}),
         },
         { pool, logger: log },
       );

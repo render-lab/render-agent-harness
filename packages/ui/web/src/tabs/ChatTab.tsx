@@ -8,7 +8,8 @@ import {
   type ToolCallMessagePartProps,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useCallback, useEffect, useState } from "react";
+import type { RunPauseInfo } from "@render-harness/contracts";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { type AgentSummary, ApiError, listAgents } from "../api.js";
 import { useConversationSession } from "../chat/runtime.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
@@ -136,25 +137,33 @@ function ChatBody({
           </div>
         )}
 
-        <AssistantRuntimeProvider runtime={session.runtime}>
-          <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col px-4">
-            <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto py-4">
-              <ThreadPrimitive.Empty>
-                <EmptyState agent={activeAgent} hydrating={session.hydrating} />
-              </ThreadPrimitive.Empty>
+        <ChatSessionContext.Provider
+          value={{
+            pause: session.pause,
+            approveToolCall: session.approveToolCall,
+            approveBusy: session.approveBusy,
+          }}
+        >
+          <AssistantRuntimeProvider runtime={session.runtime}>
+            <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col px-4">
+              <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto py-4">
+                <ThreadPrimitive.Empty>
+                  <EmptyState agent={activeAgent} hydrating={session.hydrating} />
+                </ThreadPrimitive.Empty>
 
-              <ThreadPrimitive.Messages
-                components={{
-                  UserMessage: UserBubble,
-                  AssistantMessage: AssistantBubble,
-                  SystemMessage: SystemBubble,
-                }}
-              />
-            </ThreadPrimitive.Viewport>
+                <ThreadPrimitive.Messages
+                  components={{
+                    UserMessage: UserBubble,
+                    AssistantMessage: AssistantBubble,
+                    SystemMessage: SystemBubble,
+                  }}
+                />
+              </ThreadPrimitive.Viewport>
 
-            <Composer />
-          </ThreadPrimitive.Root>
-        </AssistantRuntimeProvider>
+              <Composer />
+            </ThreadPrimitive.Root>
+          </AssistantRuntimeProvider>
+        </ChatSessionContext.Provider>
       </div>
     </div>
   );
@@ -352,10 +361,16 @@ function ReasoningBlock(props: ReasoningMessagePartProps) {
 function ToolCallBlock(props: ToolCallMessagePartProps) {
   const argsText =
     typeof props.argsText === "string" ? props.argsText : safeJsonStringify(props.args ?? {});
+  const session = useContext(ChatSessionContext);
+  const isAwaitingThisCall =
+    session.pause?.reason === "awaiting_approval" &&
+    session.pause.payload.tool_use_id === props.toolCallId;
   return (
-    <div className="my-1 border border-line p-2 text-xs">
+    <div
+      className={`my-1 border p-2 text-xs ${isAwaitingThisCall ? "border-warn" : "border-line"}`}
+    >
       <div className="label text-accent!">tool · {props.toolName}</div>
-      <details className="mt-1">
+      <details className="mt-1" open={isAwaitingThisCall}>
         <summary className="label cursor-pointer text-muted">raw input</summary>
         <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px]">
           {argsText}
@@ -369,6 +384,25 @@ function ToolCallBlock(props: ToolCallMessagePartProps) {
           </pre>
         </details>
       )}
+      {isAwaitingThisCall && (
+        <div className="mt-2 border-t border-line pt-2">
+          <div className="label mb-1 text-warn!">awaiting approval</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={session.approveBusy}
+              onClick={() => void session.approveToolCall(props.toolCallId)}
+              title="Run the proposed tool call."
+            >
+              {session.approveBusy ? "Approving…" : "Approve and resume"}
+            </button>
+            <span className="text-muted text-[10px] leading-none self-center">
+              To reject, use the cancel button in the composer below.
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -380,6 +414,32 @@ function safeJsonStringify(v: unknown): string {
     return String(v);
   }
 }
+
+// --------------------------------------------------------------------
+// Pause / approval context
+// --------------------------------------------------------------------
+
+/**
+ * Thread the active conversation's HITL state into the assistant-ui tool
+ * call renderers. assistant-ui's `ToolCallMessagePartProps` only exposes
+ * the tool call itself (name, args, result) — it doesn't know whether the
+ * surrounding run is paused or which `tool_use_id` is being awaited. This
+ * context bridges those, so `ToolCallBlock` can render an inline Approve
+ * button when this specific call is the one blocking the run.
+ */
+interface ChatSessionContextValue {
+  pause: RunPauseInfo | null;
+  approveToolCall: (toolUseId: string) => Promise<void>;
+  approveBusy: boolean;
+}
+
+const ChatSessionContext = createContext<ChatSessionContextValue>({
+  pause: null,
+  approveToolCall: async () => {
+    // no-op default — the provider in ChatBody overrides this.
+  },
+  approveBusy: false,
+});
 
 // --------------------------------------------------------------------
 // Composer

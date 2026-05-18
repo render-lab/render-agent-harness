@@ -1,5 +1,12 @@
 # @render-harness/runtime-workflows
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/core@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
@@ -18,7 +25,7 @@
 - Updated dependencies
   - @render-harness/core@0.4.0
 
-  0.3.0##
+    0.3.0##
 
 ### Minor Changes
 

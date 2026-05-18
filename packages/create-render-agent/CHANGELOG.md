@@ -1,5 +1,11 @@
 # create-render-agent
 
+## 0.4.1
+
+### Patch Changes
+
+- @render-harness/registry@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
@@ -13,7 +19,7 @@
 - Updated dependencies
   - @render-harness/registry@0.4.0
 
-  0.3.0##
+    0.3.0##
 
 ### Minor Changes
 

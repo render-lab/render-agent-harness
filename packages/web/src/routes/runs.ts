@@ -140,7 +140,7 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
     const run = await loadRunForUser(pool, id, userId);
     if (!run) return c.json({ error: "not_found" }, 404);
     const messages = await listMessages(pool, id);
-    return c.json({ run, messages });
+    return c.json({ run: serializeRun(run), messages: messages.map(serializeMessage) });
   });
 
   app.get(r("/runs/:id/tool-calls"), async (c) => {
@@ -301,11 +301,22 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
   });
 
   /**
-   * HITL input. Injects a user message into a `paused` run and re-enqueues
-   * it. The only thing that puts a run into `paused` is human-in-the-loop:
-   * `ask_user` (awaiting_input) or `permissions.requireApproval`
-   * (awaiting_approval). Chat-turn-end is *not* a pause reason — multi-turn
-   * chat is driven by POST /conversations/:id/messages.
+   * HITL input. Resumes a `paused` run. The only thing that puts a run into
+   * `paused` is human-in-the-loop:
+   *
+   * - `ask_user` (awaiting_input) — body `{ input: string }`. Appends the
+   *   text as a user message and re-enqueues. The placeholder tool_result
+   *   for the `ask_user` tool_use was written when the run paused, so the
+   *   conversation is already well-formed.
+   * - `permissions.requireApproval` (awaiting_approval) — body
+   *   `{ approvedToolCallIds: string[] }`. Stuffs the approved ids into the
+   *   pg-boss job payload; the worker threads them through to
+   *   `runAgent({ approvedToolCallIds })` so the loop executes the pending
+   *   tool_use instead of pausing on the same gate forever. (To reject an
+   *   approval, cancel the run via `POST /runs/:id/cancel`.)
+   *
+   * Chat-turn-end is *not* a pause reason — multi-turn chat is driven by
+   * POST /conversations/:id/messages.
    */
   app.post(r("/runs/:id/input"), async (c) => {
     const userId = await auth(c.req.raw);
@@ -320,25 +331,98 @@ export function registerRunRoutes(app: Hono, ctx: RunRouteContext): void {
         409,
       );
     }
-    const body = (await c.req.json().catch(() => null)) as { input?: string } | null;
-    if (!body?.input || typeof body.input !== "string") {
-      return c.json({ error: "invalid_input" }, 400);
+    const body = (await c.req.json().catch(() => null)) as {
+      input?: unknown;
+      approvedToolCallIds?: unknown;
+    } | null;
+    if (!body || typeof body !== "object") {
+      return c.json({ error: "invalid_body" }, 400);
     }
-    const content: ContentBlock[] = [{ type: "text", text: body.input }];
-    await appendMessage(pool, {
-      runId: id,
-      ...(run.conversationId ? { conversationId: run.conversationId } : {}),
-      role: "user",
-      content,
-    });
-    await setRunStatus(pool, id, "pending");
-    await boss.send(queue, {
-      runId: id,
-      agentName: run.agentName,
-      ...(run.userId ? { userId: run.userId } : {}),
-    });
-    logger.info({ runId: id, userId }, "HITL input injected; run re-enqueued");
-    return c.json({ runId: id, status: "pending" });
+
+    const serialized = serializeRun(run);
+    const pauseReason = serialized.pause?.reason ?? null;
+    const hasInput = typeof body.input === "string" && body.input.length > 0;
+    const hasApproval =
+      Array.isArray(body.approvedToolCallIds) &&
+      body.approvedToolCallIds.every((v) => typeof v === "string" && v.length > 0);
+
+    if (pauseReason === "awaiting_input") {
+      if (!hasInput) {
+        return c.json(
+          {
+            error: "invalid_input",
+            message: "run is awaiting_input; body must be { input: string }",
+          },
+          400,
+        );
+      }
+      const content: ContentBlock[] = [{ type: "text", text: body.input as string }];
+      await appendMessage(pool, {
+        runId: id,
+        ...(run.conversationId ? { conversationId: run.conversationId } : {}),
+        role: "user",
+        content,
+      });
+      await setRunStatus(pool, id, "pending");
+      await boss.send(queue, {
+        runId: id,
+        agentName: run.agentName,
+        ...(run.userId ? { userId: run.userId } : {}),
+      });
+      logger.info({ runId: id, userId }, "HITL text input injected; run re-enqueued");
+      return c.json({ runId: id, status: "pending" });
+    }
+
+    if (pauseReason === "awaiting_approval") {
+      if (!hasApproval) {
+        return c.json(
+          {
+            error: "invalid_input",
+            message:
+              "run is awaiting_approval; body must be { approvedToolCallIds: string[] }. To reject, POST /runs/:id/cancel.",
+          },
+          400,
+        );
+      }
+      const approved = body.approvedToolCallIds as string[];
+      // Cross-check against the pending tool_use_id recorded in metadata.
+      // Loose check — core does the authoritative match — but a clear 400
+      // here saves a worker round-trip when the caller sends a stale id.
+      const pendingId = serialized.pause?.payload.tool_use_id;
+      if (pendingId && !approved.includes(pendingId)) {
+        return c.json(
+          {
+            error: "stale_tool_use_id",
+            message: `pending approval is for tool_use_id ${pendingId} but request approved ${JSON.stringify(approved)}`,
+            pendingToolUseId: pendingId,
+          },
+          409,
+        );
+      }
+      await setRunStatus(pool, id, "pending");
+      await boss.send(queue, {
+        runId: id,
+        agentName: run.agentName,
+        approvedToolCallIds: approved,
+        ...(run.userId ? { userId: run.userId } : {}),
+      });
+      logger.info(
+        { runId: id, userId, approvedCount: approved.length },
+        "HITL approval injected; run re-enqueued",
+      );
+      return c.json({ runId: id, status: "pending" });
+    }
+
+    // Status is paused but no recognized pause reason in metadata — this
+    // shouldn't happen with current core, but if it does, refuse rather
+    // than guess. Caller can cancel the run.
+    return c.json(
+      {
+        error: "unknown_pause_reason",
+        message: "run is paused but pause reason could not be determined from metadata",
+      },
+      409,
+    );
   });
 }
 

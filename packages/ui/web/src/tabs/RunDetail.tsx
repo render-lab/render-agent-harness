@@ -1,7 +1,8 @@
-import type { RunDetailResp } from "@render-harness/contracts";
+import type { RunDetailResp, RunPauseInfo } from "@render-harness/contracts";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  approveToolCalls,
   type ContentBlock,
   cancelRun,
   getRun,
@@ -125,6 +126,20 @@ export function RunDetail({ runId, onBack, onOpenInChat }: RunDetailProps) {
     }
   };
 
+  const onApprove = async (toolUseId: string) => {
+    setActionError(null);
+    setHitlBusy(true);
+    try {
+      await approveToolCalls(runId, [toolUseId]);
+      const refreshed = await getRun(runId);
+      setData(refreshed);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHitlBusy(false);
+    }
+  };
+
   const conversationId = data?.run.conversationId ?? null;
 
   return (
@@ -155,12 +170,14 @@ export function RunDetail({ runId, onBack, onOpenInChat }: RunDetailProps) {
             <Timeline items={items} />
             <ActionsCard
               status={data.run.status}
+              pause={data.run.pause}
               onCancel={onCancel}
               cancelBusy={cancelBusy}
               hitlInput={hitlInput}
               setHitlInput={setHitlInput}
               hitlBusy={hitlBusy}
               onSendInput={onSendInput}
+              onApprove={onApprove}
               actionError={actionError}
             />
           </div>
@@ -202,23 +219,27 @@ function Metric({ label, value }: { label: string; value: React.ReactNode }) {
 
 interface ActionsCardProps {
   status: RunStatus;
+  pause: RunPauseInfo | null;
   onCancel: () => void;
   cancelBusy: boolean;
   hitlInput: string;
   setHitlInput: (s: string) => void;
   hitlBusy: boolean;
   onSendInput: (e: React.FormEvent) => void;
+  onApprove: (toolUseId: string) => void;
   actionError: string | null;
 }
 
 function ActionsCard({
   status,
+  pause,
   onCancel,
   cancelBusy,
   hitlInput,
   setHitlInput,
   hitlBusy,
   onSendInput,
+  onApprove,
   actionError,
 }: ActionsCardProps) {
   const isTerminal = status === "completed" || status === "failed" || status === "cancelled";
@@ -234,9 +255,46 @@ function ActionsCard({
         {cancelBusy ? "Cancelling…" : "Cancel run"}
       </button>
 
-      {status === "paused" && (
+      {status === "paused" && pause?.reason === "awaiting_approval" && (
+        <div className="space-y-2">
+          <div className="label">awaiting approval</div>
+          <div className="border border-line p-2 text-[11px]">
+            <div className="mb-1 break-all">
+              <span className="text-muted">tool:</span>{" "}
+              <span className="text-accent">{pause.payload.name}</span>
+            </div>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[10px]">
+              {JSON.stringify(pause.payload.input, null, 2)}
+            </pre>
+          </div>
+          <button
+            type="button"
+            onClick={() => onApprove(pause.payload.tool_use_id)}
+            disabled={hitlBusy}
+            className="btn btn-primary w-full"
+            title="Run the proposed tool call. To reject, click Cancel run."
+          >
+            {hitlBusy ? "Approving…" : "Approve and resume"}
+          </button>
+          <div className="text-muted text-[10px]">
+            To reject, click Cancel run. Rejection without cancel is not yet supported.
+          </div>
+        </div>
+      )}
+
+      {status === "paused" && pause?.reason === "awaiting_input" && (
         <form onSubmit={onSendInput} className="space-y-2">
-          <div className="label">send hitl input</div>
+          <div className="label">awaiting input</div>
+          <div className="border border-line p-2 text-[11px]">
+            <div className="text-muted">question:</div>
+            <div className="mt-1 break-words">{pause.payload.question}</div>
+            {pause.payload.options && pause.payload.options.length > 0 && (
+              <div className="mt-2">
+                <div className="text-muted">options:</div>
+                <div className="mt-0.5">{pause.payload.options.join(" · ")}</div>
+              </div>
+            )}
+          </div>
           <div className="flex items-start gap-2">
             <span className="text-accent">{">"}</span>
             <textarea
@@ -252,9 +310,15 @@ function ActionsCard({
             disabled={hitlBusy || !hitlInput.trim()}
             className="btn btn-primary w-full"
           >
-            {hitlBusy ? "Sending…" : "Resume run"}
+            {hitlBusy ? "Sending…" : "Send reply"}
           </button>
         </form>
+      )}
+
+      {status === "paused" && !pause && (
+        <div className="border border-warn p-2 text-xs">
+          Run is paused but no pause reason is recorded. Cancel run to recover.
+        </div>
       )}
 
       {actionError && <div className="border border-err p-2 text-xs text-err">{actionError}</div>}
