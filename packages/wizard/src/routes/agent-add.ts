@@ -87,7 +87,10 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
 
     const target = await resolveTarget(c, body, opts);
     if ("error" in target) {
-      return c.json<ErrorResponse>({ error: target.error, ...(target.details ? { details: target.details } : {}) }, target.status as 401);
+      return c.json<ErrorResponse>(
+        { error: target.error, ...(target.details ? { details: target.details } : {}) },
+        target.status as 401,
+      );
     }
 
     let octokit: Octokit;

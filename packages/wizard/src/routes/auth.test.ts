@@ -60,9 +60,7 @@ describe("auth routes", () => {
     const state = decodeURIComponent(stateMatch?.[1] ?? "");
     expect(state).toBeTruthy();
 
-    const res = await app.request(
-      `/api/auth/callback?code=abc&state=${encodeURIComponent(state)}`,
-    );
+    const res = await app.request(`/api/auth/callback?code=abc&state=${encodeURIComponent(state)}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/my");
     expect(res.headers.get("set-cookie")).toContain("rh_wizard_session=");

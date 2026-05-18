@@ -78,5 +78,7 @@ function readMigration(name: string): string {
       // try next candidate
     }
   }
-  throw new Error(`applyWizardMigrations: could not locate ${name} in any of ${candidates.join(", ")}`);
+  throw new Error(
+    `applyWizardMigrations: could not locate ${name} in any of ${candidates.join(", ")}`,
+  );
 }

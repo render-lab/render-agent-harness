@@ -156,9 +156,7 @@ export function BrowsePage() {
         </p>
       ) : null}
 
-      {notice ? (
-        <p className="border border-line p-3 text-[11px] text-muted">{notice}</p>
-      ) : null}
+      {notice ? <p className="border border-line p-3 text-[11px] text-muted">{notice}</p> : null}
 
       {filtered.length === 0 ? (
         <EmptyState query={query} communityEntries={browse.community.entryCount} />
@@ -324,9 +322,7 @@ function AddToExistingPicker({
       });
       if (res.ok) {
         onAdded(
-          `Added ${agentId} to ${selectedHarness.org}/${selectedHarness.repo}. Changed files: ${(
-            res.changedFiles ?? []
-          ).join(", ") || "none"}.`,
+          `Added ${agentId} to ${selectedHarness.org}/${selectedHarness.repo}. Changed files: ${(res.changedFiles ?? []).join(", ") || "none"}.`,
         );
         return;
       }
@@ -352,9 +348,7 @@ function AddToExistingPicker({
         aria-modal="true"
       >
         <header className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wide">
-            add agent from {item.name}
-          </h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide">add agent from {item.name}</h2>
           <button type="button" onClick={onClose} className="border border-line px-2 py-1 text-xs">
             close
           </button>

@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 import { BrowsePage } from "./BrowsePage.js";
-import { MyHarnessesPage } from "./MyHarnesses.js";
 import {
   type AuthMe,
   fetchGallery,
@@ -25,6 +24,7 @@ import type {
   ScaffoldResponse,
   WizardState,
 } from "./lib/types.js";
+import { MyHarnessesPage } from "./MyHarnesses.js";
 import { Basics } from "./steps/Basics.js";
 import { BundleReview } from "./steps/BundleReview.js";
 import { Capabilities } from "./steps/Capabilities.js";

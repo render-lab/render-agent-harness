@@ -58,10 +58,7 @@ export function MyHarnessesPage() {
         <p className="mt-3 text-sm">
           Sign in with GitHub to see harnesses you've scaffolded and add agents to them.
         </p>
-        <a
-          className="btn btn-primary mt-4 inline-block"
-          href="/api/auth/login?next=/my"
-        >
+        <a className="btn btn-primary mt-4 inline-block" href="/api/auth/login?next=/my">
           Sign in with GitHub
         </a>
       </div>
@@ -89,8 +86,8 @@ export function MyHarnessesPage() {
               {phase.me.login}'s harnesses
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Add an agent from the catalog into any harness below. The wizard commits the
-              agents[] entry, src/&lt;id&gt;.ts, and re-emitted render.yaml to your repo, and Render
+              Add an agent from the catalog into any harness below. The wizard commits the agents[]
+              entry, src/&lt;id&gt;.ts, and re-emitted render.yaml to your repo, and Render
               auto-deploys on push.
             </p>
           </div>
@@ -100,9 +97,7 @@ export function MyHarnessesPage() {
         </div>
       </section>
 
-      {notice ? (
-        <p className="border border-line p-3 text-[11px] text-muted">{notice}</p>
-      ) : null}
+      {notice ? <p className="border border-line p-3 text-[11px] text-muted">{notice}</p> : null}
 
       {phase.harnesses.length === 0 ? (
         <div className="panel p-8 text-center text-muted">
@@ -178,9 +173,7 @@ function AddAgentPicker({
   onClose: () => void;
   onAdded: (message: string) => void;
 }) {
-  const [selectedKey, setSelectedKey] = useState<string>(
-    catalog[0] ? agentKey(catalog[0]) : "",
-  );
+  const [selectedKey, setSelectedKey] = useState<string>(catalog[0] ? agentKey(catalog[0]) : "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -202,9 +195,7 @@ function AddAgentPicker({
       });
       if (res.ok) {
         onAdded(
-          `Added ${selected.agentId} to ${harness.org}/${harness.repo}. Changed files: ${(
-            res.changedFiles ?? []
-          ).join(", ") || "none"}.`,
+          `Added ${selected.agentId} to ${harness.org}/${harness.repo}. Changed files: ${(res.changedFiles ?? []).join(", ") || "none"}.`,
         );
         return;
       }
@@ -230,9 +221,7 @@ function AddAgentPicker({
         aria-modal="true"
       >
         <header className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wide">
-            add agent to {harness.repo}
-          </h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide">add agent to {harness.repo}</h2>
           <button type="button" onClick={onClose} className="border border-line px-2 py-1 text-xs">
             close
           </button>

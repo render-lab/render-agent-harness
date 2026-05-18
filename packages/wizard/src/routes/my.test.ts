@@ -65,7 +65,7 @@ describe("/api/my/harnesses", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { harnesses: Array<{ org: string }> };
     expect(json.harnesses).toHaveLength(1);
-    expect(json.harnesses[0]!.org).toBe("org");
+    expect(json.harnesses[0]?.org).toBe("org");
   });
 });
 
@@ -95,7 +95,7 @@ describe("GET /api/harnesses/claim", () => {
     );
     const repos = await store.listReposForUser(7);
     expect(repos).toHaveLength(1);
-    expect(repos[0]!.installationId).toBe("inst-9");
+    expect(repos[0]?.installationId).toBe("inst-9");
   });
 
   it("rejects an invalid token", async () => {

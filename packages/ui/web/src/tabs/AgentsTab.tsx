@@ -77,8 +77,8 @@ export function AgentsTab() {
           <div className="panel p-4 text-xs">
             <div className="label mb-2">add another agent</div>
             <p className="text-muted">
-              Pull an agent in from a gallery bundle. The wizard commits the agents[] entry,
-              source file, and re-emitted render.yaml to your managed repo.
+              Pull an agent in from a gallery bundle. The wizard commits the agents[] entry, source
+              file, and re-emitted render.yaml to your managed repo.
             </p>
             <button type="button" className="btn mt-3" onClick={() => setAddingAgent(true)}>
               Add agent
