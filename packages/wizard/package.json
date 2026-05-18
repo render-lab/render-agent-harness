@@ -7,7 +7,8 @@
   "license": "MIT",
   "main": "./dist/main.js",
   "files": [
-    "dist"
+    "dist",
+    "sql"
   ],
   "publishConfig": {
     "access": "public"
@@ -30,12 +31,14 @@
     "@render-harness/registry": "workspace:*",
     "create-render-agent": "workspace:*",
     "hono": "^4.12.18",
+    "pg": "^8.16.0",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.7",
     "@tailwindcss/vite": "^4.1.13",
     "@types/node": "^25.6.2",
+    "@types/pg": "^8.15.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "^5.1.0",
