@@ -15,6 +15,7 @@ import { type Context, Hono } from "hono";
 import { PgBoss } from "pg-boss";
 import { defaultApiKeyAuth } from "./auth.js";
 import { type ConnectorMountConfig, mountConnectorsIfAvailable } from "./connector-mount.js";
+import { registerAgentAddRoute } from "./routes/agent-add.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
@@ -212,6 +213,14 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
   });
   registerCapabilityInstallRoute(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+    wizardServiceUrl: process.env.RENDER_HARNESS_WIZARD_URL ?? null,
+    wizardSharedSecret: process.env.WIZARD_SHARED_SECRET ?? null,
+  });
+  registerAgentAddRoute(app, {
     auth,
     agents,
     pathPrefix,

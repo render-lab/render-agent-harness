@@ -2,11 +2,23 @@ import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HarnessConfigSchema } from "@render-harness/registry/schema";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse as parseYaml } from "yaml";
+
+// Pin the harness version range used by the scaffolder for the
+// duration of the test run. Without this, the snapshot below would
+// embed whatever range bundle-gallery just baked from the workspace
+// (e.g. `^0.2.2`), and every harness patch bump would re-churn the
+// snapshot file. Keep this stub stable; see AGENTS.md ("Scaffolder
+// snapshot tests") for the rationale. vi.mock is hoisted, so the
+// literal lives inside the factory rather than via an outer const.
+vi.mock("./version-ranges.js", () => ({
+  DEFAULT_HARNESS_VERSION_RANGE: "^0.0.0-test",
+}));
+const TEST_HARNESS_RANGE = "^0.0.0-test";
+
 import { buildFileMap, generate } from "./generate.js";
 import type { Answers, RuntimeSelection } from "./types.js";
-import { DEFAULT_HARNESS_VERSION_RANGE } from "./version-ranges.js";
 
 const BASE: Omit<Answers, "directory" | "runtimes"> = {
   agentName: "my-agent",
@@ -318,11 +330,12 @@ describe("buildFileMap", () => {
     const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
       dependencies: Record<string, string>;
     };
-    // Range is derived from the current workspace registry version at
-    // build time (see version-ranges.ts) — assert against the same source
-    // of truth so the test never drifts from what the scaffolder emits.
-    expect(pkg.dependencies["@render-harness/core"]).toBe(DEFAULT_HARNESS_VERSION_RANGE);
-    expect(pkg.dependencies["@render-harness/registry"]).toBe(DEFAULT_HARNESS_VERSION_RANGE);
+    // Production-side range is derived from the workspace registry
+    // version at build time (see version-ranges.ts). The test stubs
+    // that module to TEST_HARNESS_RANGE for snapshot stability, so
+    // assert against the stub.
+    expect(pkg.dependencies["@render-harness/core"]).toBe(TEST_HARNESS_RANGE);
+    expect(pkg.dependencies["@render-harness/registry"]).toBe(TEST_HARNESS_RANGE);
     expect(map.get("README.md")).toContain("published npm packages");
   });
 

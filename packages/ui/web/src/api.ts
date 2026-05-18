@@ -293,6 +293,54 @@ export function installCapability(body: InstallCapabilityBody): Promise<InstallC
   });
 }
 
+export interface AddableAgent {
+  bundleSlug: string;
+  bundleName: string;
+  agentId: string;
+  description: string;
+  runtimeKinds: string[];
+  capabilities: string[];
+  envVars: string[];
+  workflowTask: boolean;
+}
+
+export interface AgentCatalogResp {
+  agents: AddableAgent[];
+}
+
+export interface AddAgentBody {
+  bundleSlug: string;
+  agentId: string;
+}
+
+export interface AddAgentResp {
+  ok?: boolean;
+  unchanged?: boolean;
+  commitSha?: string | null;
+  changedFiles?: string[];
+  warnings?: string[];
+  error?: string;
+  details?: string;
+  installUrl?: string;
+}
+
+export function fetchAgentCatalog(wizardUrl: string): Promise<AgentCatalogResp> {
+  // The catalog lives on the wizard, not the deployed harness. Browser
+  // calls it directly via the operator UI's "wizard URL" hint.
+  return fetch(`${wizardUrl.replace(/\/+$/, "")}/api/agents/catalog`).then(async (res) => {
+    if (!res.ok) throw new ApiError(`catalog fetch failed: ${res.status}`, res.status);
+    return (await res.json()) as AgentCatalogResp;
+  });
+}
+
+export function addAgent(body: AddAgentBody): Promise<AddAgentResp> {
+  return request<AddAgentResp>("/agents/add", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function getDeployment(): Promise<DeploymentInfo> {
   return request<DeploymentInfo>("/deployment");
 }

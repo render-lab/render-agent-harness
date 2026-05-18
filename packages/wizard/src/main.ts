@@ -16,6 +16,7 @@ import { resolveGallery } from "create-render-agent";
 import { Hono } from "hono";
 import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { registerAgentAddRoute } from "./routes/agent-add.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
 import { registerBrowseRoute } from "./routes/browse.js";
 import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
@@ -61,6 +62,11 @@ async function main(): Promise<void> {
   registerCapabilityInstallRoute(app, {
     sharedSecret: env.wizardSharedSecret,
     github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+  });
+  registerAgentAddRoute(app, {
+    sharedSecret: env.wizardSharedSecret,
+    github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+    gallery,
   });
 
   // GitHub App install flow for CLI-scaffolded agents.
