@@ -2,6 +2,8 @@ import type { Octokit } from "@octokit/rest";
 import type { HarnessConfig, ResolvedAgentEntry, ResolvedGallery } from "@render-harness/registry";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
+import { setSessionCookie } from "../auth.js";
+import { createMemoryStore, type WizardStore } from "../store.js";
 import { registerAgentAddRoute } from "./agent-add.js";
 
 const SECRET = "test-secret";
@@ -76,7 +78,10 @@ const TARGET_PKG = JSON.stringify({ name: "my-harness", dependencies: {} }, null
 const TARGET_ENV = "ANTHROPIC_API_KEY=\n";
 const TARGET_RENDER = "# stale render.yaml — should be re-emitted\n";
 
-function makeApp(files: Record<string, string>) {
+function makeApp(
+  files: Record<string, string>,
+  extra: { store?: WizardStore; sessionSecret?: string } = {},
+) {
   const getContent = vi.fn(async ({ path }: { path: string }) => {
     const content = files[path];
     if (content === undefined) throw Object.assign(new Error("not found"), { status: 404 });
@@ -100,8 +105,17 @@ function makeApp(files: Record<string, string>) {
     sharedSecret: SECRET,
     github: { appId: "1", privateKey: "key" },
     gallery: GALLERY,
+    ...(extra.store ? { store: extra.store } : {}),
+    ...(extra.sessionSecret ? { sessionSecret: extra.sessionSecret } : {}),
     deps: { createOctokit: vi.fn(async () => fakeOctokit) },
   });
+  if (extra.sessionSecret) {
+    const seedSecret = extra.sessionSecret;
+    app.get("/_seed-session/:id", (c) => {
+      setSessionCookie(c, seedSecret, Number(c.req.param("id")));
+      return c.text("ok");
+    });
+  }
   return { app, getContent, createOrUpdateFileContents };
 }
 
@@ -180,5 +194,87 @@ describe("POST /api/agents/add", () => {
     expect(res.status).toBe(404);
     const json = (await res.json()) as { error: string };
     expect(json.error).toBe("bundle_not_found");
+  });
+
+  it("session-cookie path: 403 when user does not own the target", async () => {
+    const store = createMemoryStore();
+    await store.upsertUser({
+      githubUserId: 7,
+      login: "alice",
+      name: null,
+      avatarUrl: null,
+    });
+    const { app } = makeApp(
+      { "render-harness.yaml": TARGET_YAML, "package.json": TARGET_PKG },
+      { store, sessionSecret: "sess-secret" },
+    );
+    const cookieRes = await app.request("/_seed-session/7");
+    const cookie = cookieRes.headers.get("set-cookie")?.split(";")[0] ?? "";
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        bundleSlug: "chief-of-staff",
+        agentId: "meeting-prep",
+        targetOrg: "render-lab",
+        targetRepo: "not-mine",
+      }),
+    });
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("not_owner");
+  });
+
+  it("session-cookie path: 200 when user owns the target", async () => {
+    const store = createMemoryStore();
+    await store.upsertUser({
+      githubUserId: 7,
+      login: "alice",
+      name: null,
+      avatarUrl: null,
+    });
+    await store.addUserRepo({
+      githubUserId: 7,
+      org: "render-lab",
+      repo: "my-harness",
+      installationId: "123",
+      agentSlug: "chat",
+    });
+    const { app } = makeApp(
+      {
+        "render-harness.yaml": TARGET_YAML,
+        "package.json": TARGET_PKG,
+        ".env.example": TARGET_ENV,
+      },
+      { store, sessionSecret: "sess-secret" },
+    );
+    const cookieRes = await app.request("/_seed-session/7");
+    const cookie = cookieRes.headers.get("set-cookie")?.split(";")[0] ?? "";
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        bundleSlug: "chief-of-staff",
+        agentId: "meeting-prep",
+        targetOrg: "render-lab",
+        targetRepo: "my-harness",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean };
+    expect(json.ok).toBe(true);
+  });
+
+  it("returns 401 with no auth at all (no bearer, no session)", async () => {
+    const { app } = makeApp({
+      "render-harness.yaml": TARGET_YAML,
+      "package.json": TARGET_PKG,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(401);
   });
 });

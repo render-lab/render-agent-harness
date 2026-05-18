@@ -18,7 +18,7 @@ import { emitBlueprint } from "@render-harness/registry/emitter";
 import type { ResolvedGallery } from "@render-harness/registry/gallery";
 import type { HarnessConfig } from "@render-harness/registry/schema";
 import { parseHarnessConfigYaml } from "@render-harness/registry/schema";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import {
   AgentAddError,
   mutateEnvExampleForAgent,
@@ -26,25 +26,42 @@ import {
   mutatePackageJsonAddDeps,
   planAgentAdd,
 } from "../agent-add.js";
+import { readSessionCookie } from "../auth.js";
 import { createOctokit, type GithubAppCreds } from "../github-app.js";
+import type { WizardStore } from "../store.js";
 import type { ErrorResponse } from "../types.js";
 
 export interface RegisterAgentAddRouteOpts {
+  /** Bearer-secret used by the deployed /ui proxy. Unset = secret path disabled. */
   sharedSecret: string | null;
   github: Omit<GithubAppCreds, "installationId"> | null;
   gallery: ResolvedGallery;
+  /** Optional ownership store + session secret for the session-cookie auth path. */
+  store?: WizardStore;
+  sessionSecret?: string | null;
   deps?: {
     createOctokit?: typeof createOctokit;
   };
 }
 
 interface AgentAddBody {
-  org: string;
-  repo: string;
-  installationId: string;
+  /** Wire shape from the deployed /ui proxy: locator in body. */
+  org?: string;
+  repo?: string;
+  installationId?: string;
   branch?: string;
   bundleSlug: string;
   agentId: string;
+  /** Wire shape from the wizard SPA session-auth path: target by org/repo. */
+  targetOrg?: string;
+  targetRepo?: string;
+}
+
+interface ResolvedTarget {
+  org: string;
+  repo: string;
+  installationId: string;
+  branch: string;
 }
 
 const MANIFEST_PATH = "render-harness.yaml";
@@ -56,15 +73,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
   const createOctokitFn = opts.deps?.createOctokit ?? createOctokit;
 
   app.post("/api/agents/add", async (c) => {
-    if (!opts.sharedSecret) {
-      return c.json<ErrorResponse>({ error: "shared_secret_not_configured" }, 503);
-    }
     if (!opts.github) return c.json<ErrorResponse>({ error: "github_not_configured" }, 503);
-
-    const auth = c.req.header("authorization") ?? "";
-    if (!constantTimeEqual(auth, `Bearer ${opts.sharedSecret}`)) {
-      return c.json<ErrorResponse>({ error: "unauthorized" }, 401);
-    }
 
     let body: AgentAddBody;
     try {
@@ -72,15 +81,19 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
     } catch {
       return c.json<ErrorResponse>({ error: "bad_json" }, 400);
     }
-    if (!isValidBody(body)) {
+    if (typeof body.bundleSlug !== "string" || typeof body.agentId !== "string") {
       return c.json<ErrorResponse>({ error: "invalid_agent_add" }, 400);
     }
 
-    const branch = body.branch ?? "main";
+    const target = await resolveTarget(c, body, opts);
+    if ("error" in target) {
+      return c.json<ErrorResponse>({ error: target.error, ...(target.details ? { details: target.details } : {}) }, target.status as 401);
+    }
+
     let octokit: Octokit;
     try {
       octokit = await createOctokitFn({
-        creds: { ...opts.github, installationId: body.installationId },
+        creds: { ...opts.github, installationId: target.installationId },
       });
     } catch (err) {
       return c.json<ErrorResponse>(
@@ -89,14 +102,16 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       );
     }
 
+    const branch = target.branch;
+    const locator = { org: target.org, repo: target.repo };
     try {
-      const manifest = await readRepoFile(octokit, body, MANIFEST_PATH, branch, true);
-      const pkg = await readRepoFile(octokit, body, PACKAGE_PATH, branch, true);
+      const manifest = await readRepoFile(octokit, locator, MANIFEST_PATH, branch, true);
+      const pkg = await readRepoFile(octokit, locator, PACKAGE_PATH, branch, true);
       if (!manifest || !pkg) {
         return c.json<ErrorResponse>({ error: "repo_or_installation_not_found" }, 409);
       }
-      const env = await readRepoFile(octokit, body, ENV_EXAMPLE_PATH, branch, false);
-      const renderYaml = await readRepoFile(octokit, body, RENDER_YAML_PATH, branch, false);
+      const env = await readRepoFile(octokit, locator, ENV_EXAMPLE_PATH, branch, false);
+      const renderYaml = await readRepoFile(octokit, locator, RENDER_YAML_PATH, branch, false);
 
       // Source file path is plan-time; read existing content so we can
       // detect collisions without committing on conflict.
@@ -109,7 +124,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
 
       const existingSource = await readRepoFile(
         octokit,
-        body,
+        locator,
         plan.spec.sourceFilePath,
         branch,
         false,
@@ -189,8 +204,8 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         const current = currentText(path, manifest, pkg, env, existingSource, renderYaml);
         if (next.text === current) continue;
         const result = await octokit.repos.createOrUpdateFileContents({
-          owner: body.org,
-          repo: body.repo,
+          owner: locator.org,
+          repo: locator.repo,
           path,
           branch,
           message: `chore: add agent ${body.agentId} from ${body.bundleSlug}`,
@@ -224,7 +239,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         return c.json<ErrorResponse>(
           {
             error: "repo_or_installation_not_found",
-            details: `${body.org}/${body.repo}@${branch} not reachable`,
+            details: `${locator.org}/${locator.repo}@${branch} not reachable`,
           },
           409,
         );
@@ -261,15 +276,15 @@ function currentText(
 
 async function readRepoFile(
   octokit: Octokit,
-  body: Pick<AgentAddBody, "org" | "repo">,
+  locator: { org: string; repo: string },
   path: string,
   branch: string,
   required: boolean,
 ): Promise<{ text: string; sha: string } | null> {
   try {
     const res = await octokit.repos.getContent({
-      owner: body.org,
-      repo: body.repo,
+      owner: locator.org,
+      repo: locator.repo,
       path,
       ref: branch,
     });
@@ -287,14 +302,74 @@ async function readRepoFile(
   }
 }
 
-function isValidBody(body: AgentAddBody): boolean {
-  return (
-    typeof body.org === "string" &&
-    typeof body.repo === "string" &&
-    typeof body.installationId === "string" &&
-    typeof body.bundleSlug === "string" &&
-    typeof body.agentId === "string"
-  );
+interface AuthFailure {
+  error: string;
+  details?: string;
+  status: number;
+}
+
+/**
+ * Resolve the request to a concrete target locator. Two paths:
+ *
+ *   1. Bearer WIZARD_SHARED_SECRET — locator must be in the body
+ *      (`org` + `repo` + `installationId`). Used by the deployed /ui
+ *      proxy.
+ *   2. Session cookie — `targetOrg` + `targetRepo` in the body; the
+ *      `installationId` is looked up from `wizard_user_repos`, scoped
+ *      to the authenticated user. Used by the wizard SPA.
+ */
+async function resolveTarget(
+  c: Context,
+  body: AgentAddBody,
+  opts: RegisterAgentAddRouteOpts,
+): Promise<ResolvedTarget | AuthFailure> {
+  const branch = body.branch ?? "main";
+  const auth = c.req.header("authorization") ?? "";
+  const hasBearer = auth.startsWith("Bearer ");
+  if (hasBearer && opts.sharedSecret && constantTimeEqual(auth, `Bearer ${opts.sharedSecret}`)) {
+    if (
+      typeof body.org !== "string" ||
+      typeof body.repo !== "string" ||
+      typeof body.installationId !== "string"
+    ) {
+      return {
+        error: "invalid_agent_add",
+        details: "shared-secret path requires org + repo + installationId in body",
+        status: 400,
+      };
+    }
+    return { org: body.org, repo: body.repo, installationId: body.installationId, branch };
+  }
+
+  if (opts.store && opts.sessionSecret) {
+    const session = readSessionCookie(c, opts.sessionSecret);
+    if (session) {
+      const targetOrg = typeof body.targetOrg === "string" ? body.targetOrg : null;
+      const targetRepo = typeof body.targetRepo === "string" ? body.targetRepo : null;
+      if (!targetOrg || !targetRepo) {
+        return {
+          error: "invalid_agent_add",
+          details: "session-auth path requires targetOrg + targetRepo in body",
+          status: 400,
+        };
+      }
+      const row = await opts.store.getUserRepo({
+        githubUserId: session.githubUserId,
+        org: targetOrg,
+        repo: targetRepo,
+      });
+      if (!row) {
+        return {
+          error: "not_owner",
+          details: `${targetOrg}/${targetRepo} is not linked to your account`,
+          status: 403,
+        };
+      }
+      return { org: row.org, repo: row.repo, installationId: row.installationId, branch };
+    }
+  }
+
+  return { error: "unauthorized", status: 401 };
 }
 
 function isOctokitError(err: unknown): err is { status: number } {
