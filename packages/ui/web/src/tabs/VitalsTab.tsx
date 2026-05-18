@@ -14,9 +14,11 @@ import {
   ApiError,
   getVitals,
   listVitalsLogs,
+  listVitalsServices,
   type VitalsInstance,
   type VitalsLogEntry,
   type VitalsMetricSeries,
+  type VitalsServiceSummary,
 } from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
 import { formatDateTime, formatRelative } from "../components/format.js";
@@ -33,6 +35,10 @@ type LogLevel = "all" | "error" | "warn" | "info";
 
 export function VitalsTab() {
   const [rangeMinutes, setRangeMinutes] = useState(60);
+  const [services, setServices] = useState<VitalsServiceSummary[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState<Error | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [vitals, setVitals] = useState<{
     serviceId: string;
     instances: VitalsInstance[];
@@ -49,13 +55,42 @@ export function VitalsTab() {
 
   const selectedRange = RANGES.find((r) => r.id === rangeMinutes) ?? RANGES[1];
 
+  // Discover sibling services in this harness deployment once on mount.
+  // The selected service defaults to the current one so the panel still
+  // works on deployments with no Render-side sibling lookup (legacy or
+  // hand-rolled).
   useEffect(() => {
+    let cancelled = false;
+    setServicesLoading(true);
+    setServicesError(null);
+    listVitalsServices()
+      .then((res) => {
+        if (cancelled) return;
+        setServices(res.services);
+        setSelectedServiceId((prev) => prev ?? res.currentServiceId);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) return;
+        setServicesError(err instanceof Error ? err : new Error(String(err)));
+      })
+      .finally(() => {
+        if (!cancelled) setServicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedServiceId) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     getVitals({
       rangeMinutes,
       resolutionSeconds: selectedRange?.resolutionSeconds ?? 60,
+      serviceId: selectedServiceId,
     })
       .then((res) => {
         if (cancelled) return;
@@ -76,9 +111,10 @@ export function VitalsTab() {
     return () => {
       cancelled = true;
     };
-  }, [rangeMinutes, selectedRange]);
+  }, [rangeMinutes, selectedRange, selectedServiceId]);
 
   useEffect(() => {
+    if (!selectedServiceId) return;
     let cancelled = false;
     setLogsLoading(true);
     setLogsError(null);
@@ -86,6 +122,7 @@ export function VitalsTab() {
     listVitalsLogs({
       limit: 100,
       level: logQuery.level === "all" ? [] : [logQuery.level],
+      serviceId: selectedServiceId,
       ...(text ? { text } : {}),
     })
       .then((res) => {
@@ -102,7 +139,7 @@ export function VitalsTab() {
     return () => {
       cancelled = true;
     };
-  }, [logQuery]);
+  }, [logQuery, selectedServiceId]);
 
   const latest = useMemo(() => {
     const map = new Map<string, string>();
@@ -113,8 +150,18 @@ export function VitalsTab() {
     return map;
   }, [vitals]);
 
+  const selectedService = services.find((s) => s.serviceId === selectedServiceId) ?? null;
+
   return (
     <div className="space-y-4">
+      <ServicePicker
+        services={services}
+        loading={servicesLoading}
+        error={servicesError}
+        selectedServiceId={selectedServiceId}
+        onSelect={setSelectedServiceId}
+      />
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="label mr-1">RANGE</span>
         {RANGES.map((r) => (
@@ -141,7 +188,11 @@ export function VitalsTab() {
           <>
             <SectionHeader title="service" />
             <div className="grid gap-3 sm:grid-cols-4">
-              <SummaryCard label="service id" value={vitals.serviceId} />
+              <SummaryCard
+                label="service"
+                value={selectedService?.name ?? vitals.serviceId}
+                hint={vitals.serviceId}
+              />
               <SummaryCard label="instances" value={vitals.instances.length.toLocaleString()} />
               <SummaryCard label="cpu" value={latest.get("cpu") ?? "—"} />
               <SummaryCard label="memory" value={latest.get("memory") ?? "—"} />
@@ -206,13 +257,80 @@ export function VitalsTab() {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+/**
+ * Tabbed picker over the sibling services in this harness deployment.
+ * Highlights the service the operator UI is itself running on so it
+ * stays obvious where logs/metrics are sourced from when switching
+ * around.
+ */
+function ServicePicker({
+  services,
+  loading,
+  error,
+  selectedServiceId,
+  onSelect,
+}: {
+  services: VitalsServiceSummary[];
+  loading: boolean;
+  error: Error | null;
+  selectedServiceId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (loading) {
+    return <div className="panel p-3 text-muted text-xs">loading services…</div>;
+  }
+  if (error) {
+    return (
+      <div className="panel p-3 text-xs">
+        <div className="label mb-1">services</div>
+        <div className="text-muted">could not list sibling services: {error.message}</div>
+      </div>
+    );
+  }
+  if (services.length <= 1) {
+    return null;
+  }
+  return (
+    <div className="panel p-3">
+      <div className="label mb-2">services</div>
+      <div className="flex flex-wrap gap-2">
+        {services.map((svc) => {
+          const active = svc.serviceId === selectedServiceId;
+          const suspended = svc.suspended === "suspended";
+          return (
+            <button
+              key={svc.serviceId}
+              type="button"
+              onClick={() => onSelect(svc.serviceId)}
+              className={`btn flex items-center gap-2 ${active ? "btn-active" : ""}`}
+              title={`${svc.serviceId}${svc.type ? ` · ${svc.type}` : ""}${svc.isCurrent ? " · current service" : ""}`}
+            >
+              <span>{svc.name}</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted">
+                {formatServiceType(svc.type)}
+              </span>
+              {suspended ? (
+                <span className="badge" data-status="warn">
+                  suspended
+                </span>
+              ) : null}
+              {svc.isCurrent ? <span className="text-[10px] text-muted">★</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="panel min-w-0 p-4">
       <div className="label">{label}</div>
-      <div className="mt-1 truncate text-xl tabular-nums" title={value}>
+      <div className="mt-1 truncate text-xl tabular-nums" title={hint ?? value}>
         {value}
       </div>
+      {hint ? <div className="mt-1 truncate text-[10px] text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -328,11 +446,18 @@ function InstancesTable({ instances }: { instances: VitalsInstance[] }) {
   );
 }
 
+/**
+ * Render-API log windows are large (~100 entries by default). Capping
+ * the table at ~24rem and scrolling inside keeps the rest of the
+ * Vitals tab (metrics, instances) reachable without long scroll
+ * sequences. The header is sticky so column meaning stays visible
+ * while scrolling.
+ */
 function LogsTable({ logs }: { logs: VitalsLogEntry[] }) {
   return (
-    <div className="panel overflow-x-auto">
+    <div className="panel max-h-96 overflow-auto">
       <table className="w-full text-xs">
-        <thead className="label">
+        <thead className="label sticky top-0 bg-bg">
           <tr>
             {["TIME", "LEVEL", "TYPE", "REQUEST", "MESSAGE"].map((h) => (
               <th key={h} className="border-b border-line px-3 py-2 text-left font-medium">
@@ -395,4 +520,21 @@ function formatChartTime(iso: string): string {
 function formatRequest(log: VitalsLogEntry): string {
   const pieces = [log.method, log.statusCode, log.path].filter(Boolean);
   return pieces.length > 0 ? pieces.join(" ") : "—";
+}
+
+function formatServiceType(type: string | null): string {
+  switch (type) {
+    case "web_service":
+      return "web";
+    case "private_service":
+      return "private";
+    case "background_worker":
+      return "worker";
+    case "cron_job":
+      return "cron";
+    case "static_site":
+      return "static";
+    default:
+      return type ?? "—";
+  }
 }

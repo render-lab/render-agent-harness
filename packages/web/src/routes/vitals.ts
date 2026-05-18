@@ -7,6 +7,8 @@ import type {
   VitalsMetricPoint,
   VitalsMetricSeries,
   VitalsResp,
+  VitalsServiceSummary,
+  VitalsServicesResp,
 } from "@render-harness/contracts";
 import type { UserId } from "@render-harness/core";
 import type { Hono } from "hono";
@@ -26,12 +28,67 @@ const DEFAULT_RANGE_MINUTES = 60;
 const DEFAULT_RESOLUTION_SECONDS = 60;
 const MAX_RANGE_MINUTES = 24 * 60;
 const MAX_LOG_LIMIT = 100;
+const MAX_SIBLING_SERVICES = 50;
+
+/**
+ * Sibling service lookups go through the Render API on every Vitals
+ * panel load. We cache the resolved list per (apiKey, currentServiceId)
+ * pair for a short window so flipping between services on the UI
+ * doesn't pay the env-discovery round-trip every time.
+ */
+interface SiblingCacheEntry {
+  expiresAt: number;
+  services: VitalsServiceSummary[];
+  currentEnvironmentId: string | null;
+}
+const SIBLING_CACHE = new Map<string, SiblingCacheEntry>();
+const SIBLING_CACHE_TTL_MS = 60_000;
+
+/** Test helper: drop the sibling-service cache so the next /vitals call re-fetches. */
+export function __resetVitalsSiblingCache(): void {
+  SIBLING_CACHE.clear();
+}
 
 export function registerVitalsRoutes(app: Hono, ctx: VitalsRouteContext): void {
   const { auth, deployment, pathPrefix } = ctx;
   const r = (path: string) => `${pathPrefix}${path}`;
   const fetchImpl = ctx.fetchImpl ?? fetch;
   const apiBase = ctx.renderApiBase ?? DEFAULT_RENDER_API_BASE;
+
+  app.get(r("/vitals/services"), async (c) => {
+    const userId = await auth(c.req.raw);
+    if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+    if (!deployment?.operatorFeatures?.vitals.enabled) {
+      return c.json(
+        {
+          error: "vitals_disabled",
+          details: "set RENDER_HARNESS_VITALS_ENABLED=1 to enable the Vitals tab",
+        },
+        404,
+      );
+    }
+
+    const config = renderConfig(deployment);
+    if ("error" in config) return c.json(config.body, 503);
+
+    const render = new RenderVitalsClient({
+      apiBase,
+      apiKey: config.apiKey,
+      fetchImpl,
+    });
+
+    try {
+      const siblings = await resolveSiblingServices(render, config);
+      const body: VitalsServicesResp = {
+        services: siblings,
+        currentServiceId: config.serviceId,
+      };
+      return c.json(body);
+    } catch (err) {
+      return c.json(renderApiErrorBody(err), 502);
+    }
+  });
 
   app.get(r("/vitals"), async (c) => {
     const userId = await auth(c.req.raw);
@@ -72,31 +129,42 @@ export function registerVitalsRoutes(app: Hono, ctx: VitalsRouteContext): void {
       fetchImpl,
     });
 
+    const requestedServiceId = url.searchParams.get("serviceId");
+    let targetServiceId: string;
+    try {
+      targetServiceId = await resolveTargetServiceId(render, config, requestedServiceId);
+    } catch (err) {
+      if (err instanceof InvalidServiceError) {
+        return c.json({ error: err.code, details: err.message }, 400);
+      }
+      return c.json(renderApiErrorBody(err), 502);
+    }
+
     try {
       const [instances, cpu, memory, latency] = await Promise.all([
-        render.listInstances(config.serviceId),
+        render.listInstances(targetServiceId),
         render.metric("cpu", {
           startTime,
           endTime,
           resolutionSeconds,
-          resourceId: config.serviceId,
+          resourceId: targetServiceId,
         }),
         render.metric("memory", {
           startTime,
           endTime,
           resolutionSeconds,
-          resourceId: config.serviceId,
+          resourceId: targetServiceId,
         }),
         render.metric("httpLatencyP95", {
           startTime,
           endTime,
           resolutionSeconds,
-          resourceId: config.serviceId,
+          resourceId: targetServiceId,
         }),
       ]);
 
       const body: VitalsResp = {
-        serviceId: config.serviceId,
+        serviceId: targetServiceId,
         range: {
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
@@ -147,10 +215,21 @@ export function registerVitalsRoutes(app: Hono, ctx: VitalsRouteContext): void {
       fetchImpl,
     });
 
+    const requestedServiceId = url.searchParams.get("serviceId");
+    let targetServiceId: string;
+    try {
+      targetServiceId = await resolveTargetServiceId(render, config, requestedServiceId);
+    } catch (err) {
+      if (err instanceof InvalidServiceError) {
+        return c.json({ error: err.code, details: err.message }, 400);
+      }
+      return c.json(renderApiErrorBody(err), 502);
+    }
+
     try {
       const body = await render.logs({
         ownerId,
-        resourceId: config.serviceId,
+        resourceId: targetServiceId,
         limit,
         level: url.searchParams.getAll("level"),
         type: url.searchParams.getAll("type"),
@@ -161,6 +240,121 @@ export function registerVitalsRoutes(app: Hono, ctx: VitalsRouteContext): void {
       return c.json(renderApiErrorBody(err), 502);
     }
   });
+}
+
+/**
+ * Confirm a caller-supplied `?serviceId=` is actually a sibling of the
+ * service the harness is running on. Without this any authenticated
+ * operator could pull metrics + logs for any service the workspace API
+ * key can see; the Vitals tab is intentionally scoped to the harness
+ * deployment.
+ *
+ * When the requested id is missing or matches the current service we
+ * short-circuit — no Render API call needed.
+ */
+async function resolveTargetServiceId(
+  render: RenderVitalsClient,
+  config: RenderConfig,
+  requested: string | null,
+): Promise<string> {
+  if (!requested || requested === config.serviceId) return config.serviceId;
+  const siblings = await resolveSiblingServices(render, config);
+  const match = siblings.find((s) => s.serviceId === requested);
+  if (!match) {
+    throw new InvalidServiceError(
+      "service_not_in_harness",
+      `Service ${requested} is not part of this harness deployment.`,
+    );
+  }
+  return match.serviceId;
+}
+
+/**
+ * Resolve the list of services that belong to this harness. "Belongs"
+ * means: lives in the same Render environment as the current service
+ * (the one Render auto-injected `RENDER_SERVICE_ID` for).
+ *
+ * The harness's blueprint usually creates a web service, a worker
+ * service, one or more cron jobs, and sometimes a wizard service — all
+ * in the same environment. Listing by environment is the only signal
+ * Render exposes that scopes precisely to "this deployment".
+ *
+ * If the current service has no environment (legacy services pre-dating
+ * environments), we fall back to a singleton list with just the
+ * current service so the UI still works.
+ */
+async function resolveSiblingServices(
+  render: RenderVitalsClient,
+  config: RenderConfig,
+): Promise<VitalsServiceSummary[]> {
+  const cacheKey = `${config.apiKey}:${config.serviceId}`;
+  const cached = SIBLING_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.services;
+
+  const current = await render.getService(config.serviceId);
+  const currentEnvironmentId = current?.environmentId ?? null;
+
+  let raw: RawService[] = [];
+  if (currentEnvironmentId) {
+    raw = await render.listServicesInEnvironment(currentEnvironmentId);
+  }
+
+  let services = raw
+    .map((s) => normalizeService(s, config.serviceId))
+    .filter((s): s is VitalsServiceSummary => s !== null);
+
+  // If the env-scoped query returned nothing useful (no env id, or
+  // Render returned no rows), fall back to a singleton list so the UI
+  // can still render the current service.
+  if (services.length === 0 && current) {
+    const fallback = normalizeService(current, config.serviceId);
+    if (fallback) services = [fallback];
+  }
+
+  services.sort(compareServices);
+  if (services.length > MAX_SIBLING_SERVICES) {
+    services = services.slice(0, MAX_SIBLING_SERVICES);
+  }
+
+  SIBLING_CACHE.set(cacheKey, {
+    services,
+    currentEnvironmentId,
+    expiresAt: Date.now() + SIBLING_CACHE_TTL_MS,
+  });
+  return services;
+}
+
+class InvalidServiceError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function compareServices(a: VitalsServiceSummary, b: VitalsServiceSummary): number {
+  if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
+  const typeOrder = serviceTypeOrder(a.type) - serviceTypeOrder(b.type);
+  if (typeOrder !== 0) return typeOrder;
+  return a.name.localeCompare(b.name);
+}
+
+function serviceTypeOrder(type: string | null): number {
+  switch (type) {
+    case "web_service":
+      return 0;
+    case "private_service":
+      return 1;
+    case "background_worker":
+      return 2;
+    case "cron_job":
+      return 3;
+    case "static_site":
+      return 4;
+    default:
+      return 5;
+  }
 }
 
 interface RenderConfig {
@@ -238,6 +432,32 @@ class RenderVitalsClient {
     return asArray(raw)
       .map(normalizeInstance)
       .filter((i): i is VitalsInstance => i !== null);
+  }
+
+  async getService(serviceId: string): Promise<RawService | null> {
+    const raw = await this.fetchJson<unknown>(`/v1/services/${encodeURIComponent(serviceId)}`, {});
+    return extractRawService(raw);
+  }
+
+  /**
+   * List every service in a Render environment. The /v1/services
+   * response is a `[{ service, cursor }, ...]` array; we unwrap into
+   * raw `service` records here so the normalizer doesn't need to
+   * know about the envelope. We cap the page at 100 (the Render API
+   * max) — harness deployments are not expected to exceed that.
+   */
+  async listServicesInEnvironment(environmentId: string): Promise<RawService[]> {
+    const raw = await this.fetchJson<unknown>("/v1/services", {
+      environmentId,
+      limit: "100",
+    });
+    const items = asArray(raw);
+    const out: RawService[] = [];
+    for (const item of items) {
+      const svc = extractRawService(item);
+      if (svc) out.push(svc);
+    }
+    return out;
   }
 
   async metric(kind: VitalsMetricKind, query: MetricQuery): Promise<VitalsMetricSeries> {
@@ -345,6 +565,49 @@ function metricUnit(kind: VitalsMetricKind): VitalsMetricSeries["unit"] {
     case "httpLatencyP95":
       return "milliseconds";
   }
+}
+
+interface RawService {
+  id: string;
+  name?: string;
+  type?: string;
+  suspended?: string;
+  dashboardUrl?: string;
+  environmentId?: string;
+}
+
+function extractRawService(raw: unknown): RawService | null {
+  if (!isRecord(raw)) return null;
+  // /v1/services items come wrapped as `{ service, cursor }`; the single
+  // /v1/services/:id endpoint returns the bare service object. Handle both.
+  const candidate = isRecord(raw.service) ? raw.service : raw;
+  if (!isRecord(candidate)) return null;
+  const id = readStringField(candidate, ["id"]);
+  if (!id) return null;
+  const out: RawService = { id };
+  const name = readStringField(candidate, ["name"]);
+  if (name) out.name = name;
+  const type = readStringField(candidate, ["type"]);
+  if (type) out.type = type;
+  const suspended = readStringField(candidate, ["suspended"]);
+  if (suspended) out.suspended = suspended;
+  const dashboardUrl = readStringField(candidate, ["dashboardUrl", "dashboard_url"]);
+  if (dashboardUrl) out.dashboardUrl = dashboardUrl;
+  const environmentId = readStringField(candidate, ["environmentId", "environment_id"]);
+  if (environmentId) out.environmentId = environmentId;
+  return out;
+}
+
+function normalizeService(raw: RawService, currentServiceId: string): VitalsServiceSummary | null {
+  return {
+    serviceId: raw.id,
+    name: raw.name ?? raw.id,
+    type: raw.type ?? null,
+    suspended: raw.suspended ?? null,
+    dashboardUrl: raw.dashboardUrl ?? null,
+    environmentId: raw.environmentId ?? null,
+    isCurrent: raw.id === currentServiceId,
+  };
 }
 
 function normalizeInstance(raw: unknown): VitalsInstance | null {

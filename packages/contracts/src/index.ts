@@ -278,6 +278,28 @@ export interface VitalsInstance {
   updatedAt: string | null;
 }
 
+/**
+ * One sibling Render service in the harness deployment. The Vitals tab
+ * lists them so operators can switch between the web / worker / cron
+ * (and any other) services that share an environment.
+ *
+ * `type` mirrors Render API's `serviceType` enum (`web_service`,
+ * `background_worker`, `cron_job`, `private_service`, `static_site`).
+ * `suspended` is the literal Render value (`"suspended"` /
+ * `"not_suspended"`), surfaced verbatim so the UI can render a badge
+ * without inventing a third state.
+ */
+export interface VitalsServiceSummary {
+  serviceId: string;
+  name: string;
+  type: string | null;
+  suspended: string | null;
+  dashboardUrl: string | null;
+  environmentId: string | null;
+  /** True for the service hosting the operator UI itself. */
+  isCurrent: boolean;
+}
+
 export interface VitalsLogEntry {
   id: string;
   timestamp: string;
@@ -549,6 +571,13 @@ export interface VitalsResp {
 export interface VitalsLogsResp {
   logs: VitalsLogEntry[];
   nextCursor: string | null;
+}
+
+export interface VitalsServicesResp {
+  /** Sibling services found in the same Render environment as this deployment. */
+  services: VitalsServiceSummary[];
+  /** Service the operator UI is currently running on. */
+  currentServiceId: string;
 }
 
 export interface ListSchedulesResp {

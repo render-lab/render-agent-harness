@@ -83,7 +83,7 @@ The UI package is loaded dynamically, so services that do not enable the UI do n
 | Agents | View loaded agent definitions, tools, MCP servers, capability packs, mounted connectors, budgets, and skipped built-ins. |
 | Config | Edit supported deployed config such as model settings, environment variables, and feature toggles. |
 | Usage | View token, cost, and run usage rollups. |
-| Vitals | View Render service instances, metrics, and logs when enabled. |
+| Vitals | View Render service instances, metrics, and logs for every service in the deployment when enabled. |
 | Guide | Read deployment-specific guide content inside the running app. |
 
 ## Chat tab
@@ -129,7 +129,9 @@ Use the Config tab for runtime-visible edits such as model changes, environment 
 
 ## Vitals tab
 
-The Vitals tab is an opt-in Render observability surface. It shows Render service instances, CPU, memory, HTTP p95 latency, and recent logs for the current web service.
+The Vitals tab is an opt-in Render observability surface. It shows Render service instances, CPU, memory, HTTP p95 latency, and recent logs across every service in this harness deployment (web, worker, cron, and any siblings sharing the same Render environment).
+
+A service picker at the top of the tab switches between the harness's services. The web service the operator UI is itself running on is highlighted as the current service.
 
 Enable it from the Config tab, or set this environment variable on the web service:
 

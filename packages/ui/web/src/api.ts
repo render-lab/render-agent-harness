@@ -52,6 +52,8 @@ import type {
   VitalsLogsResp,
   VitalsMetricSeries,
   VitalsResp,
+  VitalsServiceSummary,
+  VitalsServicesResp,
 } from "@render-harness/contracts";
 import { uiPath } from "./lib/mount.js";
 
@@ -79,6 +81,7 @@ export type {
   VitalsInstance,
   VitalsLogEntry,
   VitalsMetricSeries,
+  VitalsServiceSummary,
 };
 
 export class ApiError extends Error {
@@ -459,10 +462,12 @@ export function getUsage(opts?: {
 export function getVitals(opts?: {
   rangeMinutes?: number;
   resolutionSeconds?: number;
+  serviceId?: string;
 }): Promise<VitalsResp> {
   const usp = new URLSearchParams();
   if (opts?.rangeMinutes) usp.set("rangeMinutes", String(opts.rangeMinutes));
   if (opts?.resolutionSeconds) usp.set("resolutionSeconds", String(opts.resolutionSeconds));
+  if (opts?.serviceId) usp.set("serviceId", opts.serviceId);
   const qs = usp.toString();
   return request<VitalsResp>(`/vitals${qs ? `?${qs}` : ""}`);
 }
@@ -472,14 +477,20 @@ export function listVitalsLogs(opts?: {
   level?: string[];
   type?: string[];
   text?: string;
+  serviceId?: string;
 }): Promise<VitalsLogsResp> {
   const usp = new URLSearchParams();
   if (opts?.limit) usp.set("limit", String(opts.limit));
   for (const level of opts?.level ?? []) usp.append("level", level);
   for (const type of opts?.type ?? []) usp.append("type", type);
   if (opts?.text) usp.append("text", opts.text);
+  if (opts?.serviceId) usp.set("serviceId", opts.serviceId);
   const qs = usp.toString();
   return request<VitalsLogsResp>(`/vitals/logs${qs ? `?${qs}` : ""}`);
+}
+
+export function listVitalsServices(): Promise<VitalsServicesResp> {
+  return request<VitalsServicesResp>("/vitals/services");
 }
 
 // --------------------------------------------------------------------

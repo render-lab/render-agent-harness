@@ -1,7 +1,7 @@
 import type { DeploymentInfo } from "@render-harness/contracts";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerVitalsRoutes } from "./vitals.js";
+import { __resetVitalsSiblingCache, registerVitalsRoutes } from "./vitals.js";
 
 const DEPLOYMENT: DeploymentInfo = {
   name: "test",
@@ -29,6 +29,7 @@ function makeApp(overrides?: {
 describe("GET /vitals", () => {
   beforeEach(() => {
     process.env.RENDER_API_KEY = "rnd_test";
+    __resetVitalsSiblingCache();
   });
   afterEach(() => {
     delete process.env.RENDER_API_KEY;
@@ -74,6 +75,75 @@ describe("GET /vitals", () => {
     expect(urls.some((url) => url.pathname === "/v1/services/srv-abc123/instances")).toBe(true);
     expect(urls.some((url) => url.pathname === "/v1/metrics/cpu")).toBe(true);
     expect(urls.some((url) => url.searchParams.get("resource") === "srv-abc123")).toBe(true);
+    // Without ?serviceId= the route must not bother resolving siblings.
+    expect(urls.some((url) => url.pathname === "/v1/services" && !url.search.includes("123"))).toBe(
+      false,
+    );
+  });
+
+  it("queries the requested sibling service when ?serviceId= is set", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/services/srv-abc123" && !url.search) {
+        return jsonResponse({
+          id: "srv-abc123",
+          name: "web",
+          type: "web_service",
+          environmentId: "env-1",
+        });
+      }
+      if (url.pathname === "/v1/services") {
+        return jsonResponse([
+          {
+            service: { id: "srv-abc123", name: "web", type: "web_service", environmentId: "env-1" },
+            cursor: "a",
+          },
+          {
+            service: {
+              id: "srv-worker",
+              name: "worker",
+              type: "background_worker",
+              environmentId: "env-1",
+            },
+            cursor: "b",
+          },
+        ]);
+      }
+      if (url.pathname === "/v1/services/srv-worker/instances") {
+        return jsonResponse([{ id: "inst-w1" }]);
+      }
+      return jsonResponse({ data: [{ points: [] }] });
+    });
+
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/vitals?serviceId=srv-worker");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { serviceId: string };
+    expect(body.serviceId).toBe("srv-worker");
+
+    const urls = fetchImpl.mock.calls.map((call) => new URL(String(call[0])));
+    expect(urls.some((u) => u.pathname === "/v1/services/srv-worker/instances")).toBe(true);
+    expect(urls.some((u) => u.searchParams.get("resource") === "srv-worker")).toBe(true);
+  });
+
+  it("rejects ?serviceId= for a service that's not a sibling", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/services/srv-abc123" && !url.search) {
+        return jsonResponse({ id: "srv-abc123", name: "web", environmentId: "env-1" });
+      }
+      if (url.pathname === "/v1/services") {
+        return jsonResponse([
+          { service: { id: "srv-abc123", name: "web", environmentId: "env-1" }, cursor: "a" },
+        ]);
+      }
+      return jsonResponse({ data: [] });
+    });
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/vitals?serviceId=srv-other");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("service_not_in_harness");
   });
 
   it("401s without an authenticated user", async () => {
@@ -129,6 +199,7 @@ describe("GET /vitals/logs", () => {
   beforeEach(() => {
     process.env.RENDER_API_KEY = "rnd_test";
     process.env.RENDER_OWNER_ID = "own-123";
+    __resetVitalsSiblingCache();
   });
   afterEach(() => {
     delete process.env.RENDER_API_KEY;
@@ -178,6 +249,97 @@ describe("GET /vitals/logs", () => {
     expect(res.status).toBe(503);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("render_owner_not_configured");
+  });
+});
+
+describe("GET /vitals/services", () => {
+  beforeEach(() => {
+    process.env.RENDER_API_KEY = "rnd_test";
+    __resetVitalsSiblingCache();
+  });
+  afterEach(() => {
+    delete process.env.RENDER_API_KEY;
+  });
+
+  it("lists sibling services scoped to the current environment", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/services/srv-abc123" && !url.search) {
+        return jsonResponse({
+          id: "srv-abc123",
+          name: "web",
+          type: "web_service",
+          environmentId: "env-1",
+          dashboardUrl: "https://dashboard.render.com/web/srv-abc123",
+        });
+      }
+      if (url.pathname === "/v1/services") {
+        expect(url.searchParams.get("environmentId")).toBe("env-1");
+        return jsonResponse([
+          {
+            service: {
+              id: "srv-abc123",
+              name: "web",
+              type: "web_service",
+              environmentId: "env-1",
+              suspended: "not_suspended",
+            },
+            cursor: "a",
+          },
+          {
+            service: {
+              id: "srv-worker",
+              name: "worker",
+              type: "background_worker",
+              environmentId: "env-1",
+              suspended: "not_suspended",
+            },
+            cursor: "b",
+          },
+          {
+            service: {
+              id: "srv-cron",
+              name: "nightly",
+              type: "cron_job",
+              environmentId: "env-1",
+              suspended: "not_suspended",
+            },
+            cursor: "c",
+          },
+        ]);
+      }
+      throw new Error(`unexpected url ${url.pathname}`);
+    });
+
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/vitals/services");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      services: Array<{ serviceId: string; isCurrent: boolean; type: string | null }>;
+      currentServiceId: string;
+    };
+    expect(body.currentServiceId).toBe("srv-abc123");
+    expect(body.services.map((s) => s.serviceId)).toEqual(["srv-abc123", "srv-worker", "srv-cron"]);
+    expect(body.services[0]).toMatchObject({ isCurrent: true, type: "web_service" });
+    expect(body.services[1]).toMatchObject({ isCurrent: false, type: "background_worker" });
+  });
+
+  it("falls back to a singleton list when the current service has no environment", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/services/srv-abc123" && !url.search) {
+        return jsonResponse({ id: "srv-abc123", name: "lonely web", type: "web_service" });
+      }
+      throw new Error(`unexpected url ${url.pathname}`);
+    });
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/vitals/services");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      services: Array<{ serviceId: string; isCurrent: boolean }>;
+    };
+    expect(body.services).toHaveLength(1);
+    expect(body.services[0]).toMatchObject({ serviceId: "srv-abc123", isCurrent: true });
   });
 });
 
