@@ -1,104 +1,592 @@
 ---
 title: Authoring Capability Packs
-description: Ship reusable tools, MCP servers, skills, and setup requirements for agents.
+description: Ship reusable tools, MCP servers, skills, connectors, and Render service requirements for agents.
 ---
 
-A capability pack is an npm package that extends agents without adding behavior to the core loop. Use a pack when multiple agents or templates need the same integration.
+A capability pack is an npm package that extends agents without adding behavior to the core loop. Reach for a pack whenever an integration should be reusable across agents, bundles, or templates: a SaaS API wrapper, a hosted MCP server, an inbound webhook receiver, a memory backend, or extra Render services that should travel with the deployment.
 
-## What a pack can provide
+This guide is the full author walkthrough. For the reference summary of what packs are and how users declare them, see [Capabilities](/capabilities/).
 
-A pack can contribute:
+## What a pack can contribute
 
-- Local TypeScript tools.
-- MCP server definitions.
-- Skills that agents can load.
-- Environment variable requirements.
-- Connector metadata.
-- Extra Render services during Blueprint generation.
+Every contribution is optional. A pack declares one or more of:
 
-Pack-contributed environment variables merge into the effective `envSchema`. Authors who use your pack should not redeclare those variables in `render-harness.yaml`.
+| Contribution | When called | Purpose |
+| --- | --- | --- |
+| `envSchema` | Build and deploy | Env vars the pack needs. Merged into the bundle's effective schema, surfaced to deploy-time UI. |
+| `localTools` | Runtime | TypeScript tool handlers passed to the model. Namespaced as `<pack>__<tool>`. |
+| `mcpServers` | Runtime | MCP server definitions started or connected at agent boot. |
+| `skills` | Runtime | Skill metadata surfaced in the system prompt and loadable via `load_skill`. |
+| `connectors` | Runtime | Inbound HTTP receivers mounted on the web service at `/connectors/<key>`. |
+| `renderServices` | Build only | Extra Render services merged into the generated `render.yaml`, e.g. a sidecar pserv. |
 
-## Package shape
+Capability packs are declared at the bundle level, not per agent, because each pack is loaded once per Node process and may hold module-level state. Users do not redeclare a pack's `envSchema` in their own `render-harness.yaml`.
+
+## Package layout
 
 ```text
 my-pack/
-  src/index.ts
+  src/
+    index.ts
   skills/
+    my-skill.md
   package.json
   tsconfig.json
+  tsup.config.ts
 ```
 
-The package should be ESM and default-export a `CapabilityPack`.
+`src/index.ts` default-exports a `CapabilityPack`. The `skills/` folder, if used, is bundled into the published tarball and referenced from `skills()` via `import.meta.url`.
 
-## Define the pack
+## package.json
+
+The validator (`render-harness-capability validate`) enforces a specific shape. The following is a complete example:
+
+```json
+{
+  "name": "@acme/render-harness-cap-example",
+  "version": "0.1.0",
+  "description": "Example capability pack for the Render agent harness.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "skills"],
+  "keywords": ["render-harness-cap", "render-harness"],
+  "renderHarness": {
+    "gallery": {
+      "label": "Example",
+      "envHint": "EXAMPLE_API_KEY"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@render-harness/registry": "^0.2",
+    "@render-harness/core": "^0.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5",
+    "@types/node": "^25.6.2"
+  },
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<owner>/<repo>.git",
+    "directory": "packages/cap-example"
+  }
+}
+```
+
+Validator rules to be aware of:
+
+- `"type": "module"` is required. Packs are ESM only.
+- `keywords` must contain `render-harness-cap`. Discovery tooling filters on this keyword.
+- `exports["./package.json"]` is required so `@render-harness/registry` can read the installed version at runtime to compute compatibility diagnostics.
+- `exports["."]` must expose an ESM entry. The validator falls back to `module` or `main`, but `exports` is preferred.
+- `repository.url` should point at the canonical Git repo. npm Trusted Publishing requires it for provenance attestations.
+- `renderHarness.gallery.label` (and optional `envHint`) is recommended metadata; it shows up in the operator UI's capability gallery.
+
+## TypeScript and build tooling
+
+Use `tsup` to emit ESM with type declarations:
 
 ```ts
-import { definePack, type PackContext } from "@render-harness/registry";
-import type { LocalToolHandler, McpServerConfig, SkillMetadata } from "@render-harness/core";
+// tsup.config.ts
+import { defineConfig } from "tsup";
 
-export default definePack({
-  name: "@acme/render-harness-cap-example",
-  version: "0.1.0",
-  envSchema: [
-    {
-      name: "EXAMPLE_API_KEY",
-      required: true,
-      secret: true,
-      description: "API key for Example.",
-    },
-  ],
-  mcpServers(ctx: PackContext): McpServerConfig[] {
-    const apiKey = ctx.env("EXAMPLE_API_KEY");
-    return [
-      {
-        name: "example",
-        transport: "http",
-        url: "https://example.com/mcp",
-        headers: { Authorization: `Bearer ${apiKey}` },
-      },
-    ];
-  },
-  localTools(_ctx: PackContext): LocalToolHandler[] {
-    return [];
-  },
-  skills(_ctx: PackContext): SkillMetadata[] {
-    return [];
-  },
+export default defineConfig({
+  entry: { index: "src/index.ts" },
+  format: ["esm"],
+  dts: true,
+  clean: true,
+  sourcemap: true,
+  target: "node22",
+  splitting: false,
+  treeshake: true,
 });
 ```
 
-Each callback receives a `PackContext`:
+```json
+// tsconfig.json
+{
+  "extends": "@tsconfig/node22/tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
+    "exactOptionalPropertyTypes": true,
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
+```
 
-- `ctx.config` contains the user's `config:` block from `render-harness.yaml`.
-- `ctx.env(name)` reads environment variables at build time or runtime.
+Imports must use the `.js` extension even when the source is `.ts`, and type-only imports must use `import type`.
 
-## Tool names
+## definePack
 
-Local tools from capability packs are namespaced when loaded. Mention the namespaced tool names in your prompt guidance so the model knows which tools exist.
+The default export of `src/index.ts` is the result of `definePack`:
 
-Use stable names. Manifests can reference capability tools in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval`.
+```ts
+import {
+  definePack,
+  type PackContext,
+  type ConnectorContribution,
+  type RenderServiceSpec,
+} from "@render-harness/registry";
+import type {
+  LocalToolHandler,
+  McpServerConfig,
+  SkillMetadata,
+} from "@render-harness/core";
+import pkg from "../package.json" with { type: "json" };
 
-## Validate before publishing
+const pack = definePack({
+  name: "cap-example",
+  version: pkg.version,
+  envSchema: [],
+  localTools(ctx: PackContext): LocalToolHandler[] {
+    return [];
+  },
+  mcpServers(ctx: PackContext): McpServerConfig[] {
+    return [];
+  },
+  skills(ctx: PackContext): SkillMetadata[] {
+    return [];
+  },
+  connectors(ctx: PackContext): ConnectorContribution[] {
+    return [];
+  },
+  renderServices(ctx: PackContext): RenderServiceSpec[] {
+    return [];
+  },
+});
 
-Build and validate the package:
+export default pack;
+```
+
+Constraints `definePack` enforces:
+
+- `name` must match `[a-z0-9][a-z0-9-]*`. The scope is not part of the pack name.
+- `name` must equal the short package name (the part after the npm scope). For `@acme/render-harness-cap-example`, set `name: "render-harness-cap-example"`. The validator errors on a mismatch.
+- `version` is required. Reading it from `package.json` keeps it in sync with the published version.
+
+## PackContext
+
+Every contribution callback receives a `PackContext`:
+
+```ts
+interface PackContext {
+  config: Record<string, unknown>;
+  env: (name: string) => string | undefined;
+  entryName: string;
+}
+```
+
+- `config` is the user-supplied `config:` block from `render-harness.yaml`. Validate it inside the pack — the harness schema only checks that it is an object.
+- `env(name)` reads an environment variable. Use this instead of `process.env` directly so tests can inject a fake.
+- `entryName` is the `name:` field from the user's `render-harness.yaml`. Use it to scope per-deployment state (memory namespaces, table prefixes, log fields).
+
+## envSchema
+
+Declare every env var the pack reads. The Blueprint emitter merges these into the bundle's effective schema, and the operator install flow uses them to seed `.env.example` placeholders.
+
+```ts
+envSchema: [
+  {
+    name: "EXAMPLE_API_KEY",
+    required: true,
+    secret: true,
+    description: "API key for the Example service.",
+  },
+  {
+    name: "EXAMPLE_BASE_URL",
+    required: false,
+    secret: false,
+    default: "https://api.example.com",
+    description: "Override the API base URL.",
+  },
+];
+```
+
+`EnvVarSpec` fields:
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `name` | yes | `SHOUT_CASE`, max 64 chars. |
+| `required` | no (default `false`) | When `true`, deploy-time UI blocks until the user fills it in. |
+| `secret` | no (default `false`) | When `true`, the Blueprint emits `sync: false`; never include a `default`. |
+| `description` | no | Shown to deploy-time and operator users. Keep under 280 chars. |
+| `default` | no | Renders into `render.yaml` for non-secret vars only. |
+
+## localTools
+
+Local tools are `LocalToolHandler` values from `@render-harness/core`:
+
+```ts
+import { getPool, type LocalToolHandler } from "@render-harness/core";
+
+const sendNotice: LocalToolHandler = {
+  definition: {
+    name: "send_notice",
+    description: "Send a one-line notice to the Example service.",
+    source: "pack:cap-example",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        channel: { type: "string", minLength: 1, maxLength: 64 },
+        text: { type: "string", minLength: 1, maxLength: 2_000 },
+      },
+      required: ["channel", "text"],
+    },
+  },
+  async handler({ input, signal, logger }) {
+    const args = (input ?? {}) as { channel?: string; text?: string };
+    if (!args.channel || !args.text) {
+      return { content: "send_notice: channel and text are required", isError: true };
+    }
+    // ... do work ...
+    return { content: `posted to ${args.channel}` };
+  },
+};
+```
+
+Handler arguments and return shape:
+
+- `input` is whatever the model produced for the call. It is `unknown`; cast it after the runtime schema check.
+- `signal` is an `AbortSignal` that fires on cancellation. Forward it to `fetch` and any cancellable IO.
+- `logger` is a per-run `pino` logger with `runId`/`agentName` fields already bound.
+- Return `{ content, isError? }`. `content` is the string the model sees. Set `isError: true` for tool-level failures; the loop logs and records the failure but the run continues.
+
+### Tool namespacing
+
+When the harness merges pack tools into an agent, every tool name is namespaced as `<pack>__<tool>`. The transformation is:
+
+1. The npm scope is stripped from the pack name.
+2. The short tool name has every `.` replaced with `_`.
+
+Examples:
+
+| Package | `definition.name` | Namespaced name |
+| --- | --- | --- |
+| `@render-harness/cap-memory-pg` | `memory.write` | `cap-memory-pg__memory_write` |
+| `@render-harness/cap-github` | `github.get_issue` | `cap-github__github_get_issue` |
+| `@acme/render-harness-cap-example` | `send_notice` | `render-harness-cap-example__send_notice` |
+
+The namespaced form is what users put in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval`. Pick stable short names — renaming a tool is a breaking change because manifests reference it by string.
+
+Document the namespaced names in your pack's README and mention them in the agent prompts that ship with your pack.
+
+## mcpServers
+
+Return `McpServerConfig` values from `@render-harness/core`. The loop attaches them to every agent in the bundle:
+
+```ts
+mcpServers(ctx: PackContext): McpServerConfig[] {
+  const apiKey = ctx.env("EXAMPLE_API_KEY");
+  if (!apiKey) return [];
+  return [
+    {
+      name: "example",
+      transport: "http",
+      url: "https://example.com/mcp",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      allowTools: ["example.list", "example.read"],
+    },
+  ];
+}
+```
+
+Both `transport: "stdio"` (with `command` / `args` / `env`) and `transport: "http"` (with `url` / `headers`) are supported. MCP server names are namespaced the same way tool names are (`<pack>__<server>`), and `allowTools` filters which MCP-exposed tools become visible to the model.
+
+Returning `[]` when an env var is missing is the idiomatic way to skip an MCP server gracefully; do not throw at boot.
+
+## skills
+
+Skills are surfaced in the system prompt's "skills index" and loaded on demand by the built-in `load_skill` tool.
+
+```ts
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { SkillMetadata } from "@render-harness/core";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SKILLS_DIR = join(HERE, "..", "skills");
+
+skills(_ctx: PackContext): SkillMetadata[] {
+  return [
+    {
+      name: "example-runbook",
+      description: "Operational runbook for the Example service.",
+      whenToUse: "When the user asks about Example outages, retries, or quotas.",
+      contentPath: join(SKILLS_DIR, "example-runbook.md"),
+    },
+  ];
+}
+```
+
+`contentPath` must point at a file inside the published tarball. Add `"skills"` to `files` in `package.json` so it is shipped to npm.
+
+## connectors
+
+Connectors mount inbound HTTP receivers on the web service at `/connectors/<key>`. They verify provider auth, normalize the event, enqueue work onto the worker, and return quickly. Connector packs need a `runtime-worker`-shaped bundle to receive and execute the enqueued runs.
+
+```ts
+import {
+  type ConnectorContribution,
+  type ConnectorWebCtx,
+  type PackContext,
+} from "@render-harness/registry";
+
+connectors(ctx: PackContext): ConnectorContribution[] {
+  return [
+    {
+      key: "example",
+      async webhook(req, webCtx): Promise<Response> {
+        const body = await req.text();
+        // verify signature here ...
+        const agent = webCtx.resolveAgent(/* optional configured agent name */);
+        const result = await webCtx.enqueueRun({
+          agentName: agent.name,
+          agentVersion: agent.version,
+          userId: "cap-example",
+          initialContent: [{ type: "text", text: body }],
+          metadata: { connector: "example" },
+        });
+        return Response.json(result, {
+          status: result.status === "enqueued" ? 202 : 200,
+        });
+      },
+    },
+  ];
+}
+```
+
+`ConnectorWebCtx` exposes:
+
+- `pool` — the shared Postgres pool.
+- `logger` — a connector-scoped logger.
+- `config` — the same user config the pack received.
+- `resolveAgent(name?)` — returns the configured target agent (or the first agent in the bundle) and throws a clear error if none match.
+- `enqueueRun(args)` — fire-and-forget run for one-shot deliveries.
+- `enqueueIntoConversation(args)` — multi-turn delivery; reuses the existing conversation and skips if a turn is already active.
+
+Connector key rules:
+
+- `key` must match `[a-z0-9][a-z0-9-]*`.
+- Reserved keys are rejected: `agents`, `blueprint`, `config`, `connectors`, `conversations`, `deployment`, `diagnostics`, `healthz`, `runs`, `schedules`, `ui`, `usage`.
+- Keys must be unique across all packs installed in the bundle. The catalog validator checks for collisions across first-party packs.
+
+Most production connector packs expose an `accessMode` config knob (`read` vs `read_write`) and conditionally register write tools in `localTools`. See `@render-harness/cap-github` for the canonical pattern.
+
+## renderServices
+
+Use `renderServices` when a pack needs its own Render service to function — typically a private service sidecar that the agent's tools dial into. The hook runs at build time only; the runtime library never calls it.
+
+```ts
+import type { RenderServiceSpec } from "@render-harness/registry";
+
+renderServices(ctx: PackContext): RenderServiceSpec[] {
+  return [
+    {
+      type: "pserv",
+      name: `${ctx.entryName}-example-sidecar`,
+      runtime: "docker",
+      dockerfilePath: "./Dockerfile.sidecar",
+      plan: "starter",
+      envVars: [
+        { key: "EXAMPLE_API_KEY", sync: false },
+        {
+          key: "DATABASE_URL",
+          fromDatabase: { name: `${ctx.entryName}-pg`, property: "connectionString" },
+        },
+      ],
+    },
+  ];
+}
+```
+
+`RenderServiceSpec` is intentionally a narrow subset of the Render Blueprint schema: `type` is `pserv` or `worker`, `runtime` is `node` or `docker`, and `envVars` accepts literal values, `sync: false` placeholders, `fromService`, `fromDatabase`, and `fromGroup`. After updating the manifest, the user runs `pnpm build:bp` to regenerate `render.yaml`; the pack's services land in the same file.
+
+## Stateful packs and lazy bootstrap
+
+Tool handlers can pull the shared Postgres pool and logger directly from core:
+
+```ts
+import { getPool, getLogger } from "@render-harness/core";
+```
+
+When a pack needs its own schema, bootstrap it lazily on first call rather than at module load. The canonical pattern (from `@render-harness/cap-memory-pg`) is:
+
+```ts
+let bootstrapped = false;
+async function ensureSchema(): Promise<void> {
+  if (bootstrapped) return;
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS cap_example_state (
+      ...
+    );
+  `);
+  bootstrapped = true;
+}
+```
+
+Lazy bootstrap keeps cold start fast for agents that never invoke the pack, and avoids forcing migration ordering on the host repo.
+
+Module-level state (like `bootstrapped`) is one of the reasons capability packs are bundle-wide rather than per-agent: each pack instance is shared across every agent that runs in the same process.
+
+## Validate
+
+Before publishing, validate the package:
 
 ```sh
 pnpm build
 pnpm exec render-harness-capability validate .
 ```
 
-The validator checks package metadata, ESM exports, the `render-harness-cap` keyword, and the default `CapabilityPack` export.
+The validator checks:
 
-## Publish and use
+- `package.json` shape: name, version, ESM type, `render-harness-cap` keyword, ESM exports, `repository`, gallery metadata.
+- The default export imports cleanly and parses as a `CapabilityPack`.
+- `pack.name` matches the package's short name.
+- Connector contributions can only be validated structurally without invoking the factory; if the pack has connectors, write integration tests that exercise the webhook with a synthetic request.
 
-Publish the pack like a normal npm package. Add the `render-harness-cap` keyword so tooling can discover it.
+Add `--json` to get machine-readable output for CI.
 
-Users add the package as a dependency and reference it in `render-harness.yaml`:
+For workspace authors, the same binary can validate the official capability catalog and cross-check first-party packs in one shot:
+
+```sh
+pnpm exec render-harness-capability catalog validate \
+  capability-catalog/index.yaml \
+  --workspace-root .
+```
+
+## Test
+
+A capability pack benefits from three test layers:
+
+1. **Unit tests** for tool input parsing, signature verification, and config defaults.
+2. **Integration tests** that stand up Postgres and Key Value via `pnpm db:up`, register the pack against a real agent definition, and assert the namespaced tool names show up.
+3. **Snapshot tests** for any generated Render service blocks.
+
+Vitest with `--passWithNoTests` is the workspace default. For connector packs, use `Request` and `Response` from the global fetch API to drive the webhook handler directly without standing up an HTTP server.
+
+## Publish to npm
+
+Publish through your normal release flow. For first-party packs in this repo, that means a Changeset:
+
+```sh
+pnpm changeset
+# pick a `patch` bump for the cap pack
+pnpm release
+```
+
+Capability packs are versioned independently of `@render-harness/core` and friends. Bump them only when the capability itself changes. See [Harness versioning](/harness-versioning/) for the full policy, and `AGENTS.md` in the repo root for the realignment cookbook if a pack drifts off the family line.
+
+For external packs:
+
+- Confirm the package name is unique on npm and the scope is one you control.
+- Set up [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) so your release workflow uses OIDC instead of long-lived `NPM_TOKEN`. The `repository.url` field is mandatory for provenance attestation.
+- Tag the GitHub release so consumers can pin to a specific version.
+
+## Register in a catalog
+
+The npm keyword `render-harness-cap` makes the package discoverable, but the operator UI's capability gallery reads from a curated catalog. To list an official pack, add an entry to `capability-catalog/index.yaml`:
+
+```yaml
+- package: "@acme/render-harness-cap-example"
+  name: Example
+  description: One-line description of what the pack adds.
+  categories: [tools]
+  provider: Example
+  repo: https://github.com/<owner>/<repo>
+  docs: https://github.com/<owner>/<repo>#readme
+  license: MIT
+  maintainer: <owner>
+  versionRange: "^0.1"
+  requiresHarness: "^0.2"
+  features: [tools]                # any of: tools, connectors, skills, services
+  envVars:
+    - name: EXAMPLE_API_KEY
+      required: true
+      secret: true
+      description: API key for the Example service.
+  permissions:
+    accessMode: read                # read | read_write | mixed
+    network: true
+    filesystem: none
+    sidecarServices: false
+  connectors: []                    # for connector packs only
+  quality:
+    testCommand: pnpm --filter @acme/render-harness-cap-example test
+    smokeTestStatus: passing
+    reviewStatus: maintainer-reviewed
+  trustTier: community              # community | partner | official
+```
+
+The catalog is the source of truth for the bundled snapshot used by the published `create-render-agent` CLI. Bumping `versionRange` in this file documents the supported range but does not change scaffolder output; that comes from running `pnpm tsx scripts/bundle-gallery.ts` in `packages/create-render-agent` (see `AGENTS.md`).
+
+## How users consume your pack
+
+Once published, users add the package as a dependency and reference it in `render-harness.yaml`:
 
 ```yaml
 capabilities:
   - pack: "@acme/render-harness-cap-example"
     config:
-      defaultLimit: 5
+      defaultChannel: alerts
 ```
 
+Their `pnpm build:bp` step:
+
+1. Resolves the pack from `node_modules`.
+2. Calls every contribution callback with their `config` and `env`.
+3. Merges `envSchema` into the bundle's effective schema and emits `render.yaml` env vars.
+4. Calls `renderServices()` and inlines the result into `render.yaml`.
+
+At runtime, the worker (or web / cron / workflows) loads the same pack, calls `localTools`, `mcpServers`, `skills`, and `connectors`, and namespaces every contributed name as described above.
+
+Already-deployed harnesses install packs through the operator UI, which commits the manifest and `package.json` changes through the wizard service and the GitHub App. See [Capabilities](/capabilities/#installing-after-deployment) for the post-install steps.
+
+## Permissions and approval
+
+Users gate pack tools through `permissions` on the bundle or per agent:
+
+```yaml
+permissions:
+  allowedTools:
+    - cap-example__send_notice
+  requireApproval:
+    - cap-example__send_notice
+```
+
+When you ship a pack that mutates external state (writes to an API, posts a Slack message, opens a PR), call it out in the README and recommend `requireApproval` in the example config. Packs that branch tool surface on user config — for example, only registering write tools when the user sets `accessMode: read_write` — should document the trigger explicitly. The `@render-harness/cap-github`, `@render-harness/cap-linear`, and `@render-harness/cap-slack` packs all use this pattern.
+
+## Checklist
+
+Before submitting a pack:
+
+- `package.json` has `"type": "module"`, the `render-harness-cap` keyword, `exports["./package.json"]`, and `repository.url`.
+- `definePack` `name` matches the package short name.
+- Every contribution callback handles missing env gracefully (return `[]` rather than throwing).
+- `envSchema` lists every env var the pack reads.
+- Local tools use stable namespaced names and document them in the README.
+- Connectors choose a non-reserved, lower-case `key` that won't collide with other packs.
+- `pnpm exec render-harness-capability validate .` passes with no errors.
+- A short README explains config, the namespaced tool names, required env vars, and whether tools mutate state.
+- Test command listed in the catalog `quality.testCommand` actually runs cleanly.

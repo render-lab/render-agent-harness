@@ -11,15 +11,16 @@ The first-party packs are examples of the extension model, not a closed catalog.
 
 A capability pack can add:
 
-- Local tools
-- MCP server definitions
-- Skills
-- Environment variable requirements
-- Render service requirements
+- Local TypeScript tools (`localTools`).
+- MCP server definitions (`mcpServers`).
+- Skills loadable via `load_skill` (`skills`).
+- Environment variable requirements (`envSchema`).
+- Inbound webhook receivers mounted at `/connectors/<key>` (`connectors`).
+- Extra Render services merged into the generated Blueprint (`renderServices`).
 
-Capability packs are declared at the bundle level, not per agent. This avoids duplicating module-level setup inside a single Node process.
+Capability packs are declared at the bundle level, not per agent. This avoids duplicating module-level setup inside a single Node process and lets a pack hold cross-agent state safely.
 
-To publish your own pack, see [Authoring capability packs](/authoring-capability-packs/).
+To publish your own pack, see [Authoring capability packs](/authoring-capability-packs/) for the full walkthrough.
 
 ## Current packs
 
@@ -50,12 +51,21 @@ The `config` object is pack-specific. Keep configuration small and move secret v
 
 ## Tool names
 
-Capability tools should use stable names because manifests can reference them in `permissions`.
+Capability tools are namespaced when they reach the model. The scope is stripped from the pack name and any `.` in the tool name becomes `_`:
+
+| Pack | Tool | Namespaced name |
+| --- | --- | --- |
+| `@render-harness/cap-memory-pg` | `memory.write` | `cap-memory-pg__memory_write` |
+| `@render-harness/cap-github` | `github.get_issue` | `cap-github__github_get_issue` |
+| `@render-harness/cap-slack` | `slack.send_message` | `cap-slack__slack_send_message` |
+
+Use the namespaced form in `permissions.allowedTools`, `permissions.deniedTools`, and `permissions.requireApproval`:
 
 ```yaml
 permissions:
   requireApproval:
-    - memory.write
+    - cap-memory-pg__memory_write
+    - cap-slack__slack_send_message
 ```
 
 Use `requireApproval` for tools that write durable state, trigger external work, or perform actions the user should review.
@@ -72,6 +82,8 @@ Connector packs mount inbound webhooks on the web service and enqueue work for a
 | `@render-harness/cap-webhook-generic` | `/connectors/webhook-generic` | HMAC-verified custom event sources. |
 
 Provider packs default to `accessMode: read`. Set `accessMode: read_write` only when the agent should get mutation tools, such as posting a Slack reply or updating an issue.
+
+Connector keys must match `[a-z0-9][a-z0-9-]*` and cannot collide with reserved web routes (`runs`, `agents`, `ui`, `usage`, etc.). For the connector contract and a working webhook handler example, see [Authoring capability packs › connectors](/authoring-capability-packs/#connectors).
 
 ## Installing after deployment
 
