@@ -1,5 +1,12 @@
 # @render-harness/ui
 
+## 0.2.0
+
+### Minor Changes
+
+- Realign with the rest of the `@render-harness/*` harness family at `0.2.0`. No code changes — version bump only, so `create-render-agent` scaffolds that pin every `@render-harness/*` dep to `^0.2` resolve `ui` too.
+
+
 ## 0.1.5
 
 ### Patch Changes
