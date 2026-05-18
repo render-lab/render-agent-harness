@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { AuthMe } from "../lib/api.js";
 import type { GalleryAgent } from "../lib/types.js";
 
 /**
@@ -8,10 +9,12 @@ import type { GalleryAgent } from "../lib/types.js";
  */
 export function BundleReview({
   bundle,
+  me,
   onSubmit,
   onPrev,
 }: {
   bundle: GalleryAgent;
+  me: AuthMe | null;
   onSubmit: (args: { agentName: string; description: string }) => void;
   onPrev: () => void;
 }) {
@@ -70,6 +73,35 @@ export function BundleReview({
           />
         </label>
       </div>
+
+      {me ? (
+        <div className="flex items-center gap-3 border border-accent p-3 text-[12px] text-accent">
+          {me.avatarUrl ? (
+            <img
+              src={me.avatarUrl}
+              alt=""
+              width={20}
+              height={20}
+              className="rounded-full border border-line"
+            />
+          ) : null}
+          <span>
+            {"// SIGNED IN as @"}
+            {me.login}
+            {
+              " — the new repo will be linked to your account. You'll be added as a collaborator and it will show up under My harnesses."
+            }
+          </span>
+        </div>
+      ) : (
+        <div className="border border-accent p-3 text-[12px] text-accent">
+          {"// ANONYMOUS — no login. The success screen will show a one-time claim link. "}
+          <a className="underline" href={`/api/auth/login?next=${encodeURIComponent("/new")}`}>
+            Sign in with GitHub
+          </a>
+          {" first to auto-link the repo."}
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <button type="button" onClick={onPrev} className="btn">

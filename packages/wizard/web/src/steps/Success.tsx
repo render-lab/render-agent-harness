@@ -46,6 +46,22 @@ export function Success({ state, result }: { state: WizardState; result: Scaffol
         </dl>
       </div>
 
+      {result.claimUrl ? (
+        <div className="panel mt-5 border-accent p-6 text-sm">
+          <div className="label text-accent">{"// CLAIM LATER"}</div>
+          <p className="mt-2">
+            This scaffold was anonymous. Save this one-time link — signing in with GitHub and
+            visiting it will add you as a collaborator and link the repo to your account.
+          </p>
+          <a
+            href={result.claimUrl}
+            className="mt-3 block break-all border border-line bg-canvas p-2 text-[11px] text-accent hover:underline"
+          >
+            {result.claimUrl}
+          </a>
+        </div>
+      ) : null}
+
       <div className="panel mt-5 p-6">
         <div className="label">{"// WHAT HAPPENS NEXT"}</div>
         <ol className="mt-3 space-y-1.5 text-sm">

@@ -1,12 +1,15 @@
+import type { AuthMe } from "../lib/api.js";
 import type { WizardState } from "../lib/types.js";
 import { StepShell } from "./StepShell.js";
 
 export function Review({
   state,
+  me,
   onSubmit,
   onPrev,
 }: {
   state: WizardState;
+  me: AuthMe | null;
   onSubmit: () => void;
   onPrev: () => void;
 }) {
@@ -56,11 +59,36 @@ export function Review({
           </details>
         </Row>
       </dl>
-      <div className="border border-accent p-3 text-[12px] text-accent">
-        {
-          "// ANONYMOUS — no login. Clicking Create returns a one-time link to the managed repo and a Deploy-to-Render button. The wizard won't show this agent again."
-        }
-      </div>
+      {me ? (
+        <div className="flex items-center gap-3 border border-accent p-3 text-[12px] text-accent">
+          {me.avatarUrl ? (
+            <img
+              src={me.avatarUrl}
+              alt=""
+              width={20}
+              height={20}
+              className="rounded-full border border-line"
+            />
+          ) : null}
+          <span>
+            {"// SIGNED IN as @"}
+            {me.login}
+            {
+              " — the new repo will be linked to your account. You'll be added as a collaborator and it will show up under My harnesses."
+            }
+          </span>
+        </div>
+      ) : (
+        <div className="border border-accent p-3 text-[12px] text-accent">
+          {
+            "// ANONYMOUS — no login. The success screen will show a one-time claim link you can use later to associate this harness with a GitHub account. "
+          }
+          <a className="underline" href={`/api/auth/login?next=${encodeURIComponent("/new")}`}>
+            Sign in with GitHub
+          </a>
+          {" first to link the repo to you automatically."}
+        </div>
+      )}
     </StepShell>
   );
 }

@@ -219,7 +219,7 @@ export function App() {
     };
     return (
       <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review" onHome={goHome}>
-        <BundleReview bundle={phase.bundle} onSubmit={submitBundle} onPrev={goHome} />
+        <BundleReview bundle={phase.bundle} me={me} onSubmit={submitBundle} onPrev={goHome} />
       </Shell>
     );
   }
@@ -270,7 +270,7 @@ export function App() {
           onPrev={goPrev}
         />
       )}
-      {step === 6 && <Review state={state} onSubmit={submit} onPrev={goPrev} />}
+      {step === 6 && <Review state={state} me={me} onSubmit={submit} onPrev={goPrev} />}
     </Shell>
   );
 }

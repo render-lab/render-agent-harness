@@ -134,6 +134,13 @@ export interface ScaffoldResponse {
   repoUrl: string;
   deployUrl: string;
   repoSlug: string;
+  /**
+   * When the scaffold was anonymous, the wizard emits a signed one-time
+   * URL the user can hit later (after signing in) to claim the repo and
+   * trigger the same collaborator-add + ownership-row insert that an
+   * authed scaffold would have done inline.
+   */
+  claimUrl?: string;
 }
 
 export interface ScaffoldJobResponse {
