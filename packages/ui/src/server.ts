@@ -144,6 +144,11 @@ export function mountUi(opts: MountUiOpts): void {
 
   if (path === "") {
     opts.app.get("/assets/*", async (c) => serveAsset(c, c.req.path.replace(/^\/assets\//, "")));
+    opts.app.get("/:asset", async (c, next) => {
+      const asset = c.req.param("asset");
+      if (isTopLevelAsset(asset)) return serveAsset(c, asset);
+      return next();
+    });
   }
 
   opts.app.get(path || "/", serveSpaShell);
@@ -211,6 +216,19 @@ function guessContentType(rel: string): string {
   if (rel.endsWith(".json")) return "application/json; charset=utf-8";
   if (rel.endsWith(".map")) return "application/json; charset=utf-8";
   return "application/octet-stream";
+}
+
+function isTopLevelAsset(path: string): boolean {
+  return (
+    !path.includes("/") &&
+    (path.endsWith(".js") ||
+      path.endsWith(".mjs") ||
+      path.endsWith(".css") ||
+      path.endsWith(".map") ||
+      path.endsWith(".woff2") ||
+      path.endsWith(".svg") ||
+      path.endsWith(".png"))
+  );
 }
 
 function safeNextPath(next: string, uiPath: string): string {

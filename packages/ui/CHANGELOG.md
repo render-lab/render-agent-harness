@@ -1,5 +1,11 @@
 # @render-harness/ui
 
+## 0.1.5
+
+### Patch Changes
+
+- Fix module-script MIME-type errors when the operator UI is mounted at root (`path: "/"`). The SPA shell references hashed asset bundles at top-level paths (e.g. `/chunk-CSCIHK7Q-Bo3glXo1.js`); the mount now serves them from `bundled-gallery`'s `static/assets/` for the root-mount case instead of falling through to the SPA HTML.
+
 ## 0.1.4
 
 ### Patch Changes

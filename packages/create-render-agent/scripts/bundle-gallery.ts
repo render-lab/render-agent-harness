@@ -16,7 +16,7 @@
  *   pnpm tsx scripts/bundle-gallery.ts
  */
 
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -34,11 +34,7 @@ const CAPABILITY_CATALOG_BUNDLE_PATH = resolve(
   "bundled-gallery",
   "capability-catalog.json",
 );
-const HARNESS_VERSION_BUNDLE_PATH = resolve(
-  CLI_ROOT,
-  "bundled-gallery",
-  "harness-version.json",
-);
+const HARNESS_VERSION_BUNDLE_PATH = resolve(CLI_ROOT, "bundled-gallery", "harness-version.json");
 
 async function main(): Promise<void> {
   const harnessVersionRange = await readWorkspacePackageRange("registry");
@@ -46,7 +42,10 @@ async function main(): Promise<void> {
   const catalog = await loadCapabilityCatalog(
     resolve(HARNESS_ROOT, "capability-catalog", "index.yaml"),
   );
-  const overriddenCatalog = await overrideCatalogVersionsFromWorkspace(catalog, harnessVersionRange);
+  const overriddenCatalog = await overrideCatalogVersionsFromWorkspace(
+    catalog,
+    harnessVersionRange,
+  );
   await mkdir(dirname(BUNDLE_PATH), { recursive: true });
   await writeFile(BUNDLE_PATH, serializeGallery(gallery), "utf8");
   await writeFile(
