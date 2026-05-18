@@ -14,6 +14,7 @@ import { parse as parseYaml } from "yaml";
 // literal lives inside the factory rather than via an outer const.
 vi.mock("./version-ranges.js", () => ({
   DEFAULT_HARNESS_VERSION_RANGE: "^0.0.0-test",
+  harnessVersionRangeFor: () => "^0.0.0-test",
 }));
 const TEST_HARNESS_RANGE = "^0.0.0-test";
 

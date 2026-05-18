@@ -34,7 +34,7 @@ This is what was done for `@render-harness/ui@0.1.5 → 0.2.0` and the six `0.1.
 
 `packages/create-render-agent/src/generate.test.ts` runs `buildFileMap()` against six representative runtime combos and captures the entire generated file map (`package.json`, `render-harness.yaml`, `src/*.ts`, `README.md`, `.env.example`, `tsup.config.ts`, etc.) into a single vitest snapshot at `src/__snapshots__/generate.test.ts.snap`. The snapshot's job is to catch unintended changes in scaffolder output during refactors.
 
-**The test stubs `./version-ranges.js` via `vi.mock` to pin `DEFAULT_HARNESS_VERSION_RANGE` to `^0.0.0-test`.** Without this stub, the snapshot would bake whatever value the workspace registry happens to be on at test time, and every harness bump would re-churn the snapshot file (we hit that twice in May 2026 before adding the stub).
+**The test stubs `./version-ranges.js` via `vi.mock`** so both `DEFAULT_HARNESS_VERSION_RANGE` and `harnessVersionRangeFor()` return `^0.0.0-test`. Without this stub, the snapshot would bake whatever value the workspace happens to be on at test time, and every harness bump would re-churn the snapshot file (we hit that twice in May 2026 before adding the stub). If you add a new export to `version-ranges.ts`, extend the mock or the test will fail with "is not a function".
 
 When you intentionally change the scaffolder's output:
 
@@ -84,5 +84,6 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 ## Things that bit us recently (and how to avoid them)
 
 - **Scaffolded projects requesting `^0.1.1` when published is `0.2.x`** — the prebuild script now derives version ranges from the live workspace. If you change how `version-ranges.ts` resolves the default, keep the bundled `harness-version.json` and `capability-catalog.json` as fallback sources.
+- **Scaffolded `package.json` requesting `@render-harness/core@^0.2.2` when only `0.2.1` is published** — the scaffolder used to stamp one universal range (from `@render-harness/registry`) across every `@render-harness/*` dep, which broke whenever sibling packages drifted onto different patch tracks (registry cascades ahead of core/contracts/runtime-* on small patches). The bundle now writes per-package ranges into `bundled-gallery/harness-version.json` (`packages: { "@render-harness/core": "^0.2.1", "@render-harness/registry": "^0.2.2", … }`) and `package-json.ts` looks each one up via `harnessVersionRangeFor(pkgName)`. The `harnessVersion` field in scaffolded `render-harness.yaml` is anchored to `@render-harness/core` so the runtime mixed-version check stays satisfied across expected drift.
 - **`agent: support-bot` carried over from a gallery template into a user-named project** — `buildHarnessConfig` rewrites `config.agent` to the scaffolded agent name. If you add another field that should be retargeted on copy-from-template, extend `retargetCapabilityConfig`.
 - **`UI_COOKIE_SECRET=""` crashing the UI** — `packages/ui/src/auth.ts` treats empty as unset and falls back to a per-process ephemeral. Don't reintroduce a hard fail on missing/empty secrets in development.

@@ -16,7 +16,7 @@
  *   pnpm tsx scripts/bundle-gallery.ts
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -37,13 +37,24 @@ const CAPABILITY_CATALOG_BUNDLE_PATH = resolve(
 const HARNESS_VERSION_BUNDLE_PATH = resolve(CLI_ROOT, "bundled-gallery", "harness-version.json");
 
 async function main(): Promise<void> {
-  const harnessVersionRange = await readWorkspacePackageRange("registry");
+  const packageVersions = await readAllHarnessPackageRanges();
+  // Anchor the bundle's "harness version" to the most conservative
+  // substrate package (`@render-harness/core`). The `harnessVersion`
+  // field that lands in scaffolded `render-harness.yaml` declares the
+  // minimum harness the project expects; pinning it to `core` keeps
+  // the constraint satisfiable whenever core is installed, even when
+  // sibling packages (registry, web, wizard) ran ahead on patch bumps.
+  const corePackage = "@render-harness/core";
+  const harnessVersionRange =
+    packageVersions[corePackage] ?? (await readWorkspacePackageRange("core"));
+
   const gallery = await loadGalleryFromSource({ root: HARNESS_ROOT });
   const catalog = await loadCapabilityCatalog(
     resolve(HARNESS_ROOT, "capability-catalog", "index.yaml"),
   );
-  const overriddenCatalog = await overrideCatalogVersionsFromWorkspace(
+  const overriddenCatalog = overrideCatalogVersionsFromWorkspace(
     catalog,
+    packageVersions,
     harnessVersionRange,
   );
   await mkdir(dirname(BUNDLE_PATH), { recursive: true });
@@ -55,11 +66,11 @@ async function main(): Promise<void> {
   );
   await writeFile(
     HARNESS_VERSION_BUNDLE_PATH,
-    `${JSON.stringify({ harnessVersionRange }, null, 2)}\n`,
+    `${JSON.stringify({ harnessVersionRange, packages: packageVersions }, null, 2)}\n`,
     "utf8",
   );
   process.stdout.write(
-    `bundled-gallery: ${gallery.agents.length} agents, ${gallery.capabilities.length} capabilities, harness=${harnessVersionRange} → ${BUNDLE_PATH}\n`,
+    `bundled-gallery: ${gallery.agents.length} agents, ${gallery.capabilities.length} capabilities, harness=${harnessVersionRange} (${Object.keys(packageVersions).length} packages tracked) → ${BUNDLE_PATH}\n`,
   );
 }
 
@@ -76,13 +87,49 @@ async function readWorkspacePackageRange(subdir: string): Promise<string> {
   return `^${json.version}`;
 }
 
-async function readCapabilityPackageRange(packageName: string): Promise<string | null> {
-  const tail = packageName.replace(/^@render-harness\//, "");
-  try {
-    return await readWorkspacePackageRange(`capabilities/${tail}`);
-  } catch {
-    return null;
+/**
+ * Auto-discover every `@render-harness/*` package in the workspace and
+ * read its current published version. Returns a map keyed by the
+ * fully-qualified package name (`@render-harness/core`, etc.). Drives
+ * the per-package version ranges baked into scaffolded `package.json`
+ * deps — replaces the previous behaviour of stamping one range across
+ * the whole family, which broke whenever sibling packages drifted onto
+ * different patch tracks (e.g. registry@0.2.2 alongside core@0.2.1).
+ */
+async function readAllHarnessPackageRanges(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const scanRoots = [
+    resolve(HARNESS_ROOT, "packages"),
+    resolve(HARNESS_ROOT, "packages", "capabilities"),
+  ];
+  for (const root of scanRoots) {
+    let entries: string[];
+    try {
+      entries = await readdir(root);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const pkgJsonPath = resolve(root, entry, "package.json");
+      let text: string;
+      try {
+        text = await readFile(pkgJsonPath, "utf8");
+      } catch {
+        continue;
+      }
+      let parsed: { name?: string; version?: string; private?: boolean };
+      try {
+        parsed = JSON.parse(text) as { name?: string; version?: string; private?: boolean };
+      } catch {
+        continue;
+      }
+      if (!parsed.name || !parsed.version) continue;
+      if (!parsed.name.startsWith("@render-harness/")) continue;
+      if (parsed.private === true) continue;
+      out[parsed.name] = `^${parsed.version}`;
+    }
   }
+  return out;
 }
 
 /**
@@ -91,16 +138,15 @@ async function readCapabilityPackageRange(packageName: string): Promise<string |
  * authoring surface; the bundled JSON is the deploy surface that ships
  * inside the published CLI tarball.
  */
-async function overrideCatalogVersionsFromWorkspace(
+function overrideCatalogVersionsFromWorkspace(
   catalog: CapabilityCatalog,
+  packageVersions: Record<string, string>,
   harnessVersionRange: string,
-): Promise<CapabilityCatalog> {
-  const capabilities = await Promise.all(
-    catalog.capabilities.map(async (entry) => {
-      const versionRange = (await readCapabilityPackageRange(entry.package)) ?? entry.versionRange;
-      return { ...entry, versionRange, requiresHarness: harnessVersionRange };
-    }),
-  );
+): CapabilityCatalog {
+  const capabilities = catalog.capabilities.map((entry) => {
+    const versionRange = packageVersions[entry.package] ?? entry.versionRange;
+    return { ...entry, versionRange, requiresHarness: harnessVersionRange };
+  });
   return { ...catalog, capabilities };
 }
 

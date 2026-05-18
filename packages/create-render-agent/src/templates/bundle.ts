@@ -24,6 +24,7 @@
 
 import { stringify as stringifyYaml } from "yaml";
 import type { Answers, BundlePick, PackageManager } from "../types.js";
+import { harnessVersionRangeFor } from "../version-ranges.js";
 
 export type BundleRuntimeKind = "web" | "worker" | "cron";
 
@@ -446,13 +447,13 @@ export function bundlePackageJson(opts: BundlePackageJsonOpts): string {
 
 function linkSpec(pkgShortName: string, harnessRoot: string | null): string {
   if (harnessRoot) return `link:${harnessRoot}/packages/${pkgShortName}`;
-  return "^0.1.1";
+  return harnessVersionRangeFor(`@render-harness/${pkgShortName}`);
 }
 
 function linkForCapability(pkgName: string, harnessRoot: string | null): string {
   const tail = pkgName.split("/").pop();
-  if (!harnessRoot) return "^0.1.1";
-  if (!tail) return "^0.1.1";
+  if (!harnessRoot) return harnessVersionRangeFor(pkgName);
+  if (!tail) return harnessVersionRangeFor(pkgName);
   // Cap packs live under packages/capabilities/.
   return `link:${harnessRoot}/packages/capabilities/${tail}`;
 }

@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 import { type Answers, isMultiRuntime, runtimePackageFor } from "../types.js";
-import { DEFAULT_HARNESS_VERSION_RANGE } from "../version-ranges.js";
+import { harnessVersionRangeFor } from "../version-ranges.js";
 
 /**
  * Builds the scaffolded project's package.json. Layout follows the
@@ -124,11 +124,17 @@ function hasConnectorCapabilities(answers: Answers): boolean {
  * version range (default) or a `link:` reference into a local harness
  * checkout.
  *
+ * For published mode, each `@render-harness/*` package gets its own
+ * version range derived from the workspace at bundle time. This avoids
+ * the trap of stamping one range (e.g. registry's) across the family,
+ * which breaks the install whenever sibling packages drift across
+ * patch tracks.
+ *
  * Capability packs live under `packages/capabilities/<name>`; everything
  * else under `packages/<name>`.
  */
 function harnessDepVersion(pkgName: string, harnessRoot: string | null): string {
-  if (!harnessRoot) return DEFAULT_HARNESS_VERSION_RANGE;
+  if (!harnessRoot) return harnessVersionRangeFor(pkgName);
   const tail = pkgName.replace(/^@render-harness\//, "");
   const subdir = tail.startsWith("cap-") ? `capabilities/${tail}` : tail;
   // Always emit a POSIX-style path. `link:` accepts absolute paths.
