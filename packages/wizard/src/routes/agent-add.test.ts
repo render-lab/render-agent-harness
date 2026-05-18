@@ -157,6 +157,24 @@ const BODY = {
   agentId: "meeting-prep",
 };
 
+// Pre-existing runtime entry files for the TARGET project. The target
+// harness is web+worker (see TARGET_YAML), so its scaffold ships these
+// alongside a tsup.config.ts that builds both. Tests that don't seed
+// these will also see runtime-entry writes — see the dedicated
+// runtime-entries describe block below for those scenarios.
+const TARGET_TSUP = `import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    web: "src/web.ts",
+    worker: "src/worker.ts",
+  },
+  format: ["esm"],
+});
+`;
+const TARGET_WEB_TS = "// existing web entry\n";
+const TARGET_WORKER_TS = "// existing worker entry\n";
+
 describe("POST /api/agents/add", () => {
   it("commits manifest, package, env example, source file, and re-emitted render.yaml", async () => {
     const { app, createOrUpdateFileContents } = makeApp({
@@ -164,6 +182,9 @@ describe("POST /api/agents/add", () => {
       "package.json": TARGET_PKG,
       ".env.example": TARGET_ENV,
       "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP,
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
     });
     const res = await app.request("/api/agents/add", {
       method: "POST",
@@ -173,13 +194,17 @@ describe("POST /api/agents/add", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { ok: boolean; changedFiles: string[]; commitSha: string };
     expect(json.ok).toBe(true);
-    // All five files changed: yaml, pkg, env, source, render.yaml.
+    // Six files: yaml, pkg, env, custom-agent source, render.yaml, and
+    // a new src/cron.ts plus a tsup.config.ts patch for the cron entry
+    // the bundle introduces.
     expect(json.changedFiles).toContain("render-harness.yaml");
     expect(json.changedFiles).toContain("package.json");
     expect(json.changedFiles).toContain(".env.example");
     expect(json.changedFiles).toContain("src/meeting-prep.ts");
     expect(json.changedFiles).toContain("render.yaml");
-    expect(createOrUpdateFileContents).toHaveBeenCalledTimes(5);
+    expect(json.changedFiles).toContain("src/cron.ts");
+    expect(json.changedFiles).toContain("tsup.config.ts");
+    expect(createOrUpdateFileContents).toHaveBeenCalledTimes(7);
   });
 
   it("returns 401 when bearer secret is wrong", async () => {
@@ -295,11 +320,14 @@ describe("POST /api/agents/add", () => {
     expect(json.ok).toBe(true);
   });
 
-  it("commits a single-agent (builtin) gallery entry without touching src/", async () => {
+  it("commits a builtin (no entrypoint) gallery entry without writing the bundle's own source file", async () => {
     const { app, createOrUpdateFileContents } = makeApp({
       "render-harness.yaml": TARGET_YAML,
       "package.json": TARGET_PKG,
       "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP,
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
     });
     const res = await app.request("/api/agents/add", {
       method: "POST",
@@ -314,12 +342,186 @@ describe("POST /api/agents/add", () => {
     const json = (await res.json()) as { ok: boolean; changedFiles: string[] };
     expect(json.ok).toBe(true);
     expect(json.changedFiles).toContain("render-harness.yaml");
-    // No source file was written — the agent is a builtin reference.
-    expect(json.changedFiles).not.toContain("src/chat-agent.ts");
-    expect(json.changedFiles).not.toContain("src/chat.ts");
-    // Each written path was committed exactly once.
+    // The builtin agent itself ships no entrypoint, so its `src/<id>.ts`
+    // is never written.
     const paths = createOrUpdateFileContents.mock.calls.map((c) => (c[0] as { path: string }).path);
-    expect(paths.filter((p) => p.startsWith("src/"))).toEqual([]);
+    expect(paths).not.toContain("src/chat-agent.ts");
+    expect(paths).not.toContain("src/chat.ts");
+    // Adding a builtin web-only agent to a project that already has
+    // web/worker runtime entries introduces no new runtime kinds either.
+    expect(paths).not.toContain("src/cron.ts");
+    expect(paths).not.toContain("tsup.config.ts");
+  });
+
+  it("uses the package.json name (not cfg.name) in the regenerated render.yaml's pnpm filter", async () => {
+    // Mirrors the live wizard scaffold, which writes a deployment-suffixed
+    // `name` into render-harness.yaml but keeps the original `name` in
+    // package.json. Without this regression the regenerated render.yaml
+    // calls `pnpm --filter <deploymentName> build`, which matches no
+    // package and silently no-ops — leaving dist/ empty and crashing the
+    // service at start with "Cannot find module dist/web.js".
+    const deployedYaml = TARGET_YAML.replace("name: my-harness", "name: my-harness-ab12");
+    const userPkg = JSON.stringify({ name: "my-harness", dependencies: {} }, null, 2);
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": deployedYaml,
+      "package.json": userPkg,
+      "render.yaml": TARGET_RENDER,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify({
+        ...BODY,
+        bundleSlug: "chat",
+        agentId: "chat-agent",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const renderYamlCall = createOrUpdateFileContents.mock.calls.find(
+      (c) => (c[0] as { path: string }).path === "render.yaml",
+    );
+    expect(renderYamlCall).toBeDefined();
+    const committedRenderYaml = Buffer.from(
+      (renderYamlCall?.[0] as { content: string }).content,
+      "base64",
+    ).toString("utf8");
+    expect(committedRenderYaml).toContain("pnpm --filter my-harness build");
+    expect(committedRenderYaml).not.toContain("pnpm --filter my-harness-ab12 build");
+  });
+
+  it("adding a cron agent to a single-runtime web project writes src/cron.ts and appends a cron entry to tsup", async () => {
+    // Single-runtime web project: src/main.ts is the only source, tsup
+    // ships `{ main: "src/main.ts" }`, render.yaml's web service runs
+    // `node dist/main.js`. Adding meeting-prep (cron) introduces a cron
+    // runtime — the regenerated render.yaml will reference dist/cron.js
+    // (singleAgent flips to false), so the wizard must write src/cron.ts
+    // AND append `cron: "src/cron.ts"` to tsup. Without this fix, the
+    // cron service crashes at start with "Cannot find module dist/cron.js".
+    const singleRuntimeYaml = `schemaVersion: 1
+name: chat
+description: Single-turn HTTP chat.
+harnessVersion: "^0.2"
+shared:
+  model: { provider: anthropic, model: claude-sonnet-4-6 }
+agents:
+  - id: chat-agent
+    agent: { kind: builtin, ref: chat, systemPrompt: hi }
+    runtimes:
+      - kind: web
+`;
+    const singleRuntimeTsup = `import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: { main: "src/main.ts" },
+  format: ["esm"],
+});
+`;
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": singleRuntimeYaml,
+      "package.json": JSON.stringify({ name: "chat", dependencies: {} }, null, 2),
+      "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": singleRuntimeTsup,
+      "src/main.ts": "// existing single-runtime entry\n",
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; changedFiles: string[] };
+    expect(json.changedFiles).toContain("src/cron.ts");
+    expect(json.changedFiles).toContain("tsup.config.ts");
+    // The pre-existing src/main.ts is left alone (we never overwrite a
+    // user-authored runtime entry).
+    expect(json.changedFiles).not.toContain("src/main.ts");
+
+    const calls = createOrUpdateFileContents.mock.calls.map(
+      (c) =>
+        c[0] as {
+          path: string;
+          content: string;
+        },
+    );
+    const cronWrite = calls.find((c) => c.path === "src/cron.ts");
+    expect(cronWrite).toBeDefined();
+    const cronBody = Buffer.from(cronWrite?.content, "base64").toString("utf8");
+    expect(cronBody).toContain("runCronFromRegistryAndExit");
+    expect(cronBody).toContain("HARNESS_AGENT_ID");
+
+    const tsupWrite = calls.find((c) => c.path === "tsup.config.ts");
+    expect(tsupWrite).toBeDefined();
+    const tsupBody = Buffer.from(tsupWrite?.content, "base64").toString("utf8");
+    // Original `main` entry preserved verbatim, cron appended.
+    expect(tsupBody).toContain('main: "src/main.ts"');
+    expect(tsupBody).toContain('"cron": "src/cron.ts"');
+  });
+
+  it("adding a cron agent to a multi-runtime web+worker project appends only the missing cron entry", async () => {
+    // Starts from TARGET (web+worker, tsup `{ web, worker }`). Adding
+    // meeting-prep (cron) should add src/cron.ts and append `cron` to
+    // the tsup entry block, without touching the existing web/worker
+    // entries.
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": TARGET_YAML,
+      "package.json": TARGET_PKG,
+      "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP,
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; changedFiles: string[] };
+    expect(json.changedFiles).toContain("src/cron.ts");
+    expect(json.changedFiles).toContain("tsup.config.ts");
+    expect(json.changedFiles).not.toContain("src/web.ts");
+    expect(json.changedFiles).not.toContain("src/worker.ts");
+
+    const calls = createOrUpdateFileContents.mock.calls.map(
+      (c) =>
+        c[0] as {
+          path: string;
+          content: string;
+        },
+    );
+    const tsupWrite = calls.find((c) => c.path === "tsup.config.ts");
+    expect(tsupWrite).toBeDefined();
+    const tsupBody = Buffer.from(tsupWrite?.content, "base64").toString("utf8");
+    expect(tsupBody).toContain('web: "src/web.ts"');
+    expect(tsupBody).toContain('worker: "src/worker.ts"');
+    expect(tsupBody).toContain('"cron": "src/cron.ts"');
+  });
+
+  it("skips the src/cron.ts write when the file already exists in the repo", async () => {
+    const existingCron = "// user-customized cron entry — must not be overwritten\n";
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": TARGET_YAML,
+      "package.json": TARGET_PKG,
+      "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP.replace(
+        'worker: "src/worker.ts",',
+        'worker: "src/worker.ts",\n    cron: "src/cron.ts",',
+      ),
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
+      "src/cron.ts": existingCron,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; changedFiles: string[] };
+    expect(json.changedFiles).not.toContain("src/cron.ts");
+    expect(json.changedFiles).not.toContain("tsup.config.ts");
+    const paths = createOrUpdateFileContents.mock.calls.map((c) => (c[0] as { path: string }).path);
+    expect(paths).not.toContain("src/cron.ts");
   });
 
   it("returns 401 with no auth at all (no bearer, no session)", async () => {

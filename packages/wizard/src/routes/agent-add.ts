@@ -28,6 +28,7 @@ import {
 } from "../agent-add.js";
 import { readSessionCookie } from "../auth.js";
 import { createOctokit, type GithubAppCreds } from "../github-app.js";
+import { ensureTsupEntries, requiredEntries } from "../runtime-entries.js";
 import type { WizardStore } from "../store.js";
 import type { ErrorResponse } from "../types.js";
 
@@ -68,6 +69,7 @@ const MANIFEST_PATH = "render-harness.yaml";
 const PACKAGE_PATH = "package.json";
 const ENV_EXAMPLE_PATH = ".env.example";
 const RENDER_YAML_PATH = "render.yaml";
+const TSUP_CONFIG_PATH = "tsup.config.ts";
 
 export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts): void {
   const createOctokitFn = opts.deps?.createOctokit ?? createOctokit;
@@ -156,12 +158,22 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
           })
         : null;
 
+      let cfg: HarnessConfig;
       let nextRenderYaml: string | null = null;
       try {
-        const cfg: HarnessConfig = parseHarnessConfigYaml(nextManifest);
+        cfg = parseHarnessConfigYaml(nextManifest);
+        // packageName MUST be the actual `name` field from package.json,
+        // not cfg.name from the manifest. The wizard's scaffold uses
+        // `body.agentName` for package.json's name but `deploymentName`
+        // (a suffixed slug) for the manifest's `name`, so the two diverge
+        // on every scaffold. Using cfg.name here produces a render.yaml
+        // whose `pnpm --filter <cfg.name> build` matches no package,
+        // silently no-ops, and leaves the dist/ tree empty — the service
+        // then crashes at start with "Cannot find module dist/web.js".
+        const packageName = readPackageJsonName(pkg.text) ?? cfg.name;
         const emitted = await emitBlueprint({
           config: cfg,
-          packageName: cfg.name,
+          packageName,
           entrypointStyle: "repo",
         });
         nextRenderYaml = emitted.yaml;
@@ -178,26 +190,92 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         );
       }
 
-      type Write = { text: string; sha: string | null };
-      const writes = new Map<string, Write>();
-      writes.set(MANIFEST_PATH, { text: nextManifest, sha: manifest.sha });
-      writes.set(PACKAGE_PATH, { text: nextPkg, sha: pkg.sha });
-      if (nextEnv && env) writes.set(ENV_EXAMPLE_PATH, { text: nextEnv, sha: env.sha });
-      // Always write the source file if its contents differ (planner
-      // already rejected hard conflicts). Builtin-only agents have a
-      // null sourceFilePath and skip this entirely.
-      if (finalPlan.spec.sourceFilePath && finalPlan.spec.sourceFileContent !== null) {
-        const existingSourceText = existingSource?.text ?? null;
-        if (existingSourceText !== finalPlan.spec.sourceFileContent) {
-          writes.set(finalPlan.spec.sourceFilePath, {
-            text: finalPlan.spec.sourceFileContent,
-            sha: existingSource?.sha ?? null,
+      const extraWarnings: string[] = [];
+
+      // For each runtime entry the freshly emitted render.yaml will
+      // reference (e.g. `dist/cron.js`), make sure `src/<name>.ts`
+      // exists and the project's tsup.config.ts builds it. Without
+      // this, adding a cron-runtime agent to a project that didn't
+      // have a cron before leaves the cron service trying to run a
+      // file the build never produced.
+      const required = requiredEntries(cfg);
+      const runtimeEntryWrites = new Map<
+        string,
+        { text: string; current: string | null; sha: string | null }
+      >();
+      for (const entry of required) {
+        const existing = await readRepoFile(octokit, locator, entry.sourcePath, branch, false);
+        if (!existing) {
+          runtimeEntryWrites.set(entry.sourcePath, {
+            text: entry.template(),
+            current: null,
+            sha: null,
           });
         }
       }
-      if (nextRenderYaml && nextRenderYaml !== renderYaml?.text) {
+
+      let tsupWrite: { text: string; current: string; sha: string } | null = null;
+      if (required.length > 0) {
+        const tsup = await readRepoFile(octokit, locator, TSUP_CONFIG_PATH, branch, false);
+        if (tsup) {
+          const result = ensureTsupEntries(
+            tsup.text,
+            required.map((e) => e.name),
+          );
+          if (!result.patched) {
+            extraWarnings.push(
+              `Couldn't locate the \`entry: { ... }\` block in ${TSUP_CONFIG_PATH}; add \`${required
+                .map((e) => `${e.name}: "${e.sourcePath}"`)
+                .join(", ")}\` entries manually so tsup builds the new runtime(s).`,
+            );
+          } else if (result.changed) {
+            tsupWrite = { text: result.text, current: tsup.text, sha: tsup.sha };
+          }
+        } else if (runtimeEntryWrites.size > 0) {
+          extraWarnings.push(
+            `${TSUP_CONFIG_PATH} not found; the new runtime entry file(s) ${[
+              ...runtimeEntryWrites.keys(),
+            ].join(", ")} will not be built. Add a tsup.config.ts that includes them.`,
+          );
+        }
+      }
+
+      // Single map of every path we might touch this commit. The
+      // `current` field is what's already in the repo (null when the
+      // file doesn't exist), so the loop below can skip no-op writes
+      // for every path uniformly without a hardcoded switch.
+      type Write = { text: string; current: string | null; sha: string | null };
+      const writes = new Map<string, Write>();
+      writes.set(MANIFEST_PATH, {
+        text: nextManifest,
+        current: manifest.text,
+        sha: manifest.sha,
+      });
+      writes.set(PACKAGE_PATH, { text: nextPkg, current: pkg.text, sha: pkg.sha });
+      if (nextEnv && env) {
+        writes.set(ENV_EXAMPLE_PATH, { text: nextEnv, current: env.text, sha: env.sha });
+      }
+      if (finalPlan.spec.sourceFilePath && finalPlan.spec.sourceFileContent !== null) {
+        // The planner already rejected hard conflicts. Builtin-only
+        // agents have a null sourceFilePath and skip this entirely.
+        writes.set(finalPlan.spec.sourceFilePath, {
+          text: finalPlan.spec.sourceFileContent,
+          current: existingSource?.text ?? null,
+          sha: existingSource?.sha ?? null,
+        });
+      }
+      for (const [path, entry] of runtimeEntryWrites) {
+        // Runtime entry files only land when the file didn't exist —
+        // never overwrite user customizations.
+        writes.set(path, entry);
+      }
+      if (tsupWrite) {
+        writes.set(TSUP_CONFIG_PATH, tsupWrite);
+      }
+      if (nextRenderYaml) {
         writes.set(RENDER_YAML_PATH, {
           text: nextRenderYaml,
+          current: renderYaml?.text ?? null,
           sha: renderYaml?.sha ?? null,
         });
       }
@@ -205,8 +283,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       const changedFiles: string[] = [];
       let commitSha: string | null = null;
       for (const [path, next] of writes) {
-        const current = currentText(path, manifest, pkg, env, existingSource, renderYaml);
-        if (next.text === current) continue;
+        if (next.text === next.current) continue;
         const result = await octokit.repos.createOrUpdateFileContents({
           owner: locator.org,
           repo: locator.repo,
@@ -225,7 +302,7 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         unchanged: changedFiles.length === 0,
         commitSha,
         changedFiles,
-        warnings: finalPlan.warnings,
+        warnings: [...finalPlan.warnings, ...extraWarnings],
       });
     } catch (err) {
       if (err instanceof AgentAddError) {
@@ -258,22 +335,6 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       );
     }
   });
-}
-
-function currentText(
-  path: string,
-  manifest: { text: string },
-  pkg: { text: string },
-  env: { text: string } | null,
-  source: { text: string } | null,
-  renderYaml: { text: string } | null,
-): string | null {
-  if (path === MANIFEST_PATH) return manifest.text;
-  if (path === PACKAGE_PATH) return pkg.text;
-  if (path === ENV_EXAMPLE_PATH) return env?.text ?? null;
-  if (path === RENDER_YAML_PATH) return renderYaml?.text ?? null;
-  // Source file path — match by suffix since the path is computed.
-  return source?.text ?? null;
 }
 
 async function readRepoFile(
@@ -388,4 +449,13 @@ function constantTimeEqual(a: string, b: string): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+function readPackageJsonName(text: string): string | null {
+  try {
+    const parsed = JSON.parse(text) as { name?: unknown };
+    return typeof parsed.name === "string" && parsed.name.length > 0 ? parsed.name : null;
+  } catch {
+    return null;
+  }
 }

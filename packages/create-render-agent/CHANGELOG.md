@@ -1,5 +1,19 @@
 # create-render-agent
 
+## 0.5.1
+
+### Patch Changes
+
+- Fix two distinct breakages in `POST /api/agents/add` that surfaced when a wizard-scaffolded harness added an agent introducing a new runtime kind (most commonly the gallery's `research-cron`).
+
+  **Wrong `packageName` in the regenerated `render.yaml`.** The route was passing `cfg.name` (the manifest's deployment-suffixed slug) as the Blueprint emitter's `packageName`, but `package.json`'s `name` is the user-chosen agent name. The mismatch meant `pnpm --filter <deploymentName> build` matched no package in the workspace, silently no-op'd, and left `dist/` empty — every service then crashed at start with `Cannot find module dist/web.js`. The route now reads `package.json`'s `name` field and feeds it to `emitBlueprint`, mirroring what the scaffold does on initial repo creation.
+
+  **Missing `src/<kind>.ts` and `tsup.config.ts` entries for newly introduced runtime kinds.** Adding a cron-runtime agent to a project that didn't have a cron before left the cron service trying to start `dist/cron.js` from a build step that never produced it. The route now computes which `dist/<X>.js` the freshly emitted `render.yaml` will reference, writes any missing `src/<X>.ts` from the bundled runtime templates (never overwriting an existing user-authored entry), and additively patches the `entry: { ... }` block in `tsup.config.ts` to include the new entries. Single-runtime layouts (`{ main: "src/main.ts" }`) are preserved verbatim alongside the appended entries. When `tsup.config.ts` can't be parsed, the route returns a warning so the user knows to add the entries by hand.
+
+  `create-render-agent` now re-exports the `bundle*Entry` runtime templates so the wizard can reuse them without duplicating the bodies.
+
+  Existing managed harnesses that already shipped a broken `render.yaml` recover the next time the wizard touches them (any `/api/agents/add` or `/api/capabilities/install` commit re-emits the Blueprint with the correct `packageName`).
+
 ## 0.5.0
 
 ### Minor Changes

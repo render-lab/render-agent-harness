@@ -70,11 +70,16 @@ const pack = definePack({
     const cfg = readConfig(ctx);
     const apiKey = ctx.env(cfg.apiKeyEnv);
     if (!apiKey) {
-      // Fail loud at build time / boot time so users notice immediately
-      // rather than getting a broken agent in production.
-      throw new Error(
-        `cap-search-exa: env var ${cfg.apiKeyEnv} is not set. Set it before building or starting the agent.`,
+      // Skip MCP server registration when the key is unset. Throwing here
+      // would crash every service in the bundle on boot — even ones that
+      // don't use Exa — because defineFromConfig walks every pack for
+      // every agent. The warning surfaces the issue without trapping the
+      // user in a crash loop; the Exa tools just won't be available
+      // until they set the key.
+      console.warn(
+        `cap-search-exa: env var ${cfg.apiKeyEnv} is not set; skipping MCP server registration. Set it to enable Exa search.`,
       );
+      return [];
     }
     const headers: Record<string, string> = {
       Authorization: `Bearer ${apiKey}`,

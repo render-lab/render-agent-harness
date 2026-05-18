@@ -1,5 +1,13 @@
 # @render-harness/cap-search-tavily
 
+## 0.5.1
+
+### Patch Changes
+
+- Skip MCP server registration with a `console.warn` when the pack's API key env var is unset, instead of throwing.
+
+  `defineFromConfig` walks every capability pack for every agent in the manifest at boot. A `throw` inside `pack.mcpServers(ctx)` crashed _every_ service in the bundle — web, worker, cron — even ones that didn't use the affected pack. The new behavior leaves the agent boot intact; the pack's tools are simply absent until the operator sets the key, and the missing key is surfaced through a single stderr warning instead of a crash loop. `cap-scrape-firecrawl`'s `localTools` callback already gated on the same key and continues to return `[]`.
+
 ## 0.5.0
 
 ### Minor Changes

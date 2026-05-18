@@ -91,9 +91,14 @@ const pack = definePack({
     const cfg = readConfig(ctx);
     const apiKey = ctx.env(cfg.apiKeyEnv);
     if (!apiKey) {
-      throw new Error(
-        `cap-scrape-firecrawl: env var ${cfg.apiKeyEnv} is not set. Set it before building or starting the agent.`,
+      // Skip MCP server registration when the key is unset; throwing
+      // would crash every service in the bundle on boot. See
+      // cap-search-exa for the full rationale. localTools already
+      // returns [] when the key is missing.
+      console.warn(
+        `cap-scrape-firecrawl: env var ${cfg.apiKeyEnv} is not set; skipping MCP server registration. Set it to enable Firecrawl scraping.`,
       );
+      return [];
     }
     return [
       {
