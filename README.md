@@ -1,5 +1,7 @@
 # Render Agent Harness
 
+> **Experimental** This project is in active development. Public APIs, the `render-harness.yaml` schema, capability pack contracts, and CLI behavior may change without notice between 0.x releases. Expect rough edges, breaking releases, and gaps in documentation. Pin exact versions, read changelogs before upgrading, and feel free to open an issue when something breaks.
+
 A Render-native agent harness. Built on Render primitives (Workflows, Workers, Cron, Postgres, Key Value, private services), provider-agnostic at the model layer, MCP-first for tools, with a [config registry](#config-registry) for one-click-deploy entries.
 
 The harness is a thin core wrapped by four runtime adapters. The same agent definition runs unchanged across all of them — pick the one that matches your shape:
