@@ -76,4 +76,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # setup-node@v4 writes ${NODE_AUTH_TOKEN} as a placeholder in
+          # the .npmrc it generates; pnpm publish reads that file and
+          # only authenticates correctly if NODE_AUTH_TOKEN is set in
+          # the env when the substitution runs.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
