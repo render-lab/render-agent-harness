@@ -142,10 +142,27 @@ export function mountUi(opts: MountUiOpts): void {
     });
   };
 
+  // Root-level static files from Vite's `public/` directory (favicon,
+  // manifest, etc.). These end up at `dist/static/<name>` rather than
+  // `dist/static/assets/<name>`, so they need a different reader. Cache
+  // less aggressively than hashed assets since the filename isn't
+  // content-addressed.
+  const serveRootStatic = async (c: Context, rel: string) => {
+    const buf = await readBundleAsset(staticDir, rel);
+    if (!buf) return c.notFound();
+    const bytes = new Uint8Array(new ArrayBuffer(buf.byteLength));
+    bytes.set(buf);
+    return c.body(bytes, 200, {
+      "content-type": guessContentType(rel),
+      "cache-control": "public, max-age=3600",
+    });
+  };
+
   if (path === "") {
     opts.app.get("/assets/*", async (c) => serveAsset(c, c.req.path.replace(/^\/assets\//, "")));
     opts.app.get("/:asset", async (c, next) => {
       const asset = c.req.param("asset");
+      if (isRootStaticName(asset)) return serveRootStatic(c, asset);
       if (isTopLevelAsset(asset)) return serveAsset(c, asset);
       return next();
     });
@@ -162,8 +179,19 @@ export function mountUi(opts: MountUiOpts): void {
     if (sub === "/login" || sub.startsWith("/login?")) {
       return next();
     }
+    const rootName = sub.startsWith("/") ? sub.slice(1) : sub;
+    if (isRootStaticName(rootName)) return serveRootStatic(c, rootName);
     return serveSpaShell(c);
   });
+}
+
+// Files Vite copies from `web/public/` into the bundle root. Kept as a
+// short, explicit allow-list rather than a wildcard so the SPA shell
+// catch-all still handles unknown paths.
+const ROOT_STATIC_FILES = new Set(["favicon.svg", "favicon.ico", "favicon.png", "robots.txt"]);
+
+function isRootStaticName(name: string): boolean {
+  return ROOT_STATIC_FILES.has(name);
 }
 
 function normalizeMountPath(raw: string): string {

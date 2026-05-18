@@ -44,6 +44,7 @@ export default defineConfig({
     starlight({
       title: "Render Harness Docs",
       description: "Interactive architecture docs for the Render agent harness.",
+      favicon: "/favicon.svg",
       customCss: ["./src/styles/theme.css"],
       editLink: {
         baseUrl: "https://github.com/render-lab/render-agent-harness/edit/main/docs-site/",
