@@ -1,5 +1,11 @@
 # @render-harness/wizard
 
+## 0.4.0
+
+### Minor Changes
+
+- Realign onto the 0.4.x family line alongside `@render-harness/web` and `create-render-agent`. See `@render-harness/web@0.4.0` for the rationale.
+
 ## 0.3.1
 
 ### Patch Changes

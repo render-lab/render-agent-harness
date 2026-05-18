@@ -1,5 +1,11 @@
 # @render-harness/web
 
+## 0.4.0
+
+### Minor Changes
+
+- Realign onto the 0.4.x family line. Coordinated minor cut accidentally cascade-patched `web` to `0.3.1` instead of carrying it onto the new minor, leaving the runtime harness version check red for every deployed harness (no single `harnessVersion` semver range satisfies both `web@0.3.1` and `core@0.4.0`). See AGENTS.md § "Realigning a drifted package" and the matching "Things that bit us recently" entry.
+
 ## 0.3.1
 
 ### Patch Changes

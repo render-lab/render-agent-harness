@@ -9,7 +9,7 @@ Read this whenever a task touches versioning, publishing, scaffolding, snapshots
 The `@render-harness/*` family does **not** patch in lockstep, but every package **must** stay on the same `0.<minor>.x` line. Different packages live on slightly different patch tracks for deliberate reasons:
 
 - **Core (`core`, `contracts`, `registry`, `runtime-*`)** — bump together when the shared substrate changes.
-- **Dependents (`web`, `wizard`)** — cascade-bumped by Changesets' `updateInternalDependencies: "patch"` policy whenever their internal harness deps change. They will always be one patch ahead of `core` immediately after a `core` bump.
+- **Dependents (`web`, `wizard`, `create-render-agent`)** — cascade-bumped at PATCH (per Changesets' `updateInternalDependencies: "patch"` policy) whenever their internal harness deps change inside the same minor line. They will always be one patch ahead of `core` after a routine patch cut. For coordinated minor cuts they must be listed explicitly in the changeset alongside the rest of the family — see "Minor bumps must be coordinated across the whole family" below for why.
 - **UI (`ui`)** — has its own line because the SPA bundle changes independently of the harness substrate.
 - **Capabilities (`packages/capabilities/cap-*`)** — patch-independent. Bump only when the capability itself changes; they ship their own patch deltas.
 
@@ -25,16 +25,19 @@ In semver-zero, `^0.X.Y` does **not** span the `0.X → 0.(X+1)` boundary. So th
 
 How to do it:
 
-1. One changeset file in `.changeset/` with a `minor` bump line for each first-party package. Use the script:
+1. One changeset file in `.changeset/` with a `minor` bump line for **every** first-party package, including `web`, `wizard`, and `create-render-agent`. Use the script:
 
  ```sh
- for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui \
+ for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui web wizard \
  $(ls packages/capabilities); do
  echo "\"@render-harness/$pkg\": minor"
  done
+ echo "\"create-render-agent\": minor"
  ```
 
- `web`, `wizard`, and `create-render-agent` cascade-patch from their declared deps automatically — no need to list them explicitly (they'll go to `0.(X+1).1`). `create-render-agent` is on its own version line and isn't part of the runtime check. Sanity-check with `pnpm changeset status` before consuming: every first-party `@render-harness/*` package should appear under "minor", `web` / `wizard` / `create-render-agent` should appear under "patch", and the major bucket should be empty.
+ **Do not** rely on cascade-patch for `web` / `wizard` / `create-render-agent`. Changesets cascade-patches from each package's **current** version, not into the family's new minor line — so `web@0.(X-1).0 + cascade-patch = 0.(X-1).1`, **not** `0.X.1`. Leaving them off the changeset produces a partial-minor cut where the runtime harness version check turns red for every deployed harness (no single `harnessVersion` range satisfies both `web@0.(X-1).1` and `core@0.X.0`). The May 2026 partial-minor incident and the May 2026 0.3 → 0.4 cut both reproduced this exact bug; see "Things that bit us recently" below.
+
+ Sanity-check with `pnpm changeset status` before consuming: every first-party package should appear under "minor", the patch and major buckets should be empty (or contain only legitimately separate concurrent patches).
 
 2. `pnpm version-packages` to consume the changeset and bump everyone.
 3. Commit + push. CI's `changesets/action` runs the publish step with no remaining changesets and publishes the whole family in one go.
@@ -53,7 +56,9 @@ When a package drifts onto its own minor line (e.g. `ui@0.1.x` while the family 
 
 Do **not** use a Changesets minor bump for realignment alone — Changesets treats the `0.x → 0.(x+1)` crossing as breaking for any cross-package dep, which can cascade unintended bumps onto dependents.
 
-This is what was done for `@render-harness/ui@0.1.5 → 0.2.0` and the six `0.1.x` capability packs.
+This is what was done for `@render-harness/ui@0.1.5 → 0.2.0`, the six `0.1.x` capability packs, and `@render-harness/web` / `@render-harness/wizard` / `create-render-agent` from `0.3.1 → 0.4.0` after the 0.3 → 0.4 partial-minor incident.
+
+`pnpm changeset status` will fail locally with "Some packages have been changed but no changesets were found" — that's expected and **not a blocker**. The release workflow uses `changesets/action@v1`; when no changesets are pending, the action skips the version step and runs `pnpm release` directly, which delegates to `scripts/publish-unpublished.mjs`. That script walks every package, asks `npm view <name>@<version>` whether the exact version exists, and publishes anything new. Manual `package.json` edits land via exactly that path.
 
 ### Why coordinated minor cuts use Changesets cleanly today
 
@@ -121,3 +126,4 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 - **Partial minor bump (`web@0.3.0` and `wizard@0.3.0` while everything else stayed on `0.2.x`)** — published in May 2026 to add `GET /agents/catalog`. Broke every existing managed harness's runtime version check because no single `harnessVersion` semver range satisfies both `0.2.x` and `0.3.x`. Resolved with a follow-up coordinated `0.3.0` cut across the whole family, but the right answer was always one coordinated minor from the start — see "Minor bumps must be coordinated across the whole family" above.
 - **Operator UI modal stuck on "Loading catalog…" forever** — same partial-minor cut as above. New `@render-harness/ui` shipped `fetchAgentCatalog()` hitting same-origin `/agents/catalog`; old `@render-harness/web` had no such route, so Hono's SPA catch-all returned a 303 to `/login` with HTML, and `request<T>()` in `packages/ui/web/src/api.ts` silently typed the HTML string as `AgentCatalogResp`. `request<T>()` now throws on 2xx-with-non-JSON-body so this kind of mismatch surfaces as an actionable error instead of a hung loading state.
 - **Coordinated minor cuts cascading `@render-harness/web` to `1.0.0`** — `web` used to declare `@render-harness/ui` as an optional peerDependency. Peer-dep semantics force a MAJOR bump on the consumer when the peer's range moves out of band (in semver-zero, any minor counts), so `pnpm changeset status` reported web at MAJOR for every family-wide minor cut. The 0.2 → 0.3 cut dodged this with manual `package.json` edits (commit `420c904`), but the real fix is that web has never actually imported ui statically — it dynamic-imports `@render-harness/ui` inside `wrapWithUiSessionIfAvailable` / `mountUiIfAvailable` and logs an actionable error if the module is missing. The peerDependency was removed in the 0.3 → 0.4 cut; consumers that want the operator UI install `@render-harness/ui` explicitly alongside `@render-harness/web`. Do not re-add a peerDependency on `@render-harness/ui` (or any other first-party package) — it brings the cascade-to-major footgun straight back.
+- **Coordinated 0.3 → 0.4 cut shipped `web@0.3.1` / `wizard@0.3.1` / `create-render-agent@0.3.1` instead of `0.4.0`** — second partial-minor cut in the project's history, caused by trusting an outdated line in this file that said "web and wizard cascade-patch automatically — they'll go to `0.(X+1).1`". They don't. Changesets cascade-patches from each package's **current** version (`0.3.0 + patch = 0.3.1`), not from the new family minor (`0.4.0 + patch = 0.4.1`). The result was the exact same red-banner failure mode as the May 2026 partial-minor incident — no single `harnessVersion` semver range satisfies both `web@0.3.1` and `core@0.4.0`. Resolved by realigning the three packages to `0.4.0` per "Realigning a drifted package" and rewriting the "Minor bumps must be coordinated across the whole family" procedure to require explicit `minor` entries for `web`, `wizard`, and `create-render-agent` in every coordinated cut. If you see "cascade-patch" used as shorthand for "snaps onto the new minor", that's the bug — say so out loud in the PR description and add a TODO to fix this section.
