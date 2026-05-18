@@ -145,6 +145,7 @@ export function MyHarnessesPage() {
 }
 
 function HarnessCard({ harness, onAdd }: { harness: MyHarness; onAdd: () => void }) {
+  const harnessUrl = deriveHarnessWebUrl(harness);
   return (
     <article className="panel flex flex-col p-4">
       <header className="flex items-start justify-between">
@@ -162,16 +163,61 @@ function HarnessCard({ harness, onAdd }: { harness: MyHarness; onAdd: () => void
         <p className="mt-3 text-xs text-muted">scaffold slug: {harness.agentSlug}</p>
       ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
-        <a className="btn" href={`https://github.com/${harness.org}/${harness.repo}`}>
+        {harnessUrl ? (
+          <a
+            className="btn btn-primary"
+            href={harnessUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Harness
+          </a>
+        ) : null}
+        <a
+          className="btn"
+          href={`https://github.com/${harness.org}/${harness.repo}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           Repo
         </a>
-        <button type="button" className="btn btn-primary" onClick={onAdd}>
+        <button type="button" className="btn" onClick={onAdd}>
           Add agent
         </button>
       </div>
     </article>
   );
 }
+
+/**
+ * Best-guess at the deployed web URL for a managed harness, given only
+ * what `/api/my/harnesses` returns (we don't talk to Render's API from
+ * the wizard).
+ *
+ * Render generates service slugs from the bundle's `cfg.name`, which
+ * the scaffolder sets to `<repo>.toLowerCase()`. The emitter's pattern
+ * (`packages/registry/src/emitter.ts`) is:
+ *
+ *   - Sync web only (single-agent `chat` template)  → `${cfg.name}`
+ *   - Web shell + worker (everything else with web) → `${cfg.name}-web`
+ *
+ * Cron-only / workflow-only / worker-only templates ship no web service
+ * — those return null and the card hides the button.
+ *
+ * If the user renamed services after scaffolding the URL may be stale,
+ * but the link will land on a clear Render 404 page; cheap to fix
+ * client-side. A future revision could let `/api/my/harnesses` persist
+ * + return an authoritative URL captured at deploy time.
+ */
+function deriveHarnessWebUrl(harness: MyHarness): string | null {
+  if (harness.agentSlug && TEMPLATES_WITHOUT_WEB.has(harness.agentSlug)) return null;
+  const base = harness.repo.toLowerCase();
+  const suffix = harness.agentSlug && TEMPLATES_WITH_SYNC_WEB.has(harness.agentSlug) ? "" : "-web";
+  return `https://${base}${suffix}.onrender.com`;
+}
+
+const TEMPLATES_WITHOUT_WEB = new Set(["research-cron"]);
+const TEMPLATES_WITH_SYNC_WEB = new Set(["chat"]);
 
 function AddAgentPicker({
   harness,

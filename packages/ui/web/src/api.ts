@@ -128,10 +128,12 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   });
   const text = await res.text();
   let parsed: unknown = null;
+  let jsonParseFailed = false;
   try {
     parsed = text ? JSON.parse(text) : null;
   } catch {
     parsed = text;
+    jsonParseFailed = true;
   }
   if (!res.ok) {
     if (res.status === 401) {
@@ -140,6 +142,19 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
       window.location.href = `${uiPath("/login")}?next=${encodeURIComponent(window.location.pathname)}`;
     }
     throw new ApiError(formatErrorMessage(parsed, res.status), res.status, parsed);
+  }
+  // A 2xx with a non-JSON body is almost always "the request slipped past
+  // every API route and hit the SPA shell's catch-all" — typically because
+  // the deployed @render-harness/web is too old to know the route the
+  // browser asked for. Surface this as a clear error instead of silently
+  // returning HTML typed as T (which leaves callers stuck in their loading
+  // state — see api.ts loading-forever bug, May 2026).
+  if (jsonParseFailed && text.length > 0) {
+    throw new ApiError(
+      `server returned non-JSON for ${input}; the deployed web service may be missing this route — upgrade @render-harness/web`,
+      res.status,
+      text.slice(0, 200),
+    );
   }
   return parsed as T;
 }
