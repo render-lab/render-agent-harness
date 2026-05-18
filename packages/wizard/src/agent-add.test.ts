@@ -163,8 +163,12 @@ describe("planAgentAdd", () => {
     expect(plan.spec.sourceFileContent).toContain("meeting-prep source");
     expect(plan.spec.capabilities).toEqual([
       {
+        // cap-memory-pg now ships in OFFICIAL_CAPABILITY_INSTALLS so the
+        // planner picks up the wizard's authoritative version range
+        // (^0.5.0) rather than falling back to the gallery snapshot's
+        // older range.
         pack: "@render-harness/cap-memory-pg",
-        versionRange: "^0.1.0",
+        versionRange: "^0.5.0",
         envVars: [],
       },
     ]);

@@ -1,5 +1,33 @@
 # @render-harness/web
 
+## 0.5.3
+
+### Patch Changes
+
+- Auto-configure the operator UI's Install capability flow so installing a pack into an existing harness "just works".
+
+  **Every official pack is installable through the modal.** `OFFICIAL_CAPABILITY_INSTALLS` in the wizard previously only covered 4 packs (`cap-slack`, `cap-github`, `cap-linear`, `cap-webhook-generic`); picking any of the 7 others (`cap-search-exa`, `cap-search-tavily`, `cap-scrape-firecrawl`, `cap-google`, `cap-memory-pg`, `cap-filesystem`, `cap-browser-browserbase`) was impossible from the UI and would 400 with `unknown_capability` even if the request were hand-crafted. The map now covers all 11 published packs, each with `label`, `description`, read/write tool names, env vars, connector flag, and an optional caveat surfaced inline in the modal.
+
+  **New `/api/capabilities/catalog` endpoint** on the wizard serializes the map; the deployed harness exposes a same-origin `/capabilities/catalog` proxy mirroring the existing `/agents/catalog` proxy (60s in-process cache, 401 unauth, 503 when the wizard URL is unset). The Install capability modal now fetches this catalog on mount instead of carrying a hardcoded 4-pack list, so the modal stays in sync with whatever the wizard knows without a UI redeploy. Pack-specific config inputs (e.g. Slack's allowed channels) and the access-mode toggle are gated on whether the selected pack has write tools, and a pack-specific description + caveat panel renders alongside the selector.
+
+  **Tier A builtins now ride along when the wizard expands `allowedTools`.** Previously, installing any capability into an agent whose template ships a restrictive `shared.permissions.allowedTools` (the support-bot gallery template does) silently stripped `load_skill`, `fetch_full_result`, `fetch_url`, `current_time`, `ask_user`, and `todo` from the model's tool catalog — those are "always on" by core's design, but a strict allowlist filters them out at request time anyway. The mutator now ensures every Tier A name lands in the allowlist alongside the pack's tools. Critically, the mutator no longer introduces an `allowedTools` allowlist when the agent didn't already have one (the previous behaviour silently turned every open agent into "only these N tools allowed" on the first install).
+
+  **`POST /api/agents/add` also expands `allowedTools` for any capability the bundle pulls in.** Adding research-cron to a restrictive agent no longer leaves the new cron unable to call its Exa search tools. The expansion is read-only by default (operators can upgrade to read+write via the Install capability modal); a warning per added pack surfaces in the route response so the operator UI can show what shifted.
+
+  The user-facing chain: pick "Exa web search" in the Install capability modal -> the wizard commits `cap-search-exa` to `capabilities[]`, grows `allowedTools` with the Exa MCP tool names plus the Tier A builtins, and Render auto-deploys. The model immediately sees `web_search_exa` / `web_fetch_exa` / `web_search_advanced_exa` in its toolset alongside `load_skill` and friends.
+
+## 0.5.2
+
+### Patch Changes
+
+- web: mount `/connections` routes even when no capability pack registers an OAuth provider.
+
+  `mountConnectionsRoutes` previously short-circuited when `listRegisteredOAuthProviders()` returned an empty list — directly contradicting its own doc comment, which promised the routes would mount in the "not yet configured" state so the UI could render an empty Connections tab. With the routes unmounted, `GET /connections` fell through to the SPA catch-all and returned HTML, which `request<T>()` correctly refused to type as JSON and surfaced as `"server returned non-JSON for /connections; the deployed web service may be missing this route — upgrade @render-harness/web"`. Operators saw a misleading "upgrade needed" hint on a harness that was already on the latest version.
+
+  The routes now mount unconditionally (unless `serveWeb({ connections: false })`). `GET /connections` returns `{ providers: [], connections: [] }` for harnesses that haven't installed any OAuth pack — the Connections tab renders an empty state, no error. New regression test in `connections.integration.test.ts` pins the empty-registry behavior so the short-circuit doesn't sneak back in.
+
+  No agent code changes required — the new behavior applies automatically on redeploy. The "not yet configured" hint UX (e.g. when `CONNECTIONS_ENCRYPTION_KEY` is unset for a harness that _does_ have an OAuth pack) is unchanged: the per-handler 503 path still fires there.
+
 ## 0.5.1
 
 ### Patch Changes

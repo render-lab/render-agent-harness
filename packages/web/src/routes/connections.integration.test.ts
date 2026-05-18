@@ -126,6 +126,31 @@ afterEach(async () => {
   if (pool) await pool.query("DELETE FROM agent_user_connections");
 });
 
+describe("GET /connections (empty registry)", () => {
+  // Regression: support-bot-style harness (no OAuth packs) was hitting
+  // 404 on /connections because `mountConnectionsRoutes` short-circuited
+  // when `listRegisteredOAuthProviders()` returned empty. The SPA catch-
+  // all in front of the static UI bundle then returned HTML, and
+  // `request<T>()` correctly threw "server returned non-JSON for
+  // /connections". The route now mounts unconditionally; this test
+  // pins the new behavior so the early-return doesn't sneak back in.
+  dbTest(
+    "returns 200 with empty providers + connections when no pack registers OAuth",
+    async (db) => {
+      _clearOAuthProviderRegistryForTests();
+      const app = buildApp({ db });
+      const res = await app.fetch(
+        new Request("http://x/connections", { headers: { "x-test-user": "u-empty" } }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/application\/json/);
+      const body = (await res.json()) as { providers: unknown[]; connections: unknown[] };
+      expect(body.providers).toEqual([]);
+      expect(body.connections).toEqual([]);
+    },
+  );
+});
+
 describe("GET /connections", () => {
   dbTest("401 unauthenticated", async (db) => {
     const app = buildApp({ db });

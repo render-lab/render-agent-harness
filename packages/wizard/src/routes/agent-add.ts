@@ -28,6 +28,7 @@ import {
   planAgentAdd,
 } from "../agent-add.js";
 import { readSessionCookie } from "../auth.js";
+import { expandAllowedToolsForPacks } from "../capability-install.js";
 import { createOctokit, type GithubAppCreds } from "../github-app.js";
 import { ensureTsupEntries, requiredEntries } from "../runtime-entries.js";
 import type { WizardStore } from "../store.js";
@@ -142,10 +143,23 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         existingSourceFileText: existingSource?.text ?? null,
       });
 
-      const nextManifest = mutateManifestForAgentAdd({
+      let nextManifest = mutateManifestForAgentAdd({
         yamlText: manifest.text,
         plan: finalPlan,
       });
+      // Expand `shared.permissions.allowedTools` for any capabilities
+      // the new agent's bundle pulls in. Read-only by default, since
+      // the operator picked the agent itself — not an access mode for
+      // each pack. The helper no-ops when the manifest has no allowlist
+      // (open agent → don't introduce a restriction). When it does
+      // grow the allowlist it also pulls in the Tier A builtin names
+      // so we don't silently strip load_skill / fetch_url / etc.
+      const allowedToolsExpansion = expandAllowedToolsForPacks({
+        yamlText: nextManifest,
+        packs: finalPlan.spec.capabilities.map((c) => c.pack),
+        accessMode: "read",
+      });
+      nextManifest = allowedToolsExpansion.yamlText;
       // First add capability deps; runtime deps are layered in after
       // the Blueprint emission below so we know which runtime kinds the
       // updated manifest actually requires.
@@ -195,6 +209,24 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
       }
 
       const extraWarnings: string[] = [];
+
+      if (allowedToolsExpansion.expanded.length > 0) {
+        extraWarnings.push(
+          `Expanded shared.permissions.allowedTools with read-only tools for: ${allowedToolsExpansion.expanded.join(", ")}. Use the Install capability modal to enable write tools.`,
+        );
+      }
+      if (allowedToolsExpansion.skippedOpenAllowlist.length > 0) {
+        // Agents without an allowlist are already open — nothing to do,
+        // but flag for the operator so they know why no tools landed.
+        extraWarnings.push(
+          `Capabilities ${allowedToolsExpansion.skippedOpenAllowlist.join(", ")} were added but the manifest has no shared.permissions.allowedTools allowlist, so no expansion was needed.`,
+        );
+      }
+      if (allowedToolsExpansion.skippedUnknown.length > 0) {
+        extraWarnings.push(
+          `Capability ${allowedToolsExpansion.skippedUnknown.join(", ")} is not in the wizard's OFFICIAL_CAPABILITY_INSTALLS map; allowedTools was not expanded. Add the pack to that map (with its read/write tool names) to enable auto-expansion.`,
+        );
+      }
 
       // For each runtime entry the freshly emitted render.yaml will
       // reference (e.g. `dist/cron.js`), make sure `src/<name>.ts`

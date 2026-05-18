@@ -379,6 +379,31 @@ export function installCapability(body: InstallCapabilityBody): Promise<InstallC
   });
 }
 
+export interface InstallableCapability {
+  pack: string;
+  label: string;
+  description: string;
+  /** Env var names the operator must set on the harness service. */
+  envVars: string[];
+  /** True when the pack ships write tools the operator can opt into. */
+  hasWriteTools: boolean;
+  /** True when the pack is a connector (mounts a /connectors/<key> route). */
+  isConnector: boolean;
+  /** Optional caveat surfaced inline with the cap's metadata. */
+  caveat: string | null;
+}
+
+export interface CapabilityCatalogResp {
+  capabilities: InstallableCapability[];
+}
+
+export function fetchCapabilityCatalog(): Promise<CapabilityCatalogResp> {
+  // Same-origin proxy story as fetchAgentCatalog: the wizard owns the
+  // catalog but the browser only ever talks to its own origin via the
+  // deployed harness's /capabilities/catalog proxy.
+  return request<CapabilityCatalogResp>("/capabilities/catalog");
+}
+
 export interface AddableAgent {
   bundleSlug: string;
   bundleName: string;

@@ -524,6 +524,79 @@ export default defineConfig({
     expect(paths).not.toContain("src/cron.ts");
   });
 
+  it("expands shared.permissions.allowedTools (with Tier A) when the bundle pulls in a cap into a restrictive agent", async () => {
+    // Target manifest is the same support-bot-style web+worker layout as
+    // the rest of this file's fixtures, but ships a non-empty
+    // allowedTools — exactly the case where the wizard SHOULD grow
+    // the allowlist with the new cap's read tools + Tier A.
+    const restrictiveYaml = `${TARGET_YAML.replace(
+      "shared:\n  model: { provider: anthropic, model: claude-sonnet-4-6 }",
+      `shared:
+  model: { provider: anthropic, model: claude-sonnet-4-6 }
+  permissions:
+    allowedTools:
+      - cap-slack__slack_get_thread`,
+    )}`;
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": restrictiveYaml,
+      "package.json": TARGET_PKG,
+      "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP,
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; warnings: string[] };
+    expect(json.ok).toBe(true);
+    expect(json.warnings.some((w) => w.includes("allowedTools"))).toBe(true);
+
+    const manifestWrite = createOrUpdateFileContents.mock.calls.find(
+      (c) => (c[0] as { path: string }).path === "render-harness.yaml",
+    );
+    expect(manifestWrite).toBeDefined();
+    const committedYaml = Buffer.from(
+      (manifestWrite?.[0] as { content: string }).content,
+      "base64",
+    ).toString("utf8");
+    // cap-memory-pg read tool name lands.
+    expect(committedYaml).toContain("cap-memory-pg__search");
+    // Tier A builtins land alongside so load_skill / fetch_url still work.
+    expect(committedYaml).toContain("load_skill");
+    expect(committedYaml).toContain("fetch_url");
+  });
+
+  it("does NOT introduce an allowlist when the agent had no allowedTools", async () => {
+    // TARGET_YAML doesn't declare allowedTools; the cap-add must not
+    // introduce one (otherwise it strips every other tool the agent had).
+    const { app, createOrUpdateFileContents } = makeApp({
+      "render-harness.yaml": TARGET_YAML,
+      "package.json": TARGET_PKG,
+      "render.yaml": TARGET_RENDER,
+      "tsup.config.ts": TARGET_TSUP,
+      "src/web.ts": TARGET_WEB_TS,
+      "src/worker.ts": TARGET_WORKER_TS,
+    });
+    const res = await app.request("/api/agents/add", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify(BODY),
+    });
+    expect(res.status).toBe(200);
+    const manifestWrite = createOrUpdateFileContents.mock.calls.find(
+      (c) => (c[0] as { path: string }).path === "render-harness.yaml",
+    );
+    const committedYaml = Buffer.from(
+      (manifestWrite?.[0] as { content: string }).content,
+      "base64",
+    ).toString("utf8");
+    expect(committedYaml).not.toMatch(/^\s*allowedTools:/m);
+  });
+
   it("returns 401 with no auth at all (no bearer, no session)", async () => {
     const { app } = makeApp({
       "render-harness.yaml": TARGET_YAML,

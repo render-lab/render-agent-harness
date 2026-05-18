@@ -10,6 +10,8 @@ export interface CapabilityInstallRouteContext {
   wizardServiceUrl: string | null;
   wizardSharedSecret: string | null;
   fetchImpl?: typeof fetch;
+  /** TTL for the in-memory catalog cache (ms). Defaults to 60s; tests pass 0. */
+  catalogCacheTtlMs?: number;
 }
 
 export function registerCapabilityInstallRoute(
@@ -18,7 +20,56 @@ export function registerCapabilityInstallRoute(
 ): void {
   const { auth, agents, pathPrefix, deployment, wizardServiceUrl, wizardSharedSecret } = ctx;
   const fetchImpl = ctx.fetchImpl ?? fetch;
+  const cacheTtlMs = ctx.catalogCacheTtlMs ?? 60_000;
   const r = (path: string) => `${pathPrefix}${path}`;
+
+  // Module-local cache, keyed by wizard URL — same shape as the
+  // agents-catalog proxy. The map of installable capabilities only
+  // changes when the wizard service redeploys, so a 60s cache is fine.
+  const catalogCache = new Map<string, { fetchedAt: number; body: string }>();
+
+  // GET /capabilities/catalog — same-origin proxy to the wizard's
+  // /api/capabilities/catalog. The browser never crosses origins (the
+  // wizard ships no CORS headers); the operator UI's Install
+  // capability modal calls this to enumerate every installable pack.
+  app.get(r("/capabilities/catalog"), async (c) => {
+    const userId = await auth(c.req.raw);
+    if (!userId) return c.json({ error: "unauthorized" }, 401);
+    if (!wizardServiceUrl) return c.json({ error: "wizard_service_not_configured" }, 503);
+
+    const cacheKey = wizardServiceUrl;
+    const now = Date.now();
+    const cached = catalogCache.get(cacheKey);
+    if (cached && cacheTtlMs > 0 && now - cached.fetchedAt < cacheTtlMs) {
+      return new Response(cached.body, {
+        status: 200,
+        headers: { "content-type": "application/json", "x-cache": "HIT" },
+      });
+    }
+
+    try {
+      const res = await fetchImpl(
+        `${trimTrailingSlash(wizardServiceUrl)}/api/capabilities/catalog`,
+      );
+      const text = await res.text();
+      if (!res.ok) {
+        return c.json({ error: "wizard_catalog_failed", status: res.status, details: text }, 502);
+      }
+      if (cacheTtlMs > 0) catalogCache.set(cacheKey, { fetchedAt: now, body: text });
+      return new Response(text, {
+        status: 200,
+        headers: { "content-type": "application/json", "x-cache": "MISS" },
+      });
+    } catch (err) {
+      return c.json(
+        {
+          error: "wizard_catalog_failed",
+          details: err instanceof Error ? err.message : String(err),
+        },
+        502,
+      );
+    }
+  });
 
   app.post(r("/capabilities/install"), async (c) => {
     const userId = await auth(c.req.raw);

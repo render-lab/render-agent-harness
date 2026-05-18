@@ -376,23 +376,26 @@ interface MountConnectionsArgs {
 }
 
 /**
- * Mount the connection routes when:
- *  - `opts.connections !== false`, AND
- *  - the OAuth provider registry has at least one provider (either
- *    auto-populated by `defineFromConfig` or supplied via
- *    `opts.connections.providers`).
+ * Mount the connection routes whenever `opts.connections !== false`.
  *
- * The route's own handlers refuse 503 when
- * `CONNECTIONS_ENCRYPTION_KEY` is unset, so we mount even in that
- * "not yet configured" state — the UI rendering improves when the
- * tab can fetch `GET /connections` instead of getting a 404.
+ * We deliberately mount even when the OAuth provider registry is empty
+ * (no pack registered an `oauthProviders` field) and even when
+ * `CONNECTIONS_ENCRYPTION_KEY` is unset. The route's own handlers refuse
+ * 503 on the start / callback paths in the "not yet configured" state,
+ * and `GET /connections` returns a clean `{ providers: [], connections:
+ * [] }` shape so the operator UI's Connections tab renders an empty
+ * state instead of falling through to the SPA catch-all and tripping
+ * `request<T>()`'s "non-JSON body" guard with a generic
+ * `server returned non-JSON for /connections` error. The previous
+ * "skip mount when the registry is empty" early-return was wrong on its
+ * face and contradicted the doc comment that promised the opposite —
+ * see the May 2026 incident in AGENTS.md "Things that bit us recently".
  */
 function mountConnectionsRoutes(args: MountConnectionsArgs): void {
   const { app, opts, auth, pool, logger, pathPrefix } = args;
   if (opts.connections === false) return;
   const cfg = typeof opts.connections === "object" ? opts.connections : {};
   const providers = cfg.providers ?? listRegisteredOAuthProviders();
-  if (providers.length === 0) return;
   registerConnectionsRoutes(app, {
     pool,
     auth,
