@@ -72,14 +72,20 @@ describe("PUT /config/env-vars/:name", () => {
     delete process.env.RENDER_API_KEY;
   });
 
-  it("writes the env var to Render API and returns 202", async () => {
-    const fetchImpl = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ key: "OPENAI_API_KEY" }), {
+  it("writes the env var and triggers a deploy_only deploy to roll the service", async () => {
+    // Two API calls: PUT env-var, then POST deploys. Both succeed.
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/env-vars/")) {
+        return new Response(JSON.stringify({ key: "OPENAI_API_KEY" }), {
           status: 200,
           headers: { "content-type": "application/json" },
-        }),
-    );
+        });
+      }
+      return new Response(JSON.stringify({ id: "dep-1" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    });
     const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
     const res = await app.request("/config/env-vars/OPENAI_API_KEY", {
       method: "PUT",
@@ -87,14 +93,69 @@ describe("PUT /config/env-vars/:name", () => {
       body: JSON.stringify({ value: "sk-new" }),
     });
     expect(res.status).toBe(202);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const call = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect(call[0]).toBe("https://api.render.test/v1/services/srv-abc123/env-vars/OPENAI_API_KEY");
-    expect(call[1].method).toBe("PUT");
-    const headers = call[1].headers as Record<string, string>;
-    expect(headers.authorization).toBe("Bearer rnd_test");
-    const sent = JSON.parse(String(call[1].body)) as { value: string };
-    expect(sent.value).toBe("sk-new");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const put = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(put[0]).toBe("https://api.render.test/v1/services/srv-abc123/env-vars/OPENAI_API_KEY");
+    expect(put[1].method).toBe("PUT");
+    const putHeaders = put[1].headers as Record<string, string>;
+    expect(putHeaders.authorization).toBe("Bearer rnd_test");
+    expect(JSON.parse(String(put[1].body))).toEqual({ value: "sk-new" });
+
+    const deploy = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect(deploy[0]).toBe("https://api.render.test/v1/services/srv-abc123/deploys");
+    expect(deploy[1].method).toBe("POST");
+    expect(JSON.parse(String(deploy[1].body))).toEqual({ deployMode: "deploy_only" });
+
+    const body = (await res.json()) as { ok: boolean; name: string; restart: string };
+    expect(body).toMatchObject({ ok: true, name: "OPENAI_API_KEY", restart: "queued" });
+  });
+
+  it("reports save_only + deployError when Render rejects the deploy trigger", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/env-vars/")) {
+        return new Response(JSON.stringify({ key: "OPENAI_API_KEY" }), { status: 200 });
+      }
+      return new Response("rate limited", { status: 429 });
+    });
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/config/env-vars/OPENAI_API_KEY", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "sk-new" }),
+    });
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as {
+      ok: boolean;
+      restart: string;
+      deployError: { status: number | null; details: string | null };
+    };
+    expect(body.restart).toBe("save_only");
+    expect(body.deployError.status).toBe(429);
+    expect(body.deployError.details).toContain("rate limited");
+  });
+
+  it("treats a thrown error from the deploy POST as save_only (process likely killed mid-flight)", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/env-vars/")) {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+      throw new TypeError("fetch failed");
+    });
+    const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await app.request("/config/env-vars/OPENAI_API_KEY", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "x" }),
+    });
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as {
+      restart: string;
+      deployError: { status: number | null; details: string | null };
+    };
+    expect(body.restart).toBe("save_only");
+    expect(body.deployError.status).toBeNull();
+    expect(body.deployError.details).toContain("fetch failed");
   });
 
   it("rejects names not declared in envSchema", async () => {
@@ -144,7 +205,7 @@ describe("PUT /config/env-vars/:name", () => {
     expect(body.error).toBe("render_api_key_not_configured");
   });
 
-  it("surfaces Render API errors as 502", async () => {
+  it("surfaces Render API errors on the env-var PUT as 502 (no deploy attempted)", async () => {
     const fetchImpl = vi.fn(async () => new Response("forbidden", { status: 403 }));
     const app = makeApp({ fetchImpl: fetchImpl as unknown as typeof fetch });
     const res = await app.request("/config/env-vars/OPENAI_API_KEY", {
@@ -156,5 +217,8 @@ describe("PUT /config/env-vars/:name", () => {
     const body = (await res.json()) as { error: string; status: number };
     expect(body.error).toBe("render_api_error");
     expect(body.status).toBe(403);
+    // Only the PUT was attempted — no point hitting /deploys when the
+    // env-var write itself failed.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

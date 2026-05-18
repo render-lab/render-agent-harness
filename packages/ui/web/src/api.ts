@@ -352,17 +352,39 @@ export function listEnvVars(): Promise<{ envVars: DeploymentEnvVar[] }> {
 export interface SetEnvVarResp {
   ok?: boolean;
   name?: string;
-  restart?: string;
+  /**
+   * `"queued"` — Render accepted both the env-var write and the
+   * follow-up `deploy_only` deploy. The service will restart.
+   * `"save_only"` — the value was saved but the deploy trigger
+   * failed (see {@link deployError}). The new value won't take
+   * effect until the next deploy fires for some other reason.
+   */
+  restart?: "queued" | "save_only";
+  /**
+   * Set when `restart === "save_only"`. The Render API's response on
+   * the deploy-trigger call, for operator diagnosis.
+   */
+  deployError?: {
+    status: number | null;
+    details: string | null;
+  };
   error?: string;
   details?: string;
   status?: number;
 }
 
 /**
- * Set an env var on this Render service. The harness calls the Render
- * API; Render auto-deploys, which may kill the current process before
- * the response lands. The UI treats a clean 202 as "saved, restart in
- * flight" and a disconnect after submit as "probably saved, re-poll".
+ * Set an env var on this Render service. The harness writes the value
+ * via Render's API and then explicitly POSTs to
+ * `/v1/services/:id/deploys` with `deployMode: "deploy_only"` so the
+ * running process gets recycled with the new value in `process.env`.
+ * (The env-var endpoint by itself only saves — it does NOT roll the
+ * service. The dashboard's "save and deploy" is a UI convenience the
+ * API has no flag for.)
+ *
+ * Render may kill the current process before the response lands. The
+ * UI treats a clean 202 as "saved, restart in flight" and a
+ * disconnect after submit as "probably saved, re-poll".
  */
 export function setEnvVar(name: string, value: string): Promise<SetEnvVarResp> {
   return request<SetEnvVarResp>(`/config/env-vars/${encodeURIComponent(name)}`, {

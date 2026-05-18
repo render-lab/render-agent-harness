@@ -9,19 +9,33 @@
  *     write without a full `/deployment` reload.
  *
  *   PUT   /config/env-vars/:name
- *     Writes a new value through the Render API. Render auto-deploys
- *     the service on env changes, so the response is 202 and the UI
- *     polls `GET /config/env-vars` until `isSet` flips.
+ *     Writes a new value through the Render API, then explicitly
+ *     triggers a deploy so the running service picks up the new
+ *     value. Returns 202 (queued). The UI polls
+ *     `GET /config/env-vars` until `isSet` flips on the new
+ *     instance.
+ *
+ * Why we trigger the deploy explicitly: Render's
+ * `PUT /v1/services/:id/env-vars/:key` endpoint *saves* the variable
+ * but does not roll the service. (The dashboard's "save and deploy"
+ * is a UI convenience; the API has no equivalent flag.) Without an
+ * explicit `POST /v1/services/:id/deploys` follow-up, the env-var
+ * change is saved on Render's side but `process.env` on the running
+ * container is unchanged until the next deploy fires for some other
+ * reason — which is exactly the "save & restart did nothing"
+ * symptom operators were hitting on the Vitals toggle and ad-hoc
+ * env writes. We chase the PUT with a `deployMode: "deploy_only"`
+ * POST (no rebuild) which is the cheapest way to recycle the
+ * process with the new env in scope.
  *
  * Auth: same operator-UI session resolver as the rest of `web`. Render
  * dashboard ACLs already gate who can deploy; this is an additional
  * application-level check.
  *
- * NOTE: writing an env var triggers a Render redeploy that kills this
- * process mid-flight. The UI handles a disconnect on save as
- * "probably succeeded" and re-polls. We make the Render API call
- * before responding (so the operator gets a clear success/failure)
- * but write-then-restart is best-effort.
+ * NOTE: the deploy trigger fires-and-forgets. Render kills this
+ * process mid-flight once the new deploy is live, so the response we
+ * return is "queued, expect a restart shortly". The UI handles a
+ * disconnect on save as "probably succeeded" and re-polls.
  */
 
 import type { DeploymentEnvVar, DeploymentInfo } from "@render-harness/contracts";
@@ -117,8 +131,9 @@ export function registerConfigRoutes(app: Hono, ctx: ConfigRouteContext): void {
 
     // Render API: PUT /v1/services/:serviceId/env-vars/:key with { value }.
     // Replacing an existing key or creating a new one are the same call.
-    const url = `${trimTrailingSlash(apiBase)}/v1/services/${encodeURIComponent(serviceId)}/env-vars/${encodeURIComponent(name)}`;
-    const res = await fetchImpl(url, {
+    const apiRoot = trimTrailingSlash(apiBase);
+    const putUrl = `${apiRoot}/v1/services/${encodeURIComponent(serviceId)}/env-vars/${encodeURIComponent(name)}`;
+    const putRes = await fetchImpl(putUrl, {
       method: "PUT",
       headers: {
         accept: "application/json",
@@ -128,22 +143,67 @@ export function registerConfigRoutes(app: Hono, ctx: ConfigRouteContext): void {
       body: JSON.stringify({ value: body.value }),
     });
 
-    const text = await res.text();
-    if (!res.ok) {
+    const putText = await putRes.text();
+    if (!putRes.ok) {
       return c.json(
         {
           error: "render_api_error",
-          status: res.status,
-          details: text.slice(0, 1000),
+          status: putRes.status,
+          details: putText.slice(0, 1000),
         },
-        res.status === 401 || res.status === 403 ? 502 : 502,
+        502,
       );
     }
-    // Render returns 200 with the updated env var. The service deploy
-    // is triggered async; this process may be killed momentarily. The
-    // UI handles a disconnect after a 200 here as "redeploy in
-    // flight" and re-polls /config/env-vars until isSet stabilises.
-    return c.json({ ok: true, name, restart: "expected" }, 202);
+
+    // Render saved the value, but the env-var endpoint by itself does
+    // NOT roll the service — operators hit "saved, nothing happens"
+    // until the next manual deploy. Chase the write with an explicit
+    // `deploy_only` deploy: skips the build, just rotates the
+    // container so the new env-var lands in `process.env`.
+    const deployUrl = `${apiRoot}/v1/services/${encodeURIComponent(serviceId)}/deploys`;
+    let deployStatus: number | null = null;
+    let deployBody: string | null = null;
+    try {
+      const deployRes = await fetchImpl(deployUrl, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ deployMode: "deploy_only" }),
+      });
+      deployStatus = deployRes.status;
+      if (!deployRes.ok) deployBody = (await deployRes.text()).slice(0, 1000);
+    } catch (err) {
+      // Render frequently kills this process mid-flight once the
+      // deploy queues, so the POST may never get a response. Treat
+      // any network error as "the kill landed first" — best-effort
+      // success.
+      deployBody = err instanceof Error ? err.message : String(err);
+    }
+
+    // 201/202 from Render's deploys endpoint both indicate the deploy
+    // is queued. Anything else is reported back to the operator so
+    // they know the value saved but the restart didn't fire — they
+    // can hit "manual deploy" in the dashboard to finish the job.
+    const deployQueued = deployStatus === 201 || deployStatus === 202;
+    return c.json(
+      {
+        ok: true,
+        name,
+        restart: deployQueued ? "queued" : "save_only",
+        ...(deployQueued
+          ? {}
+          : {
+              deployError: {
+                status: deployStatus,
+                details: deployBody?.slice(0, 500) ?? null,
+              },
+            }),
+      },
+      202,
+    );
   });
 }
 

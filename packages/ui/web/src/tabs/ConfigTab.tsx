@@ -125,6 +125,14 @@ function FeatureTogglePanel({
     setError(null);
     try {
       const res = await setEnvVar("RENDER_HARNESS_VITALS_ENABLED", enabled ? "0" : "1");
+      if (res.restart === "save_only") {
+        // Value saved on Render's side, but the deploy didn't queue
+        // — surface this so the operator knows the toggle won't take
+        // effect until they manually redeploy.
+        const detail = res.deployError?.details ?? `status ${res.deployError?.status ?? "?"}`;
+        setError(`saved, but Render didn't queue a deploy (${detail}). Trigger a manual deploy.`);
+        return;
+      }
       if (res.ok || res.restart) {
         onSaved();
         return;
@@ -295,6 +303,17 @@ function EditEnvVarModal({
     setError(null);
     try {
       const res = await setEnvVar(envVar.name, value);
+      if (res.restart === "save_only") {
+        // Value saved on Render but the follow-up deploy didn't
+        // queue. Tell the operator the variable won't be live until
+        // they redeploy manually — otherwise this looks like a silent
+        // no-op.
+        const detail = res.deployError?.details ?? `status ${res.deployError?.status ?? "?"}`;
+        setError(
+          `Saved, but Render didn't queue a deploy (${detail}). Trigger a manual deploy from the Render dashboard for the new value to take effect.`,
+        );
+        return;
+      }
       if (res.ok || res.restart) {
         onSaved();
         return;
