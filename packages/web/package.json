@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Multi-tenant public HTTP service for the Render agent harness. Fronts the worker runtime via pg-boss.",
   "type": "module",
   "license": "MIT",
@@ -33,14 +33,6 @@
     "hono": "^4.12.18",
     "pg": "^8.20.0",
     "pg-boss": "^12.18.2"
-  },
-  "peerDependencies": {
-    "@render-harness/ui": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@render-harness/ui": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@render-harness/ui": "workspace:*",

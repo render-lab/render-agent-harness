@@ -1,5 +1,15 @@
 # @render-harness/web
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/core@0.4.0
+  - @render-harness/contracts@0.4.0
+  - @render-harness/registry@0.4.0
+  - @render-harness/runtime-worker@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

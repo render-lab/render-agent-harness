@@ -46,8 +46,18 @@ Each Slack thread maps to one harness conversation, so follow-up messages in the
 
 Read tools are available when `SLACK_BOT_TOKEN` is set:
 
-- `slack.get_thread`
-- `slack.get_channel_history`
+- `slack.get_thread` — read a Slack thread's messages.
+- `slack.get_channel_history` — read recent Slack channel messages.
+- `slack.get_user_info` — resolve a Slack user ID (for example `U0B4357MH7H`) to a display name, real name, and handle.
+- `slack.get_channel_info` — resolve a Slack channel ID (for example `C0AQHA6M3PS`) to a channel name and metadata.
+
+`slack.get_thread` and `slack.get_channel_history` also auto-enrich their responses so agents don't have to render raw IDs:
+
+- Each message gains a `user_display_name` field with the best available label (`display_name` → `real_name` → `name`).
+- Each message gains a `text_resolved` field where `<@U…>` mentions become `@display_name` and `<#C…|name>` mentions become `#name`.
+- The response gains a `resolved_users` map keyed by user ID and a `resolved_channel` object describing the requested channel.
+
+User and channel lookups are cached for the lifetime of the agent process to keep enrichment cheap across turns.
 
 Set `accessMode: read_write` to enable write tools:
 

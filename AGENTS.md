@@ -27,14 +27,14 @@ How to do it:
 
 1. One changeset file in `.changeset/` with a `minor` bump line for each first-party package. Use the script:
 
-   ```sh
-   for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui \
-              $(ls packages/capabilities | sed 's|^|cap-|'); do
-     echo "\"@render-harness/$pkg\": minor"
-   done
-   ```
+ ```sh
+ for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui \
+ $(ls packages/capabilities); do
+ echo "\"@render-harness/$pkg\": minor"
+ done
+ ```
 
-   `web` and `wizard` cascade-patch from registry automatically — no need to list them explicitly (they'll go to `0.(X+1).1`). `create-render-agent` also cascade-patches and stays on its own line; it isn't part of the runtime check.
+ `web`, `wizard`, and `create-render-agent` cascade-patch from their declared deps automatically — no need to list them explicitly (they'll go to `0.(X+1).1`). `create-render-agent` is on its own version line and isn't part of the runtime check. Sanity-check with `pnpm changeset status` before consuming: every first-party `@render-harness/*` package should appear under "minor", `web` / `wizard` / `create-render-agent` should appear under "patch", and the major bucket should be empty.
 
 2. `pnpm version-packages` to consume the changeset and bump everyone.
 3. Commit + push. CI's `changesets/action` runs the publish step with no remaining changesets and publishes the whole family in one go.
@@ -44,16 +44,22 @@ Until the wizard's `POST /api/agents/add` / `POST /api/capabilities/install` / `
 
 ## Realigning a drifted package
 
-When a package drifts onto its own minor line (e.g. `ui@0.1.x` while the family is on `0.2.x`), do **not** use a Changesets minor bump — Changesets will treat the `0.x → 0.(x+1)` crossing as breaking and cascade a major bump to every dependent.
-
-Instead:
+When a package drifts onto its own minor line (e.g. `ui@0.1.x` while the family is on `0.2.x`):
 
 1. Manually edit the package's `version` in `package.json`.
 2. Prepend a `## <new-version>` entry to its `CHANGELOG.md` explaining the realignment.
 3. Run `pnpm install --lockfile-only`.
 4. Commit + push as a normal `chore(<pkg>): realign to X.Y.Z` change.
 
+Do **not** use a Changesets minor bump for realignment alone — Changesets treats the `0.x → 0.(x+1)` crossing as breaking for any cross-package dep, which can cascade unintended bumps onto dependents.
+
 This is what was done for `@render-harness/ui@0.1.5 → 0.2.0` and the six `0.1.x` capability packs.
+
+### Why coordinated minor cuts use Changesets cleanly today
+
+Earlier in the project, `@render-harness/web` declared `@render-harness/ui` as an (optional) **peerDependency**. Peer-dep semantics force a MAJOR bump on the consumer when the peer's range moves out of band (a real semver rule, not a Changesets quirk), and in semver-zero **any** minor counts as out-of-band. Net effect: every coordinated minor cut cascaded `@render-harness/web` to `1.0.0`, which is never what we want, so the `0.2 → 0.3` cut had to be done by manual `package.json` edits to dodge Changesets entirely (see commit `420c904`).
+
+`@render-harness/web` never imported `@render-harness/ui` statically — it uses a dynamic `await import("@render-harness/ui")` inside `wrapWithUiSessionIfAvailable` / `mountUiIfAvailable`, with a try/catch that logs `"ui: failed to load @render-harness/ui — install the package or set ui: false"` if the module is missing. The peer declaration was advisory and contributed nothing the dynamic import did not already handle. It was removed in the `0.3 → 0.4` cut so coordinated minors can run through Changesets normally. Do not re-add a peerDependency on `@render-harness/ui` (or any other first-party package) without also re-evaluating this section — it brings the footgun back instantly.
 
 ## Scaffolder snapshot tests
 
@@ -114,3 +120,4 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 - **`UI_COOKIE_SECRET=""` crashing the UI** — `packages/ui/src/auth.ts` treats empty as unset and falls back to a per-process ephemeral. Don't reintroduce a hard fail on missing/empty secrets in development.
 - **Partial minor bump (`web@0.3.0` and `wizard@0.3.0` while everything else stayed on `0.2.x`)** — published in May 2026 to add `GET /agents/catalog`. Broke every existing managed harness's runtime version check because no single `harnessVersion` semver range satisfies both `0.2.x` and `0.3.x`. Resolved with a follow-up coordinated `0.3.0` cut across the whole family, but the right answer was always one coordinated minor from the start — see "Minor bumps must be coordinated across the whole family" above.
 - **Operator UI modal stuck on "Loading catalog…" forever** — same partial-minor cut as above. New `@render-harness/ui` shipped `fetchAgentCatalog()` hitting same-origin `/agents/catalog`; old `@render-harness/web` had no such route, so Hono's SPA catch-all returned a 303 to `/login` with HTML, and `request<T>()` in `packages/ui/web/src/api.ts` silently typed the HTML string as `AgentCatalogResp`. `request<T>()` now throws on 2xx-with-non-JSON-body so this kind of mismatch surfaces as an actionable error instead of a hung loading state.
+- **Coordinated minor cuts cascading `@render-harness/web` to `1.0.0`** — `web` used to declare `@render-harness/ui` as an optional peerDependency. Peer-dep semantics force a MAJOR bump on the consumer when the peer's range moves out of band (in semver-zero, any minor counts), so `pnpm changeset status` reported web at MAJOR for every family-wide minor cut. The 0.2 → 0.3 cut dodged this with manual `package.json` edits (commit `420c904`), but the real fix is that web has never actually imported ui statically — it dynamic-imports `@render-harness/ui` inside `wrapWithUiSessionIfAvailable` / `mountUiIfAvailable` and logs an actionable error if the module is missing. The peerDependency was removed in the 0.3 → 0.4 cut; consumers that want the operator UI install `@render-harness/ui` explicitly alongside `@render-harness/web`. Do not re-add a peerDependency on `@render-harness/ui` (or any other first-party package) — it brings the cascade-to-major footgun straight back.
