@@ -67,6 +67,10 @@ Set `accessMode: read_write` to enable write tools:
 
 Use `permissions.requireApproval` for write tools if the agent should ask before posting or changing Slack messages.
 
+### Request timeouts and retries
+
+The underlying `@slack/web-api` WebClient defaults to no per-request timeout and retries up to ten times over roughly 30 minutes, which lets a single rate-limited or transient-failure response hang a tool call indefinitely from the agent's perspective. This pack overrides those defaults with a 15-second per-request timeout and a bounded retry policy (3 retries, 0.5s → 3s backoff), so a failing call surfaces as a clear tool error within ~70 seconds worst case instead of appearing stuck. Agents using `slack.send_message` against high-traffic channels should still expect the occasional rate-limit error and either back off or use `permissions.requireApproval` to throttle posts.
+
 ## Test Commands
 
 ```sh

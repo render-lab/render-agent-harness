@@ -1,5 +1,17 @@
 # @render-harness/cap-slack
 
+## 0.4.1
+
+### Patch Changes
+
+- cap-slack: stop tool calls hanging for ~30 minutes when Slack rate-limits or returns transient errors.
+
+  The underlying `@slack/web-api` WebClient defaults to no per-request timeout and to `tenRetriesInAboutThirtyMinutes`, which silently retries 5xx and 429 responses for up to 30 minutes per call. From the agent's perspective the tool call appears stuck in-flight forever with no progress signal. `slack.send_message` is especially exposed — `chat.postMessage` is rate-limited to ~1 msg/sec/channel and trips a 429 + Retry-After whenever the agent posts a short burst.
+
+  The pack now constructs the WebClient with `timeout: 15_000` and `retryConfig: { retries: 3, factor: 2, minTimeout: 500, maxTimeout: 3_000 }`, so a failing call surfaces as a clear tool error within ~70 seconds worst case (4 attempts × 15s + ~3.5s of backoff) instead of hanging. All other behavior is unchanged.
+
+  No agent code changes required — the new defaults apply automatically on redeploy.
+
 ## 0.4.0
 
 ### Minor Changes
@@ -18,7 +30,7 @@
 - Updated dependencies
   - @render-harness/registry@0.4.0
 
-  0.3.0##
+    0.3.0##
 
 ### Minor Changes
 

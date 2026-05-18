@@ -1,7 +1,20 @@
 import type { LocalToolHandler } from "@render-harness/core";
-import { WebClient } from "@slack/web-api";
+import { type RetryOptions, WebClient } from "@slack/web-api";
 
 export type SlackAccessMode = "read" | "read_write";
+
+// @slack/web-api defaults to `tenRetriesInAboutThirtyMinutes` and no per-request
+// timeout, which means a single rate-limited or transient-failure response can
+// hang a tool call for up to 30 minutes with no surfaced progress. We replace
+// that with a bounded retry policy + 15s per-request timeout so the agent gets a
+// clear error within ~70s worst case instead of appearing stuck forever.
+const SLACK_REQUEST_TIMEOUT_MS = 15_000;
+const BOUNDED_RETRY_CONFIG: RetryOptions = {
+  retries: 3,
+  factor: 2,
+  minTimeout: 500,
+  maxTimeout: 3_000,
+};
 
 interface ResolvedUser {
   id: string;
@@ -28,7 +41,10 @@ export function slackTools(args: {
   accessMode: SlackAccessMode;
   allowedChannels?: string[];
 }): LocalToolHandler[] {
-  const client = new WebClient(args.botToken);
+  const client = new WebClient(args.botToken, {
+    timeout: SLACK_REQUEST_TIMEOUT_MS,
+    retryConfig: BOUNDED_RETRY_CONFIG,
+  });
   const resolver = createResolver(client);
 
   const tools: LocalToolHandler[] = [
