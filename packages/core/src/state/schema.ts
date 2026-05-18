@@ -29,7 +29,12 @@ const MIGRATION_LOCK_ID = 7374737831n;
  * every `IF NOT EXISTS` a no-op.
  */
 export async function applyMigrations(pool: Pool): Promise<string[]> {
-  const migrations = ["0001_init.sql", "0002_conversations.sql", "0003_schedules.sql"];
+  const migrations = [
+    "0001_init.sql",
+    "0002_conversations.sql",
+    "0003_schedules.sql",
+    "0004_connections.sql",
+  ];
   const applied: string[] = [];
 
   const client = await pool.connect();

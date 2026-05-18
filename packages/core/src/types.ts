@@ -28,6 +28,7 @@ import type {
   UserId,
 } from "@render-harness/contracts";
 import type { Logger } from "pino";
+import type { SecretsContext } from "./connections.js";
 
 // --------------------------------------------------------------------
 // Re-exports from @render-harness/contracts
@@ -350,5 +351,20 @@ export interface LocalToolHandler {
     toolCallId: ToolCallId;
     signal: AbortSignal;
     logger: Logger;
+    /**
+     * The owner of the run this tool is executing under, or null when
+     * the runtime didn't attach one. Pack tools that need per-end-user
+     * data should branch on this; the platform already scopes
+     * `secrets` to the same userId so most packs only need to call
+     * `secrets?.requireConnection(...)`.
+     */
+    userId?: UserId | null;
+    /**
+     * Per-end-user OAuth connections (see `@render-harness/core`'s
+     * `connections.ts`). `undefined` means the runtime opted out of
+     * mounting the connection API — packs should treat that as "no
+     * connections available" rather than crashing.
+     */
+    secrets?: SecretsContext;
   }) => Promise<{ content: string; isError?: boolean }>;
 }

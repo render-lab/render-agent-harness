@@ -29,6 +29,34 @@ export {
   isCancelled,
   requestCancel,
 } from "./cancel.js";
+export type {
+  BuildSecretsContextArgs,
+  ConnectionAccess,
+  ConnectionRecord,
+  ExchangeCodeArgs,
+  OAuthProviderConfig,
+  ParsedTokenResponse,
+  RefreshArgs,
+  SecretsContext,
+  UpsertConnectionArgs,
+} from "./connections.js";
+export {
+  _clearOAuthProviderRegistryForTests,
+  buildAuthorizeUrl,
+  buildSecretsContext,
+  ConnectionsKeyMissingError,
+  deleteConnection,
+  exchangeAuthorizationCode,
+  getConnectionsEncryptionKey,
+  getRegisteredOAuthProvider,
+  listConnectionsForUser,
+  listRegisteredOAuthProviders,
+  loadDecryptedConnection,
+  NeedsConnectionError,
+  refreshAccessToken,
+  registerOAuthProvider,
+  upsertConnection,
+} from "./connections.js";
 export type { PricingOverride } from "./cost.js";
 export { addUsage, estimateCost } from "./cost.js";
 export { defineAgent } from "./define.js";

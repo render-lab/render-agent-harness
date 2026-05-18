@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import type { LLMClient } from "./adapters/index.js";
 import { resolveClient } from "./adapters/index.js";
 import { buildBuiltinTools } from "./builtins/index.js";
+import { buildSecretsContext, type SecretsContext } from "./connections.js";
 import { addUsage, estimateCost } from "./cost.js";
 import { serializeError } from "./errors.js";
 import {
@@ -60,6 +61,14 @@ export interface RunAgentDeps {
    * worker pserv).
    */
   externalMcpTools?: McpToolHandle[];
+  /**
+   * Optional pre-built {@link SecretsContext}. If not provided, the loop
+   * builds one from the global OAuth provider registry, the run's
+   * `userId`, and `CONNECTIONS_ENCRYPTION_KEY` from `process.env`. Pass
+   * an explicit context in tests, or pass `null` to disable the
+   * connection API entirely for this run.
+   */
+  secrets?: SecretsContext | null;
 }
 
 export interface RunAgentArgs {
@@ -155,6 +164,11 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
   let toolCallsThisStep = 0;
   let lastAssistantMessage: Message | null = null;
 
+  const secrets: SecretsContext | null =
+    deps.secrets === null
+      ? null
+      : (deps.secrets ?? buildSecretsContext({ pool, userId: run.userId, logger: log }));
+
   const toolCtx: ToolExecutionContext = {
     pool,
     logger: log,
@@ -165,6 +179,8 @@ export async function runAgent(args: RunAgentArgs, deps: RunAgentDeps): Promise<
     agentDef,
     localTools,
     mcpTools,
+    userId: run.userId,
+    ...(secrets ? { secrets } : {}),
     ...(args.approvedToolCallIds ? { approvedToolCallIds: args.approvedToolCallIds } : {}),
   };
 

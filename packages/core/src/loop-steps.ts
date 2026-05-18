@@ -11,6 +11,7 @@
 import type { Pool } from "pg";
 import type { Logger } from "pino";
 import { AwaitingInputError } from "./builtins/index.js";
+import type { SecretsContext } from "./connections.js";
 import { idempotencyKey } from "./idempotency.js";
 import type { McpToolHandle } from "./mcp.js";
 import {
@@ -35,6 +36,7 @@ import type {
   ToolCall,
   ToolResult,
   ToolUseBlock,
+  UserId,
 } from "./types.js";
 
 // --------------------------------------------------------------------
@@ -126,12 +128,17 @@ interface NormalizedHandler {
   ) => Promise<{ content: string; isError?: boolean }>;
 }
 
-export function findHandler(
-  name: string,
-  local: LocalToolHandler[],
-  mcp: McpToolHandle[],
-  runId: RunId,
-): NormalizedHandler | null {
+export interface FindHandlerArgs {
+  name: string;
+  local: LocalToolHandler[];
+  mcp: McpToolHandle[];
+  runId: RunId;
+  userId: UserId | null;
+  secrets?: SecretsContext;
+}
+
+export function findHandler(args: FindHandlerArgs): NormalizedHandler | null {
+  const { name, local, mcp, runId, userId, secrets } = args;
   const localHit = local.find((t) => t.definition.name === name);
   if (localHit) {
     return {
@@ -143,6 +150,8 @@ export function findHandler(
           toolCallId: use.id,
           signal,
           logger,
+          userId,
+          ...(secrets ? { secrets } : {}),
         });
         return res;
       },
@@ -286,6 +295,15 @@ export interface ToolExecutionContext {
   localTools: LocalToolHandler[];
   mcpTools: McpToolHandle[];
   approvedToolCallIds?: ReadonlySet<string>;
+  /** Owner of this run; threaded into pack tool handlers as `args.userId`. */
+  userId: UserId | null;
+  /**
+   * Per-end-user OAuth connection accessor (see
+   * `@render-harness/core/src/connections.ts`). Constructed once per
+   * `runAgent` invocation and threaded into every local-tool handler.
+   * `undefined` means the runtime opted out of the connection API.
+   */
+  secrets?: SecretsContext;
 }
 
 /**
@@ -323,9 +341,18 @@ export async function executeToolCall(
     localTools,
     mcpTools,
     approvedToolCallIds,
+    userId,
+    secrets,
   } = ctx;
 
-  const handler = findHandler(use.name, localTools, mcpTools, runId);
+  const handler = findHandler({
+    name: use.name,
+    local: localTools,
+    mcp: mcpTools,
+    runId,
+    userId,
+    ...(secrets ? { secrets } : {}),
+  });
   if (!handler) {
     return {
       kind: "result",
