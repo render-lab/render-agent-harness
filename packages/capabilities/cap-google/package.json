@@ -1,0 +1,56 @@
+{
+  "name": "@render-harness/cap-google",
+  "version": "0.4.1",
+  "description": "Google Workspace (Gmail + Calendar) capability pack for the Render agent harness. Per-end-user OAuth via the harness's connections API.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "render-harness-cap",
+    "render-harness",
+    "google",
+    "gmail",
+    "calendar",
+    "oauth"
+  ],
+  "renderHarness": {
+    "gallery": {
+      "label": "Google Workspace",
+      "envHint": "GOOGLE_OAUTH_CLIENT_ID"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@render-harness/registry": "workspace:*"
+  },
+  "devDependencies": {
+    "@render-harness/core": "workspace:*",
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/render-lab/render-agent-harness.git",
+    "directory": "packages/capabilities/cap-google"
+  }
+}
