@@ -19,6 +19,7 @@ export { type DefineChatAgentOpts, defineChatAgent } from "./builtin-chat.js";
 export {
   assertCapabilityPack,
   type CapabilityPack,
+  type ConnectionRequirement,
   type ConnectorContribution,
   type ConnectorEnqueueConversationArgs,
   type ConnectorEnqueueResult,

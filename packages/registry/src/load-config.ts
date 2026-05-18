@@ -24,7 +24,9 @@ import {
   type LocalToolHandler,
   type McpServerConfig,
   type ModelSpec,
+  type OAuthProviderConfig,
   type Permissions,
+  registerOAuthProvider,
   type SamplingParams,
   type SkillMetadata,
 } from "@render-harness/core";
@@ -76,6 +78,13 @@ export interface DefineFromConfigResult {
   agentsById: Record<string, AgentDefinition>;
   config: HarnessConfig;
   packs: LoadedPack[];
+  /**
+   * OAuth providers contributed by capability packs. Also registered
+   * into core's process-level provider registry as a side-effect of
+   * `defineFromConfig` so `runAgent`'s per-run `SecretsContext` finds
+   * them without further wiring.
+   */
+  oauthProviders: OAuthProviderConfig[];
 }
 
 /**
@@ -100,6 +109,22 @@ export async function defineFromConfig(
     config.capabilities ? { entryRoot, refs: config.capabilities } : { entryRoot },
   );
 
+  // Collect + register OAuth providers from any pack that contributes them.
+  // Registration is a side-effect on the core's process-level registry so
+  // `runAgent`'s per-run SecretsContext picks them up without further
+  // wiring. The caller also gets the array so the web layer can mount
+  // /connections routes for each one.
+  const oauthProviders: OAuthProviderConfig[] = [];
+  for (const loaded of packs) {
+    if (!loaded.pack.oauthProviders) continue;
+    const ctx = makePackContext(loaded, config.name, env);
+    const providers = await loaded.pack.oauthProviders(ctx);
+    for (const provider of providers) {
+      registerOAuthProvider(provider);
+      oauthProviders.push(provider);
+    }
+  }
+
   const agents: AgentDefinition[] = [];
   const agentsById: Record<string, AgentDefinition> = {};
   for (const entry of config.agents) {
@@ -110,7 +135,7 @@ export async function defineFromConfig(
     agentsById[entry.id] = finalAgent;
   }
 
-  return { agents, agentsById, config, packs };
+  return { agents, agentsById, config, packs, oauthProviders };
 }
 
 // ----------------------------------------------------------------------

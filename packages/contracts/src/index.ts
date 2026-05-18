@@ -461,6 +461,61 @@ export interface ConnectorsResp {
   connectors: ConnectorSummary[];
 }
 
+// --------------------------------------------------------------------
+// Per-end-user OAuth connections (cap-google, cap-microsoft, etc.)
+// --------------------------------------------------------------------
+
+/**
+ * Wire shape of an `agent_user_connections` row. Dates serialize as
+ * ISO strings; `accountLabel` surfaces as `null` when the provider's
+ * userinfo fetch didn't yield one.
+ */
+export interface UserConnectionSummary {
+  provider: string;
+  displayName: string;
+  scopes: string[];
+  accountLabel: string | null;
+  connectedAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+/**
+ * One installable provider as seen by the operator UI. The Connections
+ * tab renders one entry per provider, with a "Connect" button when no
+ * `connection` row matches and "Disconnect" / "Reconnect" when it does.
+ *
+ * `requiredBy` lists the capability packs whose tools call
+ * `secrets.requireConnection(provider)` so the UI can explain *why*
+ * the user should connect.
+ */
+export interface ConnectionProviderSummary {
+  id: string;
+  displayName: string;
+  defaultScopes: string[];
+  clientCredentialsConfigured: boolean;
+  requiredBy: string[];
+}
+
+export interface ConnectionsResp {
+  /** Providers the deployment knows about (installed packs + env-configured). */
+  providers: ConnectionProviderSummary[];
+  /** Connections the *current user* has established. */
+  connections: UserConnectionSummary[];
+}
+
+export interface StartConnectionResp {
+  /** Provider's authorize URL. The SPA navigates to it directly. */
+  authorizeUrl: string;
+  /** Provider id the start was for, echoed for caller convenience. */
+  provider: string;
+}
+
+export interface DeleteConnectionResp {
+  ok: boolean;
+  provider: string;
+}
+
 /**
  * Deployment-wide metadata exposed at GET /deployment. Drives the operator
  * UI's header label and the in-product Guide so prose, service names, and

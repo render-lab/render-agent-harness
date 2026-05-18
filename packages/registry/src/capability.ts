@@ -40,6 +40,7 @@ import type {
   LocalToolHandler,
   Logger,
   McpServerConfig,
+  OAuthProviderConfig,
   Pool,
   RunId,
   SkillMetadata,
@@ -182,6 +183,22 @@ export interface ConnectorContribution {
 // ----------------------------------------------------------------------
 
 /**
+ * Declarative scope requirement: the pack tells the operator UI which
+ * `(provider, scopes)` pairs it expects end users to connect before the
+ * pack's tools will work. The Connections tab reads this list so users
+ * see "Connect Google for cap-google" prompts even when no tool call
+ * has thrown a NeedsConnectionError yet.
+ *
+ * `connectionsRequired` is metadata only; it never affects runtime
+ * behaviour. Tools still call `secrets.requireConnection()` at call
+ * time and the platform still does refresh-on-use.
+ */
+export interface ConnectionRequirement {
+  provider: string;
+  scopes: string[];
+}
+
+/**
  * A capability pack. Default-exported by every npm package that wants
  * to plug into render-harness entries.
  */
@@ -209,6 +226,25 @@ export interface CapabilityPack {
   renderServices?: (ctx: PackContext) => RenderServiceSpec[] | Promise<RenderServiceSpec[]>;
   /** Inbound webhook/event receivers mounted by @render-harness/web. */
   connectors?: (ctx: PackContext) => ConnectorContribution[] | Promise<ConnectorContribution[]>;
+  /**
+   * Per-end-user OAuth providers contributed by the pack. The harness's
+   * `@render-harness/web` mounts `/connections/:provider/start|callback`
+   * routes for each one, the operator UI surfaces a "Connect <provider>"
+   * button, and the pack's tools call `secrets.requireConnection(id)`
+   * at call time to fetch a fresh access token.
+   *
+   * Returning the same provider id from multiple packs is allowed and
+   * idempotent (the later registration replaces the earlier — useful
+   * when the same provider config powers more than one pack).
+   */
+  oauthProviders?: (ctx: PackContext) => OAuthProviderConfig[] | Promise<OAuthProviderConfig[]>;
+  /**
+   * Static "this pack needs the user to have connected these providers
+   * with at least these scopes" hint for the operator UI. The pack's
+   * tools still gate at call time via `secrets.requireConnection`;
+   * this just lets the UI prompt proactively.
+   */
+  connectionsRequired?: ConnectionRequirement[];
 }
 
 /**
@@ -238,6 +274,15 @@ const PackShapeSchema = z
     skills: z.unknown().optional(),
     renderServices: z.unknown().optional(),
     connectors: z.unknown().optional(),
+    oauthProviders: z.unknown().optional(),
+    connectionsRequired: z
+      .array(
+        z.object({
+          provider: z.string().min(1),
+          scopes: z.array(z.string().min(1)).default([]),
+        }),
+      )
+      .optional(),
   })
   .passthrough();
 
