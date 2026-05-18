@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/registry",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Config registry for the Render agent harness. Schema for render-harness.yaml, capability-pack contract, runtime loader, and Blueprint emitter.",
   "type": "module",
   "license": "MIT",
@@ -42,7 +42,8 @@
     "./deploy": {
       "types": "./dist/deploy/index.d.ts",
       "import": "./dist/deploy/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
     "render-harness-build": "./dist/bin/build.js",

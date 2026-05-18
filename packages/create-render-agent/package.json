@@ -1,6 +1,6 @@
 {
   "name": "create-render-agent",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Scaffold a new Render agent harness project. Run via `npm init render-agent` or `npx create-render-agent`.",
   "type": "module",
   "license": "MIT",
@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
     "create-render-agent": "./dist/bin.js"

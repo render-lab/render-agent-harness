@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/runtime-cron",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cron runtime for @render-harness/core. One-shot, run-to-completion semantics for scheduled agents.",
   "type": "module",
   "license": "MIT",
@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
