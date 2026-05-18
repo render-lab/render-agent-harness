@@ -15,6 +15,8 @@ import type {
   CancelRunResp,
   CapabilitiesResp,
   CapabilitySummary,
+  ConnectionProviderSummary,
+  ConnectionsResp,
   ConnectorSummary,
   ConnectorsResp,
   ContentBlock,
@@ -24,6 +26,7 @@ import type {
   CreateConversationResp,
   CreateRunBody,
   CreateRunResp,
+  DeleteConnectionResp,
   DeploymentAgentInfo,
   DeploymentAgentRuntime,
   DeploymentEnvVar,
@@ -46,8 +49,10 @@ import type {
   SendConversationMessageBody,
   SendConversationMessageResp,
   SendInputResp,
+  StartConnectionResp,
   ToolCallRecord,
   UsageRow,
+  UserConnectionSummary,
   VitalsInstance,
   VitalsLogEntry,
   VitalsLogsResp,
@@ -62,6 +67,8 @@ export type {
   AgentModelSummary,
   AgentSummary,
   CapabilitySummary,
+  ConnectionProviderSummary,
+  ConnectionsResp,
   ConnectorSummary,
   ContentBlock,
   ConversationSummary,
@@ -80,6 +87,7 @@ export type {
   ScheduleSummary,
   ToolCallRecord,
   UsageRow,
+  UserConnectionSummary,
   VitalsInstance,
   VitalsLogEntry,
   VitalsMetricSeries,
@@ -322,6 +330,26 @@ export function listCapabilities(): Promise<CapabilitiesResp> {
 
 export function listConnectors(): Promise<ConnectorsResp> {
   return request<ConnectorsResp>("/connectors");
+}
+
+// --------------------------------------------------------------------
+// Per-end-user OAuth connections (cap-google, cap-microsoft, etc.)
+// --------------------------------------------------------------------
+
+export function listConnections(): Promise<ConnectionsResp> {
+  return request<ConnectionsResp>("/connections");
+}
+
+export function startConnection(provider: string): Promise<StartConnectionResp> {
+  return request<StartConnectionResp>(`/connections/${encodeURIComponent(provider)}/start`, {
+    method: "POST",
+  });
+}
+
+export function deleteConnection(provider: string): Promise<DeleteConnectionResp> {
+  return request<DeleteConnectionResp>(`/connections/${encodeURIComponent(provider)}`, {
+    method: "DELETE",
+  });
 }
 
 export interface InstallCapabilityBody {

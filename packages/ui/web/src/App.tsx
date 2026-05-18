@@ -11,6 +11,7 @@ import { uiPath } from "./lib/mount.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
 import { ChatTab } from "./tabs/ChatTab.js";
 import { ConfigTab } from "./tabs/ConfigTab.js";
+import { ConnectionsTab } from "./tabs/ConnectionsTab.js";
 import { DocsTab } from "./tabs/DocsTab.js";
 import { type GuideSectionId, GuideTab, isGuideSectionId } from "./tabs/GuideTab.js";
 import { RunsTab } from "./tabs/RunsTab.js";
@@ -24,6 +25,7 @@ type TabId =
   | "agents"
   | "scheduled"
   | "config"
+  | "connections"
   | "usage"
   | "vitals"
   | "guide"
@@ -57,6 +59,7 @@ const NAV_SECTIONS: {
       { id: "usage", label: "Usage", mark: "%%" },
       { id: "vitals", label: "Vitals", mark: "~~" },
       { id: "config", label: "Config", mark: "##" },
+      { id: "connections", label: "Connections", mark: "<>" },
     ],
   },
   {
@@ -233,6 +236,7 @@ function AppInner() {
             {activeTab === "agents" && <AgentsTab />}
             {activeTab === "scheduled" && <ScheduledTab />}
             {activeTab === "config" && <ConfigTab />}
+            {activeTab === "connections" && <ConnectionsTab />}
             {activeTab === "usage" && <UsageTab />}
             {activeTab === "vitals" && <VitalsTab />}
             {activeTab === "guide" && (
