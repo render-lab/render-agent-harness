@@ -69,7 +69,7 @@ function readPackageJsonRegistryDep(): string | null {
 }
 
 const BUNDLED = readBundledHarnessVersions();
-const FALLBACK_RANGE = readPackageJsonRegistryDep() ?? "^0.2.0";
+const FALLBACK_RANGE = readPackageJsonRegistryDep() ?? "^0.3.0";
 
 /**
  * Anchor range used for `render-harness.yaml`'s `harnessVersion`

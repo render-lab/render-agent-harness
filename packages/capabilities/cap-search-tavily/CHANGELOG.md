@@ -1,5 +1,12 @@
 # @render-harness/cap-search-tavily
 
+0.3.0## 
+
+### Minor Changes
+
+- Coordinated 0.3.0 baseline cut across the entire first-party harness family.
+  See AGENTS.md § "Minor bumps must be coordinated across the whole family".
+
 ## 0.2.2
 
 ### Patch Changes

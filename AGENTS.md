@@ -4,18 +4,43 @@ Repo-specific guidance for AI coding agents (Claude Code, Cursor, Codex, etc.). 
 
 Read this whenever a task touches versioning, publishing, scaffolding, snapshots, or capability packs.
 
-## Versioning model: independent, not lockstep
+## Versioning model: independent within a minor line, coordinated across minor bumps
 
-The `@render-harness/*` family does **not** move in lockstep. Different packages live on different version tracks for deliberate reasons:
+The `@render-harness/*` family does **not** patch in lockstep, but every package **must** stay on the same `0.<minor>.x` line. Different packages live on slightly different patch tracks for deliberate reasons:
 
 - **Core (`core`, `contracts`, `registry`, `runtime-*`)** — bump together when the shared substrate changes.
 - **Dependents (`web`, `wizard`)** — cascade-bumped by Changesets' `updateInternalDependencies: "patch"` policy whenever their internal harness deps change. They will always be one patch ahead of `core` immediately after a `core` bump.
 - **UI (`ui`)** — has its own line because the SPA bundle changes independently of the harness substrate.
-- **Capabilities (`packages/capabilities/cap-*`)** — explicitly independent. Bump only when the capability itself changes; they ship their own minor/patch deltas.
+- **Capabilities (`packages/capabilities/cap-*`)** — patch-independent. Bump only when the capability itself changes; they ship their own patch deltas.
 
-`@render-harness/registry`'s `buildHarnessVersionInfo` is aware of this: it doesn't flag patch-level drift as long as every installed version still satisfies the consumer's declared `harnessVersion` range. **Do not add a "strict uniqueness" check back in.** If you need to assert that core packages move together, scope it to the core list only, not all first-party packages.
+`@render-harness/registry`'s `buildHarnessVersionInfo` enforces this: it walks every running `@render-harness/*` package (including capability packs declared in the consumer's `render-harness.yaml`) and validates each version against the declared `harnessVersion` range. Patch-level drift inside the range is fine — minor drift across siblings is **not** and trips the "Harness version needs attention" red banner in the deployed harness's Config tab. **Do not add a "strict uniqueness" check back in** beyond the existing per-package range check.
 
 The Changesets config (`.changeset/config.json`) keeps `linked: []` empty on purpose. Linking already-drifted packages forces Changesets into a major-version reconciliation (every package jumps to the next `1.0.0`), which is never what we want.
+
+### Minor bumps must be coordinated across the whole family
+
+In semver-zero, `^0.X.Y` does **not** span the `0.X → 0.(X+1)` boundary. So the moment any one `@render-harness/*` package crosses a minor, the runtime version check fails for every consumer whose `harnessVersion` range still anchors at the old minor. There is no scaffolded range short of a multi-clause `>=0.2.0 <0.4.0` that satisfies a partial minor cut, and no scaffolder ever writes one.
+
+**Rule:** a minor bump on any one first-party harness package (core, contracts, registry, runtime-\*, web, ui, wizard, **and every capability pack**) requires a single Changeset that bumps **every** first-party harness package to the same `0.(X+1).0` baseline.
+
+How to do it:
+
+1. One changeset file in `.changeset/` with a `minor` bump line for each first-party package. Use the script:
+
+   ```sh
+   for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui \
+              $(ls packages/capabilities | sed 's|^|cap-|'); do
+     echo "\"@render-harness/$pkg\": minor"
+   done
+   ```
+
+   `web` and `wizard` cascade-patch from registry automatically — no need to list them explicitly (they'll go to `0.(X+1).1`). `create-render-agent` also cascade-patches and stays on its own line; it isn't part of the runtime check.
+
+2. `pnpm version-packages` to consume the changeset and bump everyone.
+3. Commit + push. CI's `changesets/action` runs the publish step with no remaining changesets and publishes the whole family in one go.
+4. Each managed harness then needs `harnessVersion: "^0.(X+1).0"` in `render-harness.yaml` and `"@render-harness/<name>": "^0.(X+1).0"` for every first-party dep in `package.json`. The scaffolder writes these automatically for *new* harnesses (per-package ranges from the rebuilt `bundled-gallery/harness-version.json`), but **existing managed harnesses need a manual bump**.
+
+Until the wizard's `POST /api/agents/add` / `POST /api/capabilities/install` / `PATCH /api/agents/:slug/model` paths grow auto-bump-the-deps logic, every coordinated minor cut leaves a follow-up chore for every existing deployment. Plan accordingly.
 
 ## Realigning a drifted package
 
@@ -77,7 +102,7 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 |---|---|
 | Bug fix in `core`/`registry`/runtime/contracts/ui | Changeset `patch` on the affected package. Dependents (`web`, `wizard`) cascade-bump automatically. |
 | Bug fix in a capability pack | Changeset `patch` on just that capability. |
-| New public API in `core`/`registry` | Changeset `minor`. Be mindful that `0.x` minors are "breaking" in semver-zero land. |
+| New public API in any first-party package (`core`, `contracts`, `registry`, `runtime-*`, `web`, `ui`, `wizard`, **cap-\***) | **Coordinated minor cut.** One changeset, `minor` on every first-party harness package — see "Minor bumps must be coordinated across the whole family" above. Never partial. |
 | Realign a drifted package onto the family version | Direct `package.json` + `CHANGELOG.md` edit. No changeset. (See "Realigning a drifted package" above.) |
 | Catalog metadata change for an existing capability | Edit `capability-catalog/index.yaml`. No version bump needed unless the cap's code also changes. |
 
@@ -87,3 +112,5 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 - **Scaffolded `package.json` requesting `@render-harness/core@^0.2.2` when only `0.2.1` is published** — the scaffolder used to stamp one universal range (from `@render-harness/registry`) across every `@render-harness/*` dep, which broke whenever sibling packages drifted onto different patch tracks (registry cascades ahead of core/contracts/runtime-* on small patches). The bundle now writes per-package ranges into `bundled-gallery/harness-version.json` (`packages: { "@render-harness/core": "^0.2.1", "@render-harness/registry": "^0.2.2", … }`) and `package-json.ts` looks each one up via `harnessVersionRangeFor(pkgName)`. The `harnessVersion` field in scaffolded `render-harness.yaml` is anchored to `@render-harness/core` so the runtime mixed-version check stays satisfied across expected drift.
 - **`agent: support-bot` carried over from a gallery template into a user-named project** — `buildHarnessConfig` rewrites `config.agent` to the scaffolded agent name. If you add another field that should be retargeted on copy-from-template, extend `retargetCapabilityConfig`.
 - **`UI_COOKIE_SECRET=""` crashing the UI** — `packages/ui/src/auth.ts` treats empty as unset and falls back to a per-process ephemeral. Don't reintroduce a hard fail on missing/empty secrets in development.
+- **Partial minor bump (`web@0.3.0` and `wizard@0.3.0` while everything else stayed on `0.2.x`)** — published in May 2026 to add `GET /agents/catalog`. Broke every existing managed harness's runtime version check because no single `harnessVersion` semver range satisfies both `0.2.x` and `0.3.x`. Resolved with a follow-up coordinated `0.3.0` cut across the whole family, but the right answer was always one coordinated minor from the start — see "Minor bumps must be coordinated across the whole family" above.
+- **Operator UI modal stuck on "Loading catalog…" forever** — same partial-minor cut as above. New `@render-harness/ui` shipped `fetchAgentCatalog()` hitting same-origin `/agents/catalog`; old `@render-harness/web` had no such route, so Hono's SPA catch-all returned a 303 to `/login` with HTML, and `request<T>()` in `packages/ui/web/src/api.ts` silently typed the HTML string as `AgentCatalogResp`. `request<T>()` now throws on 2xx-with-non-JSON-body so this kind of mismatch surfaces as an actionable error instead of a hung loading state.

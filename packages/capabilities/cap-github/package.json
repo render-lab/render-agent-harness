@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-github",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "description": "GitHub monitoring capability pack for the Render agent harness.",
   "type": "module",
   "license": "MIT",
