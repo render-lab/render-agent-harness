@@ -1,5 +1,17 @@
 # @render-harness/web
 
+## 0.2.6
+
+### Patch Changes
+
+- toaster for changes pushed to render
+- Updated dependencies
+  - @render-harness/contracts@0.2.2
+  - @render-harness/ui@0.2.4
+  - @render-harness/core@0.2.2
+  - @render-harness/registry@0.2.3
+  - @render-harness/runtime-worker@0.2.2
+
 ## 0.2.5
 
 ### Patch Changes

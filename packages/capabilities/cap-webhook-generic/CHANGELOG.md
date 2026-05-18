@@ -1,5 +1,11 @@
 # @render-harness/cap-webhook-generic
 
+## 0.2.4
+
+### Patch Changes
+
+- @render-harness/registry@0.2.3
+
 ## 0.2.3
 
 ### Patch Changes

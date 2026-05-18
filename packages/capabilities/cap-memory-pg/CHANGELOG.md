@@ -1,5 +1,12 @@
 # @render-harness/cap-memory-pg
 
+## 0.2.1
+
+### Patch Changes
+
+- @render-harness/core@0.2.2
+- @render-harness/registry@0.2.3
+
 ## 0.2.0
 
 ### Patch Changes

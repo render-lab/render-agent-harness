@@ -1,5 +1,11 @@
 # @render-harness/contracts
 
+## 0.2.2
+
+### Patch Changes
+
+- toaster for changes pushed to render
+
 ## 0.2.1
 
 ### Patch Changes

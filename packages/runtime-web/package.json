@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/runtime-web",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Synchronous HTTP runtime for @render-harness/core. One web service, one process, agent runs in-request.",
   "type": "module",
   "license": "MIT",

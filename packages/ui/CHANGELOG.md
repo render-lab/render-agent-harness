@@ -1,5 +1,14 @@
 # @render-harness/ui
 
+## 0.2.4
+
+### Patch Changes
+
+- toaster for changes pushed to render
+- Updated dependencies
+  - @render-harness/contracts@0.2.2
+  - @render-harness/core@0.2.2
+
 ## 0.2.3
 
 ### Patch Changes

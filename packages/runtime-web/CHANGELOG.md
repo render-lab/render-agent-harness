@@ -1,5 +1,11 @@
 # @render-harness/runtime-web
 
+## 0.2.2
+
+### Patch Changes
+
+- @render-harness/core@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes
