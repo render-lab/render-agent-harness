@@ -58,16 +58,16 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      # No registry-url here: with npm Trusted Publishing
-      # (`permissions.id-token: write` + a configured trusted publisher
-      # on each package's npm settings), the npm CLI authenticates via
-      # the GitHub Actions OIDC token, and an .npmrc with a token
-      # placeholder would only get in the way.
+      # registry-url is required by the canonical npm Trusted
+      # Publishing GitHub Actions example. No NODE_AUTH_TOKEN is set on
+      # the publish step, so the .npmrc placeholder stays unsubstituted
+      # and npm falls through to OIDC trusted publishing instead.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
+          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -79,4 +79,7 @@ jobs:
           publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # With trusted publishing on a public repo, npm auto-generates
+          # a sigstore provenance attestation. The flag is explicit so
+          # the intent is obvious in this workflow file.
           NPM_CONFIG_PROVENANCE: true

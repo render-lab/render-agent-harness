@@ -43,5 +43,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/render-lab/render-agent-harness.git",
+    "directory": "packages/capabilities/cap-webhook-generic"
   }
 }
