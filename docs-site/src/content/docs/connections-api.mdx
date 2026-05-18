@@ -1,0 +1,153 @@
+---
+title: Connections API
+description: Per-end-user OAuth connections for capability packs (Google Workspace, Microsoft 365, Notion, etc.).
+---
+
+The connection API lets capability packs use **per-end-user OAuth** instead of a single deployment-wide token. Each end user clicks "Connect <provider>" in the operator UI, the harness stores their refresh token encrypted, and pack tools fetch a fresh access token at call time.
+
+Use it when the pack needs to read *the user's* mailbox, calendar, or workspace — not one shared service account.
+
+## When to reach for this vs static env vars
+
+| Pattern | Use when | Example pack |
+| --- | --- | --- |
+| **Deployment-wide token in env** | One tenant, one workspace. The bot acts as itself. | `cap-slack`, `cap-github`, `cap-linear` |
+| **Per-end-user OAuth via connection API** | The agent acts *as* each user, on their data. | `cap-google` |
+| **Service account / domain-wide delegation** | Workspace admin grants once, agent impersonates org members. | (not yet shipped) |
+
+## What gets stored
+
+A new table, `agent_user_connections`, holds one row per `(user_id, provider)`:
+
+| Column | Notes |
+| --- | --- |
+| `user_id` | The harness's `UserId` from the run row. |
+| `provider` | Provider id (`google`, `microsoft`, ...). |
+| `scopes` | Granted scopes. |
+| `account_label` | Display name fetched from the provider's userinfo endpoint (e.g. the user's Gmail address). |
+| `ciphertext`, `iv`, `auth_tag` | AES-256-GCM ciphertext over `{accessToken, refreshToken, expiresAt, scopes, accountLabel}`. |
+| `key_version` | For future rotation; defaults to 1. |
+| `expires_at` | Denormalized access-token expiry so refresh-on-use can check freshness without decrypting. |
+
+The encryption key comes from `CONNECTIONS_ENCRYPTION_KEY` (base64-encoded 32-byte secret). Generate one with `openssl rand -base64 32`.
+
+## Required env vars
+
+| Env var | Required when | What it does |
+| --- | --- | --- |
+| `CONNECTIONS_ENCRYPTION_KEY` | any pack registers an OAuth provider | AES-256 key for encrypting refresh tokens at rest. |
+| `<PROVIDER>_OAUTH_CLIENT_ID` | per provider | OAuth client id from the provider's console. |
+| `<PROVIDER>_OAUTH_CLIENT_SECRET` | per provider | OAuth client secret. |
+| `UI_COOKIE_SECRET` | always (also signs OAuth `state`) | HMAC secret for the cookie session and OAuth state token. |
+| `RENDER_EXTERNAL_URL` or `CONNECTIONS_PUBLIC_URL` | production | Public origin used when building redirect URIs. Render auto-injects `RENDER_EXTERNAL_URL`. |
+
+The Diagnostics tab in the operator UI surfaces missing vars as actionable hints.
+
+## HTTP surface
+
+All routes are added by `@render-harness/web` whenever a capability pack registers an OAuth provider.
+
+| Route | Auth | Purpose |
+| --- | --- | --- |
+| `GET /connections` | bearer / cookie | List the caller's connections + the deployment's provider catalog. |
+| `POST /connections/:provider/start` | bearer / cookie | Returns `{ authorizeUrl }`. The UI navigates the browser there. |
+| `GET /connections/:provider/callback` | **none** (signed `state`) | Provider redirects here; exchanges code for tokens, encrypts, upserts, 302s to `/ui#/connections?connected=<provider>`. |
+| `DELETE /connections/:provider` | bearer / cookie | Best-effort provider-side revoke + row delete. |
+
+The callback route does **not** run bearer auth — Google's redirect is anonymous. The harness recovers the `userId` from an HMAC-signed `state` token (10-minute TTL).
+
+## Tool-side API
+
+Tool handlers receive a `secrets: SecretsContext` argument:
+
+```ts
+import type { LocalToolHandler } from "@render-harness/core";
+
+const gmailSearch: LocalToolHandler = {
+  definition: { name: "gmail.search", description: "...", inputSchema: { ... }, source: "pack:my-pack" },
+  handler: async ({ input, secrets, signal }) => {
+    const conn = await secrets!.requireConnection("google");
+    // conn.accessToken is guaranteed fresh; the platform refreshed it if
+    // necessary inside a SELECT ... FOR UPDATE transaction.
+    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${input.q}`, {
+      headers: { authorization: `Bearer ${conn.accessToken}` },
+      signal,
+    });
+    return { content: await res.text() };
+  },
+};
+```
+
+When the user hasn't connected, `requireConnection` throws `NeedsConnectionError`. The harness's `executeToolCall` turns it into a normal `is_error: true` tool result so the model can ask the user to visit `/ui/connections` — no special run pause.
+
+## Pack-side API
+
+Register an OAuth provider from your pack:
+
+```ts
+import { definePack, type PackContext } from "@render-harness/registry";
+import type { OAuthProviderConfig } from "@render-harness/core";
+
+export default definePack({
+  name: "cap-my-saas",
+  version: "0.1.0",
+  envSchema: [
+    { name: "MY_SAAS_OAUTH_CLIENT_ID", required: true, secret: false, description: "..." },
+    { name: "MY_SAAS_OAUTH_CLIENT_SECRET", required: true, secret: true, description: "..." },
+    { name: "CONNECTIONS_ENCRYPTION_KEY", required: true, secret: true, description: "..." },
+  ],
+  connectionsRequired: [{ provider: "my-saas", scopes: ["read", "write"] }],
+  oauthProviders: (_ctx: PackContext): OAuthProviderConfig[] => [
+    {
+      id: "my-saas",
+      displayName: "My SaaS",
+      authorizeUrl: "https://my-saas.com/oauth/authorize",
+      tokenUrl: "https://my-saas.com/oauth/token",
+      revokeUrl: "https://my-saas.com/oauth/revoke",
+      clientIdEnv: "MY_SAAS_OAUTH_CLIENT_ID",
+      clientSecretEnv: "MY_SAAS_OAUTH_CLIENT_SECRET",
+      defaultScopes: ["read", "write"],
+      fetchAccountLabel: async (token) => {
+        const res = await fetch("https://my-saas.com/me", { headers: { authorization: `Bearer ${token}` } });
+        return res.ok ? (await res.json()).email : undefined;
+      },
+    },
+  ],
+  localTools: (_ctx) => [/* your tools */],
+});
+```
+
+The platform auto-registers the provider when the pack loads (via `defineFromConfig`), mounts the routes, and shows the provider in the operator UI's Connections tab.
+
+## Provider compatibility
+
+The design works for any provider implementing OAuth 2.0 Authorization Code grant with refresh tokens (RFC 6749). Two optional hooks cover the small number of providers that don't fit the standard wire shape:
+
+| Hook | When to use |
+| --- | --- |
+| `parseTokenResponse(raw)` | Provider's token endpoint returns a non-standard JSON shape — e.g. Slack puts the user token under `authed_user.access_token`. |
+| `revoke({ accessToken, refreshToken, clientId, clientSecret })` | Provider's revoke endpoint doesn't accept the standard `POST revokeUrl?token=...` form. |
+
+| Provider | Fit | Notes |
+| --- | --- | --- |
+| Google | ✅ | Needs `access_type=offline + prompt=consent` for refresh tokens. |
+| Microsoft / Entra ID | ✅ | `offline_access` scope; rotates refresh tokens on every refresh (handled). |
+| Notion / Linear / Atlassian / Zoom / HubSpot / Salesforce | ✅ | Standard. |
+| Slack user-OAuth | ✅ | Use `parseTokenResponse` for the `authed_user` wrapper. |
+| GitHub OAuth Apps | ✅ | Standard. |
+| OAuth 1.0a (Twitter v1.1) | ❌ | Request signing per call; out of scope. |
+| Service accounts (GCP SA, GitHub Apps, AWS STS) | ❌ | Different primitive; deferred. |
+
+## Multi-tenant safety
+
+The production worker is one Node process for all tenants. The connection API holds:
+
+- `SecretsContext` is constructed per tool invocation closed over `run.user_id`. There is no path for a tool to query another user's connections.
+- `CONNECTIONS_ENCRYPTION_KEY` is process-wide (same for all tenants) — that's fine, the `user_id` column is the access control boundary.
+- Audit any future query against `agent_user_connections` to ensure it filters by `user_id`.
+
+## See also
+
+- [`cap-google`](https://www.npmjs.com/package/@render-harness/cap-google) — Gmail + Calendar, the first pack using this API.
+- [Capabilities](/capabilities/) — pack contract overview.
+- [Authoring capability packs](/authoring-capability-packs/) — full pack author walkthrough.

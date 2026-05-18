@@ -156,3 +156,46 @@ capabilities:
       smokeTestStatus: passing
       reviewStatus: maintainer-reviewed
     trustTier: official
+
+  - package: "@render-harness/cap-google"
+    name: Google Workspace
+    description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.
+    categories: [tools, google, gmail, calendar, workspace]
+    provider: Google
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-google
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.5"
+    requiresHarness: "^0.5"
+    features: [tools]
+    envVars:
+      - name: GOOGLE_OAUTH_CLIENT_ID
+        required: true
+        secret: false
+        description: Google Cloud OAuth 2.0 client id (Web application credentials).
+      - name: GOOGLE_OAUTH_CLIENT_SECRET
+        required: true
+        secret: true
+        description: Google Cloud OAuth 2.0 client secret.
+      - name: CONNECTIONS_ENCRYPTION_KEY
+        required: true
+        secret: true
+        description: >-
+          32-byte base64 secret used by the harness to encrypt refresh tokens at rest.
+          Generate with `openssl rand -base64 32`.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        Per-end-user OAuth via the harness connection API. Tools call
+        secrets.requireConnection("google") at runtime; each end user clicks
+        "Connect Google" in the operator UI. Default accessMode is read_write
+        (gmail.send, calendar.create_event, etc.); set "read" for read-only.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-google test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official

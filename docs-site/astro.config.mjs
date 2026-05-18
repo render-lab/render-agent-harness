@@ -96,6 +96,7 @@ export default defineConfig({
             { label: "Deployment model", slug: "deployment" },
             { label: "Web API", slug: "web-api" },
             { label: "Capabilities", slug: "capabilities" },
+            { label: "Connections API", slug: "connections-api" },
             { label: "Built-in tools", slug: "built-in-tools" },
             { label: "State and streaming", slug: "state-and-streaming" },
           ],
