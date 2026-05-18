@@ -483,38 +483,27 @@ function StepIndicator({
         ];
   return (
     <div className="sticky top-[64px] z-10 border-b border-line bg-canvas/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-2">
-        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
-          <span>
-            step {currentStep + 1}/{total}
-          </span>
-          <span>/</span>
-          <span className="text-ink">{title}</span>
-        </div>
-      </div>
-      <div className="border-t border-line px-5 py-2">
-        <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto pb-1">
-          {navItems.map((item, idx) => {
-            const isActive = idx === currentStep;
-            const isDone = idx < currentStep;
-            return (
-              <div
-                key={item.id}
-                className={`flex shrink-0 items-center gap-2 border px-3 py-1.5 text-[10px] uppercase tracking-wider ${
-                  isActive
-                    ? "border-accent bg-accent text-canvas"
-                    : isDone
-                      ? "border-line bg-surface text-ink"
-                      : "border-line bg-canvas text-muted"
-                }`}
-              >
-                <span className="font-mono">{String(idx + 1).padStart(2, "0")}</span>
-                <span>{item.label}</span>
-              </div>
-            );
-          })}
-        </nav>
-      </div>
+      <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-5 py-2">
+        {navItems.map((item, idx) => {
+          const isActive = idx === currentStep;
+          const isDone = idx < currentStep;
+          return (
+            <div
+              key={item.id}
+              className={`flex shrink-0 items-center gap-2 border px-3 py-1.5 text-[10px] uppercase tracking-wider ${
+                isActive
+                  ? "border-accent bg-accent text-canvas"
+                  : isDone
+                    ? "border-line bg-surface text-ink"
+                    : "border-line bg-canvas text-muted"
+              }`}
+            >
+              <span className="font-mono">{String(idx + 1).padStart(2, "0")}</span>
+              <span>{item.label}</span>
+            </div>
+          );
+        })}
+      </nav>
     </div>
   );
 }
