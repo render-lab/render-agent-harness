@@ -46,6 +46,24 @@ export interface WizardEnv {
    * deployed from a packaged artifact or external index checkout.
    */
   registryIndexPath: string | null;
+  /**
+   * Postgres connection string for the wizard's own DB (`wizard_users`,
+   * `wizard_user_repos`). Unset = session-cookie + ownership-aware
+   * routes (auth, /my, session-auth on /api/agents/add) return 503.
+   * The bearer-secret routes keep working without a DB.
+   */
+  databaseUrl: string | null;
+  /**
+   * HMAC secret used to sign session cookies + OAuth state tokens +
+   * one-time claim tokens. Unset = same as databaseUrl unset.
+   */
+  sessionSecret: string | null;
+  /**
+   * GitHub App OAuth client id + secret (separate from the App's PEM
+   * private key). Unset = /api/auth/* returns 503.
+   */
+  oauthClientId: string | null;
+  oauthClientSecret: string | null;
 }
 
 export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
@@ -74,6 +92,10 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
   const stateSecret = env.WIZARD_STATE_SECRET ?? null;
   const githubAppName = env.GITHUB_APP_NAME ?? null;
   const registryIndexPath = env.WIZARD_REGISTRY_INDEX_PATH ?? null;
+  const databaseUrl = env.DATABASE_URL ?? null;
+  const sessionSecret = env.WIZARD_SESSION_SECRET ?? env.WIZARD_STATE_SECRET ?? null;
+  const oauthClientId = env.GITHUB_OAUTH_CLIENT_ID ?? null;
+  const oauthClientSecret = env.GITHUB_OAUTH_CLIENT_SECRET ?? null;
 
   return {
     port,
@@ -87,5 +109,9 @@ export function parseEnv(env: NodeJS.ProcessEnv): WizardEnv {
     stateSecret,
     githubAppName,
     registryIndexPath,
+    databaseUrl,
+    sessionSecret,
+    oauthClientId,
+    oauthClientSecret,
   };
 }
