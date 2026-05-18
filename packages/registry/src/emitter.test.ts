@@ -72,7 +72,12 @@ describe("emitBlueprint — runtime shape mapping", () => {
       name: "web-chat-db",
       property: "connectionString",
     });
-    expect(web?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.value).toBe("");
+    // Secrets are emitted with sync:false so Render preserves the
+    // Dashboard value across Blueprint reapplies — `value: ""` would
+    // clobber the operator's input on every redeploy.
+    const anthropic = web?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY");
+    expect(anthropic?.sync).toBe(false);
+    expect(anthropic?.value).toBeUndefined();
   });
 
   it("emits a cron service for an agent with [cron] runtime", async () => {
@@ -128,7 +133,9 @@ describe("emitBlueprint — runtime shape mapping", () => {
       property: "connectionString",
     });
     const worker = services.find((s) => s.type === "worker");
-    expect(worker?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY")?.value).toBe("");
+    const anthropicWorker = worker?.envVars?.find((e) => e.key === "ANTHROPIC_API_KEY");
+    expect(anthropicWorker?.sync).toBe(false);
+    expect(anthropicWorker?.value).toBeUndefined();
     expect(worker?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe(
       "support-agent-runs",
     );
@@ -328,7 +335,10 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       if (svc.type === "keyvalue") continue;
       const calendar = svc.envVars?.filter((e) => e.key === "CALENDAR_ICS_URL");
       expect(calendar).toHaveLength(1);
-      expect(calendar?.[0]?.value).toBe("");
+      // Manifest-declared secrets propagate as sync:false so the
+      // operator-set Dashboard value survives Blueprint reapplies.
+      expect(calendar?.[0]?.sync).toBe(false);
+      expect(calendar?.[0]?.value).toBeUndefined();
     }
   });
 
@@ -467,11 +477,14 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     const projectTrigger = blueprint.projects?.[0]?.environments[0]?.services?.find(
       (s) => s.name === "mixed-cron-cron-trigger-weekly-recap",
     );
-    // RENDER_API_KEY is shared through the environment group in serialized project YAML.
+    // RENDER_API_KEY is shared through the environment group with
+    // sync:false so the Dashboard value survives Blueprint reapplies.
     expect(projectTrigger?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(
-      blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.value,
-    ).toBe("");
+    const renderApiKey = blueprint.envVarGroups?.[0]?.envVars.find(
+      (e) => e.key === "RENDER_API_KEY",
+    );
+    expect(renderApiKey?.sync).toBe(false);
+    expect(renderApiKey?.value).toBeUndefined();
 
     // Trigger services have no model env — they don't run inference.
     expect(trigger?.envVars?.some((e) => e.key === "LLM_MODEL")).toBe(false);
@@ -518,9 +531,11 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
       "delegator-workflows",
     );
     expect(projectWorker?.envVars?.some((e) => e.key === "RENDER_API_KEY")).toBe(false);
-    expect(
-      blueprint.envVarGroups?.[0]?.envVars.find((e) => e.key === "RENDER_API_KEY")?.value,
-    ).toBe("");
+    const renderApiKey = blueprint.envVarGroups?.[0]?.envVars.find(
+      (e) => e.key === "RENDER_API_KEY",
+    );
+    expect(renderApiKey?.sync).toBe(false);
+    expect(renderApiKey?.value).toBeUndefined();
   });
 
   it("does NOT wire workflow env when the bundle has no workflow-task agents", async () => {

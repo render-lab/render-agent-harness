@@ -19,7 +19,7 @@ export function Review({
       description="One last look. Create will provision a private repository in the Render-managed GitHub org and commit the scaffolded files."
       onNext={onSubmit}
       onPrev={onPrev}
-      nextLabel="Create agent →"
+      nextLabel="Create harness →"
     >
       <dl className="space-y-2.5 text-sm">
         <Row label="name">{state.agentName}</Row>

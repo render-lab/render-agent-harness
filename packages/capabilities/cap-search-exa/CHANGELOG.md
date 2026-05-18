@@ -1,5 +1,12 @@
 # @render-harness/cap-search-exa
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/registry@0.5.1
+
 ## 0.5.1
 
 ### Patch Changes

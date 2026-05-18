@@ -385,6 +385,57 @@ export function mutatePackageJsonAddDeps(args: {
 }
 
 /**
+ * Add `@render-harness/runtime-*` packages to `dependencies` when an
+ * agent introduces a runtime kind the project didn't have before.
+ *
+ * Without this the freshly-emitted `render.yaml` references e.g.
+ * `dist/cron.js`, the wizard writes `src/cron.ts` and patches
+ * `tsup.config.ts`, but the build crashes at esbuild resolve time:
+ *
+ *   ✘ Could not resolve "@render-harness/runtime-cron"
+ *
+ * The version range is inherited from any existing `@render-harness/*`
+ * dependency in the same `package.json`. That keeps the new dep on the
+ * same minor line as the rest of the harness family — the runtime
+ * version check rejects mixed minors and there is no scaffolded range
+ * that spans `0.X` and `0.(X+1)`. If no harness deps are present yet
+ * (a hand-rolled scaffold) we fall back to `*` and the user can pin it
+ * explicitly later.
+ */
+export function mutatePackageJsonAddRuntimeDeps(args: {
+  jsonText: string;
+  packages: ReadonlyArray<string>;
+}): string {
+  if (args.packages.length === 0) return args.jsonText;
+  const pkg = JSON.parse(args.jsonText) as { dependencies?: Record<string, string> };
+  const deps = { ...(pkg.dependencies ?? {}) };
+  const inheritedRange = inferHarnessVersionRange(deps);
+  let changed = false;
+  for (const name of args.packages) {
+    if (deps[name]) continue;
+    deps[name] = inheritedRange ?? "*";
+    changed = true;
+  }
+  if (!changed) return args.jsonText;
+  pkg.dependencies = deps;
+  return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+/**
+ * Pick a version range from any existing `@render-harness/*` dep in
+ * `package.json`. Caller uses it as the default when adding a new
+ * runtime package so the harness family stays on the same minor line.
+ */
+function inferHarnessVersionRange(deps: Record<string, string>): string | null {
+  for (const [name, range] of Object.entries(deps)) {
+    if (name.startsWith("@render-harness/") && typeof range === "string" && range.length > 0) {
+      return range;
+    }
+  }
+  return null;
+}
+
+/**
  * Append any new env var names to `.env.example` under an "Added
  * agent: <id>" header. Skips names already present.
  */

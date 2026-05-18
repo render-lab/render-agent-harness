@@ -7,6 +7,7 @@ import {
   mutateEnvExampleForAgent,
   mutateManifestForAgentAdd,
   mutatePackageJsonAddDeps,
+  mutatePackageJsonAddRuntimeDeps,
   planAgentAdd,
 } from "./agent-add.js";
 
@@ -329,6 +330,66 @@ describe("mutatePackageJsonAddDeps", () => {
     });
     const parsed = JSON.parse(next) as { dependencies: Record<string, string> };
     expect(parsed.dependencies["fictional-pack"]).toBe("*");
+  });
+});
+
+describe("mutatePackageJsonAddRuntimeDeps", () => {
+  it("inherits the version range from an existing @render-harness/* dep", () => {
+    const input = JSON.stringify(
+      {
+        dependencies: {
+          "@render-harness/core": "^0.5",
+          "@render-harness/registry": "^0.5",
+        },
+      },
+      null,
+      2,
+    );
+    const next = mutatePackageJsonAddRuntimeDeps({
+      jsonText: input,
+      packages: ["@render-harness/runtime-cron"],
+    });
+    const parsed = JSON.parse(next) as { dependencies: Record<string, string> };
+    expect(parsed.dependencies["@render-harness/runtime-cron"]).toBe("^0.5");
+  });
+
+  it("is a no-op when every package is already a dep", () => {
+    const input = JSON.stringify(
+      {
+        dependencies: {
+          "@render-harness/core": "^0.5",
+          "@render-harness/runtime-cron": "^0.4.2",
+        },
+      },
+      null,
+      2,
+    );
+    const next = mutatePackageJsonAddRuntimeDeps({
+      jsonText: input,
+      packages: ["@render-harness/runtime-cron"],
+    });
+    expect(next).toBe(input);
+  });
+
+  it("falls back to * when no harness deps are present", () => {
+    const input = JSON.stringify({ dependencies: { lodash: "^4" } }, null, 2);
+    const next = mutatePackageJsonAddRuntimeDeps({
+      jsonText: input,
+      packages: ["@render-harness/runtime-cron"],
+    });
+    const parsed = JSON.parse(next) as { dependencies: Record<string, string> };
+    expect(parsed.dependencies["@render-harness/runtime-cron"]).toBe("*");
+  });
+
+  it("adds multiple packages in one call", () => {
+    const input = JSON.stringify({ dependencies: { "@render-harness/core": "^0.5" } }, null, 2);
+    const next = mutatePackageJsonAddRuntimeDeps({
+      jsonText: input,
+      packages: ["@render-harness/runtime-cron", "@render-harness/runtime-workflows"],
+    });
+    const parsed = JSON.parse(next) as { dependencies: Record<string, string> };
+    expect(parsed.dependencies["@render-harness/runtime-cron"]).toBe("^0.5");
+    expect(parsed.dependencies["@render-harness/runtime-workflows"]).toBe("^0.5");
   });
 });
 

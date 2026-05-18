@@ -24,6 +24,7 @@ import {
   mutateEnvExampleForAgent,
   mutateManifestForAgentAdd,
   mutatePackageJsonAddDeps,
+  mutatePackageJsonAddRuntimeDeps,
   planAgentAdd,
 } from "../agent-add.js";
 import { readSessionCookie } from "../auth.js";
@@ -145,7 +146,10 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
         yamlText: manifest.text,
         plan: finalPlan,
       });
-      const nextPkg = mutatePackageJsonAddDeps({
+      // First add capability deps; runtime deps are layered in after
+      // the Blueprint emission below so we know which runtime kinds the
+      // updated manifest actually requires.
+      let nextPkg = mutatePackageJsonAddDeps({
         jsonText: pkg.text,
         capabilities: finalPlan.spec.capabilities,
       });
@@ -212,6 +216,21 @@ export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts
             sha: null,
           });
         }
+      }
+
+      // Layer in `@render-harness/runtime-*` deps for any runtime kind
+      // newly introduced by this agent. Skipping this step makes the
+      // build fail at esbuild resolve time the moment the freshly-
+      // written `src/cron.ts` (or sibling) is compiled — its
+      // `import "@render-harness/runtime-cron"` has no matching dep.
+      const runtimePackages = required
+        .map((entry) => entry.runtimePackage)
+        .filter((pkgName): pkgName is string => pkgName !== null);
+      if (runtimePackages.length > 0) {
+        nextPkg = mutatePackageJsonAddRuntimeDeps({
+          jsonText: nextPkg,
+          packages: runtimePackages,
+        });
       }
 
       let tsupWrite: { text: string; current: string; sha: string } | null = null;

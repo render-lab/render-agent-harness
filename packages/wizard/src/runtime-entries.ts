@@ -51,6 +51,16 @@ export interface RequiredEntry {
   sourcePath: string;
   /** Template body to write when the source file is missing. */
   template: () => string;
+  /**
+   * Runtime package the entry imports, or null when the entry only
+   * pulls from packages already present in every harness scaffold
+   * (e.g. `@render-harness/web`, which the operator UI brings in
+   * regardless). Returned alongside the entry so the agent-add route
+   * can extend `package.json`'s deps in lockstep with writing the
+   * source file. Without this the build crashes at esbuild resolve
+   * time the moment a new runtime kind is introduced.
+   */
+  runtimePackage: string | null;
 }
 
 type WebRt = Extract<RuntimeBlockInput, { kind: "web" }>;
@@ -79,6 +89,23 @@ function isSingleAgent(cfg: HarnessConfig): boolean {
   return cfg.agents.length === 1 && cfg.agents[0]?.id === cfg.name;
 }
 
+/**
+ * Runtime npm package each generated entry depends on. Aligned with
+ * the `import` statements emitted by the bundle templates in
+ * `create-render-agent` so adding an entry triggers the right
+ * package.json bump downstream. `web` resolves to `@render-harness/web`
+ * because that's what the bundle template imports; the underlying
+ * `runtime-web` runtime is wired in by `serveWeb` and isn't a direct
+ * import.
+ */
+const RUNTIME_PACKAGE_BY_ENTRY: Record<string, string | null> = {
+  web: "@render-harness/web",
+  worker: "@render-harness/runtime-worker",
+  cron: "@render-harness/runtime-cron",
+  "cron-trigger": "@render-harness/runtime-workflows",
+  workflows: "@render-harness/runtime-workflows",
+};
+
 export function requiredEntries(cfg: HarnessConfig): RequiredEntry[] {
   const buckets = bucketByKind(cfg);
   const isMultiTenantWeb = buckets.web.length > 0 && buckets.worker.length > 0;
@@ -87,7 +114,12 @@ export function requiredEntries(cfg: HarnessConfig): RequiredEntry[] {
   const entries = new Map<string, RequiredEntry>();
   const add = (name: string, template: () => string) => {
     if (!entries.has(name)) {
-      entries.set(name, { name, sourcePath: `src/${name}.ts`, template });
+      entries.set(name, {
+        name,
+        sourcePath: `src/${name}.ts`,
+        template,
+        runtimePackage: RUNTIME_PACKAGE_BY_ENTRY[name] ?? null,
+      });
     }
   };
 

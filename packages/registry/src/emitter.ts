@@ -723,6 +723,22 @@ function explicitEntryEnv(cfg: HarnessConfig): BlueprintEnvVar[] {
   return [];
 }
 
+/**
+ * Emit the deployment-wide env group.
+ *
+ * Secrets (model API keys, `RENDER_API_KEY`, anything `secret: true` in
+ * the manifest's `envSchema`) are declared with `sync: false` rather
+ * than `value: ""`. Both shapes are valid in the env-group schema, but
+ * `value: ""` causes Render to enforce the empty string on every
+ * Blueprint reapply — which silently wipes whatever the operator typed
+ * into the Dashboard. `sync: false` declares "the operator owns this
+ * value, leave it alone on reapply".
+ *
+ * Non-secret entries with no default still go in with `value: ""` so
+ * the env group has a placeholder row; non-secrets are not sensitive
+ * to a forced-blank reapply because they're not ones the operator
+ * should be filling in via the Dashboard.
+ */
 function buildEnvVarGroups(cfg: HarnessConfig): BlueprintEnvVarGroup[] {
   const vars = new Map<string, BlueprintEnvVar>();
   const add = (envVar: BlueprintEnvVar) => {
@@ -733,19 +749,19 @@ function buildEnvVarGroups(cfg: HarnessConfig): BlueprintEnvVarGroup[] {
   add({ key: "LOG_LEVEL", value: "info" });
 
   for (const model of collectModels(cfg)) {
-    if (model.provider === "anthropic") add({ key: "ANTHROPIC_API_KEY", value: "" });
+    if (model.provider === "anthropic") add({ key: "ANTHROPIC_API_KEY", sync: false });
     if (model.provider === "openai-compat") {
-      add({ key: "OPENAI_API_KEY", value: "" });
+      add({ key: "OPENAI_API_KEY", sync: false });
     }
   }
   if (workflowTaskAgents(cfg).length > 0) {
-    add({ key: "RENDER_API_KEY", value: "" });
+    add({ key: "RENDER_API_KEY", sync: false });
   }
 
   for (const spec of cfg.envSchema ?? []) {
     const envVar: BlueprintEnvVar = { key: spec.name };
     if (spec.secret) {
-      envVar.value = "";
+      envVar.sync = false;
     } else if (spec.default !== undefined) {
       envVar.value = spec.default;
     } else {

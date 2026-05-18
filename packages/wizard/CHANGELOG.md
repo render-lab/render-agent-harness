@@ -1,5 +1,27 @@
 # @render-harness/wizard
 
+## 0.5.2
+
+### Patch Changes
+
+- Stop emitting secret env vars with `value: ""` in the deployment-wide env group. The empty value made Render re-apply blank on every Blueprint sync — silently wiping whatever the operator had set in the Dashboard. Affected keys: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `RENDER_API_KEY`, and any `envSchema` entry with `secret: true`.
+
+  Render's env-group schema (`envVarFromKeyValue`) does support `sync: false`, even though it's only documented for service-level env vars. With `sync: false` the operator sets the value once in the Dashboard and Render preserves it across every subsequent reapply.
+
+  Existing managed harnesses self-heal the next time the wizard re-emits their `render.yaml` (any `/api/agents/add` or `/api/capabilities/install` commit). Repos that haven't been touched in a while can patch by hand: replace each `value: ""` line under `envVarGroups[].envVars[]` with `sync: false` for the secret keys above.
+
+  Also extends the wizard's `agent-add` flow (`mutatePackageJsonAddRuntimeDeps` in `packages/wizard/src/agent-add.ts`) to add `@render-harness/runtime-cron` / `runtime-workflows` to `package.json` when an added agent introduces a new runtime kind. Without this the freshly-written `src/cron.ts` would crash the build at esbuild resolve time:
+
+  ```
+  ✘ Could not resolve "@render-harness/runtime-cron"
+  ```
+
+  The version range is inherited from any existing `@render-harness/*` dep so the harness family stays on a single minor line.
+
+- Updated dependencies
+  - @render-harness/registry@0.5.1
+  - create-render-agent@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes
