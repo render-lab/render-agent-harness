@@ -91,6 +91,33 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Build a human-readable error message from a JSON error body returned
+ * by the harness web service. The wire format is
+ * `{ error: string, details?: string, status?: number }` (the upstream
+ * `status` is the third-party API status that bubbled up, e.g. Render
+ * API 429 -> our 502 with `status: 429`).
+ *
+ * We surface `details` because it's where the actual diagnostic lives —
+ * routes like `/vitals` slot the upstream Render API response body in
+ * there. Showing just the `error` code (e.g. `render_api_error`) is
+ * useless to operators.
+ */
+function formatErrorMessage(parsed: unknown, httpStatus: number): string {
+  if (!parsed || typeof parsed !== "object" || !("error" in parsed)) {
+    return `request failed (${httpStatus})`;
+  }
+  const body = parsed as { error: unknown; details?: unknown; status?: unknown };
+  const base = String(body.error);
+  const detail =
+    typeof body.details === "string" && body.details.length > 0 ? body.details : null;
+  const upstream = typeof body.status === "number" ? body.status : null;
+  if (detail && upstream !== null) return `${base} (${upstream}): ${detail}`;
+  if (detail) return `${base}: ${detail}`;
+  if (upstream !== null) return `${base} (${upstream})`;
+  return base;
+}
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, {
     credentials: "include",
@@ -110,11 +137,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
       // app shell to perform a full navigation.
       window.location.href = `${uiPath("/login")}?next=${encodeURIComponent(window.location.pathname)}`;
     }
-    const message =
-      parsed && typeof parsed === "object" && "error" in parsed
-        ? String((parsed as { error: unknown }).error)
-        : `request failed (${res.status})`;
-    throw new ApiError(message, res.status, parsed);
+    throw new ApiError(formatErrorMessage(parsed, res.status), res.status, parsed);
   }
   return parsed as T;
 }

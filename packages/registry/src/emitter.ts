@@ -136,6 +136,14 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
   const needsKv = buckets.worker.length > 0 || (opts.packs ?? []).some((p) => packNeedsKv(p));
   const naming = buildNaming(cfg, entrypointStyle);
 
+  // Resolve the pg-boss queue name once. The web shell and the worker
+  // MUST land on the same name — they share a Postgres database, but
+  // pg-boss partitions by queue name, so a divergence here means the
+  // web enqueues jobs the worker never sees and runs stay `pending`
+  // forever. The worker runtime's explicit `queue:` wins; otherwise
+  // fall back to the `${cfg.name}-runs` default.
+  const resolvedWorkerQueue = buckets.worker[0]?.rt.queue ?? workerQueue(cfg);
+
   // -------------- databases + key value --------------------------------
   const databases: BlueprintDatabase[] = [
     {
@@ -188,6 +196,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
           packageName,
           region,
           naming,
+          workerQueueName: resolvedWorkerQueue,
         }),
       );
     } else {
@@ -215,7 +224,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
       .filter(({ rt }) => rt.queue && rt.queue !== primary.rt.queue);
     if (divergentQueues.length > 0) {
       warnings.push(
-        `Multiple agents declare kind:worker with divergent queue names. Using "${primary.rt.queue ?? workerQueue(cfg)}"; per-agent queues are not supported in v1.`,
+        `Multiple agents declare kind:worker with divergent queue names. Using "${resolvedWorkerQueue}"; per-agent queues are not supported in v1.`,
       );
     }
     services.push(
@@ -225,6 +234,7 @@ export async function emitBlueprint(opts: EmitOpts): Promise<EmitResult> {
         packageName,
         region,
         naming,
+        workerQueueName: resolvedWorkerQueue,
       }),
     );
   }
@@ -438,9 +448,22 @@ interface WebShellArgs {
   packageName: string;
   region: string;
   naming: Naming;
+  /**
+   * Canonical pg-boss queue name. Resolved once at the top level of
+   * `emitBlueprint` so the web shell's `WORKER_QUEUE` env always
+   * matches the worker's; passing it in keeps the divergence
+   * impossible-by-construction rather than relying on each builder
+   * re-deriving it.
+   */
+  workerQueueName: string;
 }
 
-interface SyncWebArgs extends WebShellArgs {
+interface SyncWebArgs {
+  cfg: HarnessConfig;
+  rt: WebRt;
+  packageName: string;
+  region: string;
+  naming: Naming;
   agent: AgentEntryInput;
 }
 
@@ -450,6 +473,8 @@ interface WorkerArgs {
   packageName: string;
   region: string;
   naming: Naming;
+  /** Same canonical queue name passed into the web shell. */
+  workerQueueName: string;
 }
 
 interface CronArgs {
@@ -484,7 +509,7 @@ function syncWebService(args: SyncWebArgs): BlueprintService {
 }
 
 function webShellService(args: WebShellArgs): BlueprintService {
-  const { cfg, rt, packageName, region, naming } = args;
+  const { cfg, rt, packageName, region, naming, workerQueueName } = args;
   return {
     type: "web",
     name: `${cfg.name}-web`,
@@ -496,7 +521,7 @@ function webShellService(args: WebShellArgs): BlueprintService {
     startCommand: naming.webShellStartCommand(),
     healthCheckPath: rt.healthCheckPath ?? "/healthz",
     envVars: [
-      { key: "WORKER_QUEUE", value: workerQueue(cfg) },
+      { key: "WORKER_QUEUE", value: workerQueueName },
       ...sharedRuntimeEnv(cfg),
       ...kvFromService(cfg),
       ...uiEnvIfNeeded(cfg),
@@ -507,7 +532,7 @@ function webShellService(args: WebShellArgs): BlueprintService {
 }
 
 function workerService(args: WorkerArgs): BlueprintService {
-  const { cfg, rt, packageName, region, naming } = args;
+  const { cfg, rt, packageName, region, naming, workerQueueName } = args;
   return {
     type: "worker",
     name: `${cfg.name}-worker`,
@@ -518,7 +543,7 @@ function workerService(args: WorkerArgs): BlueprintService {
     buildCommand: defaultBuildCommand(packageName),
     startCommand: naming.workerStartCommand(),
     envVars: [
-      { key: "WORKER_QUEUE", value: rt.queue ?? workerQueue(cfg) },
+      { key: "WORKER_QUEUE", value: workerQueueName },
       ...sharedRuntimeEnv(cfg),
       // Worker is multi-tenant — it carries every agent's model envs;
       // use the bundle default (shared.model) here.

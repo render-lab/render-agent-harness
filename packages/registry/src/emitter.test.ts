@@ -132,6 +132,43 @@ describe("emitBlueprint — runtime shape mapping", () => {
     expect(worker?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe(
       "support-agent-runs",
     );
+    // pg-boss partitions by queue name even on a shared DB, so the web
+    // shell and worker MUST agree. Regression for the support-bot
+    // scaffold landing with mismatched queue names — runs would sit
+    // `pending` forever because the web enqueued onto one queue and the
+    // worker polled another.
+    expect(web?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value).toBe("support-agent-runs");
+  });
+
+  it("uses the manifest worker.queue on BOTH web shell and worker (not just the worker)", async () => {
+    // Reproduce the gallery template's shape: harness name diverges
+    // from the runtime-block queue (which is what bit the wizard's
+    // support-bot scaffold — `cfg.name` got rewritten to the project
+    // slug but `runtimes[].queue` was carried over verbatim from the
+    // template).
+    const config = HarnessConfigSchema.parse(
+      singleAgent({
+        name: "rah-support-bot-0d65",
+        description: "Support bot scaffolded by the wizard.",
+        systemPrompt: "Help.",
+        runtimes: [
+          { kind: "web", plan: "starter" },
+          { kind: "worker", plan: "starter", queue: "support-bot-runs" },
+        ],
+      }),
+    );
+    const { blueprint } = await emitBlueprint({
+      config,
+      packageName: "@render-harness/example-support-bot",
+    });
+    const services = blueprint.services ?? [];
+    const web = services.find((s) => s.type === "web");
+    const worker = services.find((s) => s.type === "worker");
+    const webQueue = web?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value;
+    const workerQueue = worker?.envVars?.find((e) => e.key === "WORKER_QUEUE")?.value;
+    expect(workerQueue).toBe("support-bot-runs");
+    expect(webQueue).toBe("support-bot-runs");
+    expect(webQueue).toBe(workerQueue);
   });
 
   it("records a Dashboard step and a warning for kind:workflows", async () => {
