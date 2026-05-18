@@ -1,5 +1,13 @@
 # @render-harness/web
 
+## 0.2.5
+
+### Patch Changes
+
+- fixes
+- Updated dependencies
+  - @render-harness/ui@0.2.3
+
 ## 0.2.4
 
 ### Patch Changes

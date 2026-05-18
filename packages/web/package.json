@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/web",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Multi-tenant public HTTP service for the Render agent harness. Fronts the worker runtime via pg-boss.",
   "type": "module",
   "license": "MIT",
