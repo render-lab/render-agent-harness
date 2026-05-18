@@ -336,15 +336,28 @@ function PublicShell({
               Docs
             </a>
             {me ? (
-              <div className="flex items-center gap-2 border border-line px-2 py-1 text-[11px]">
+              <div className="btn flex items-center gap-2">
+                {me.avatarUrl ? (
+                  <img
+                    src={me.avatarUrl}
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="rounded-full border border-line"
+                  />
+                ) : null}
                 <span className="text-muted">@{me.login}</span>
-                <button type="button" className="text-accent" onClick={onLogout}>
+                <button
+                  type="button"
+                  className="border-l border-line pl-2 text-accent hover:underline"
+                  onClick={onLogout}
+                >
                   sign out
                 </button>
               </div>
             ) : (
               <a className="btn" href="/api/auth/login?next=/my">
-                Sign in
+                Sign in with GitHub
               </a>
             )}
           </nav>

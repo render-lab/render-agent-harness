@@ -82,9 +82,20 @@ export function MyHarnessesPage() {
         </div>
         <div className="mt-3 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold uppercase tracking-widest">
-              {phase.me.login}'s harnesses
-            </h1>
+            <div className="flex items-center gap-3">
+              {phase.me.avatarUrl ? (
+                <img
+                  src={phase.me.avatarUrl}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="rounded-full border border-line"
+                />
+              ) : null}
+              <h1 className="text-2xl font-bold uppercase tracking-widest">
+                {phase.me.login}'s harnesses
+              </h1>
+            </div>
             <p className="mt-2 text-sm text-muted">
               Add an agent from the catalog into any harness below. The wizard commits the agents[]
               entry, src/&lt;id&gt;.ts, and re-emitted render.yaml to your repo, and Render
