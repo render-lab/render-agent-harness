@@ -77,8 +77,7 @@ const FALLBACK_RANGE = readPackageJsonRegistryDep() ?? "^0.2.0";
  * the registry's mixed-version check accepts when the family drifts
  * across patch tracks.
  */
-export const DEFAULT_HARNESS_VERSION_RANGE: string =
-  BUNDLED?.harnessVersionRange ?? FALLBACK_RANGE;
+export const DEFAULT_HARNESS_VERSION_RANGE: string = BUNDLED?.harnessVersionRange ?? FALLBACK_RANGE;
 
 /**
  * Returns the version range to stamp into a scaffolded `package.json`

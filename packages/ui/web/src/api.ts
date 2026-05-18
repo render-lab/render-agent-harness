@@ -109,8 +109,7 @@ function formatErrorMessage(parsed: unknown, httpStatus: number): string {
   }
   const body = parsed as { error: unknown; details?: unknown; status?: unknown };
   const base = String(body.error);
-  const detail =
-    typeof body.details === "string" && body.details.length > 0 ? body.details : null;
+  const detail = typeof body.details === "string" && body.details.length > 0 ? body.details : null;
   const upstream = typeof body.status === "number" ? body.status : null;
   if (detail && upstream !== null) return `${base} (${upstream}): ${detail}`;
   if (detail) return `${base}: ${detail}`;

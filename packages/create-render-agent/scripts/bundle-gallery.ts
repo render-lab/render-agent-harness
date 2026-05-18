@@ -16,7 +16,7 @@
  *   pnpm tsx scripts/bundle-gallery.ts
  */
 
-import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
