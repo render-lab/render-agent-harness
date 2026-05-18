@@ -328,7 +328,7 @@ export function fetchAgentCatalog(wizardUrl: string): Promise<AgentCatalogResp> 
   // The catalog lives on the wizard, not the deployed harness. Browser
   // calls it directly via the operator UI's "wizard URL" hint.
   return fetch(`${wizardUrl.replace(/\/+$/, "")}/api/agents/catalog`).then(async (res) => {
-    if (!res.ok) throw new ApiError(`catalog fetch failed: ${res.status}`, res.status);
+    if (!res.ok) throw new ApiError(`catalog fetch failed: ${res.status}`, res.status, null);
     return (await res.json()) as AgentCatalogResp;
   });
 }

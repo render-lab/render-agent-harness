@@ -10,16 +10,21 @@ import {
   listConnectors,
 } from "../api.js";
 import { AsyncBoundary } from "../components/AsyncBoundary.js";
+import { useDeployment } from "../deployment-context.js";
+import { AddAgentModal } from "./AddAgentModal.js";
 import { EditModelModal } from "./EditModelModal.js";
 import { InstallCapabilityModal } from "./InstallCapabilityModal.js";
 
 export function AgentsTab() {
+  const deployment = useDeployment();
+  const wizardUrl = deployment?.wizardServiceUrl ?? null;
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [installingCapability, setInstallingCapability] = useState(false);
+  const [addingAgent, setAddingAgent] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,6 +73,18 @@ export function AgentsTab() {
           connectors={connectors}
           onAdd={() => setInstallingCapability(true)}
         />
+        {wizardUrl ? (
+          <div className="panel p-4 text-xs">
+            <div className="label mb-2">add another agent</div>
+            <p className="text-muted">
+              Pull an agent in from a gallery bundle. The wizard commits the agents[] entry,
+              source file, and re-emitted render.yaml to your managed repo.
+            </p>
+            <button type="button" className="btn mt-3" onClick={() => setAddingAgent(true)}>
+              Add agent
+            </button>
+          </div>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2">
           {agents.map((agent) => (
             <AgentCard
@@ -87,6 +104,13 @@ export function AgentsTab() {
           agents={agents}
           onClose={() => setInstallingCapability(false)}
           onInstalled={setNotice}
+        />
+      ) : null}
+      {addingAgent && wizardUrl ? (
+        <AddAgentModal
+          wizardUrl={wizardUrl}
+          onClose={() => setAddingAgent(false)}
+          onAdded={setNotice}
         />
       ) : null}
     </AsyncBoundary>
