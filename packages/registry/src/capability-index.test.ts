@@ -68,7 +68,7 @@ describe("capability catalog fixture", () => {
       "@render-harness/cap-slack",
     ]);
     expect(catalog.capabilities[1]?.connectors[0]?.key).toBe("github");
-    expect(catalog.capabilities[1]?.requiresHarness).toBe("^0.1");
+    expect(catalog.capabilities[1]?.requiresHarness).toBe("^0.2");
   });
 
   it("round-trips through YAML serialization", () => {
