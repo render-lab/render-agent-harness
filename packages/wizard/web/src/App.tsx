@@ -162,24 +162,36 @@ export function App() {
         state={phase.state}
         jobId={phase.jobId}
         events={phase.events}
+        me={me}
+        route={route}
+        onNavigate={navigate}
         onHome={goHome}
       />
     );
   }
   if (phase.kind === "error") {
     return (
-      <ErrorScreen
-        message={phase.message}
-        onRetry={() =>
-          setPhase({ kind: "ready", step: STEP_TITLES.length - 1, state: phase.state })
-        }
-        onHome={goHome}
-      />
+      <PublicShell route={route} onNavigate={navigate} me={me}>
+        <ErrorScreen
+          message={phase.message}
+          onRetry={() =>
+            setPhase({ kind: "ready", step: STEP_TITLES.length - 1, state: phase.state })
+          }
+          onHome={goHome}
+        />
+      </PublicShell>
     );
   }
   if (phase.kind === "success") {
     return (
-      <Shell currentStep={STEP_TITLES.length - 1} stepTitle="Success" onHome={goHome}>
+      <Shell
+        currentStep={STEP_TITLES.length - 1}
+        stepTitle="Success"
+        me={me}
+        route={route}
+        onNavigate={navigate}
+        withAside={false}
+      >
         <Success state={phase.state} result={phase.result} />
       </Shell>
     );
@@ -218,7 +230,14 @@ export function App() {
       }
     };
     return (
-      <Shell currentStep={0} totalSteps={2} stepTitle="Bundle review" onHome={goHome}>
+      <Shell
+        currentStep={0}
+        totalSteps={2}
+        stepTitle="Bundle review"
+        me={me}
+        route={route}
+        onNavigate={navigate}
+      >
         <BundleReview bundle={phase.bundle} me={me} onSubmit={submitBundle} onPrev={goHome} />
       </Shell>
     );
@@ -251,7 +270,7 @@ export function App() {
   };
 
   return (
-    <Shell currentStep={step} onHome={goHome}>
+    <Shell currentStep={step} me={me} route={route} onNavigate={navigate}>
       {step === 0 && <Basics state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
       {step === 1 && (
         <SystemPrompt state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />
@@ -275,6 +294,96 @@ export function App() {
   );
 }
 
+function TopNav({
+  route,
+  onNavigate,
+  me,
+  subtitle,
+}: {
+  route: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
+  me: AuthMe | null;
+  subtitle?: string;
+}) {
+  const onLogout = async () => {
+    await postLogout();
+    window.location.reload();
+  };
+  return (
+    <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+        <button
+          type="button"
+          className="text-left"
+          onClick={() => onNavigate("browse")}
+          title="Browse harnesses"
+        >
+          <div className="text-sm font-bold uppercase leading-none tracking-widest">
+            <div>Render</div>
+            <div>Harness</div>
+          </div>
+          <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
+            {subtitle ?? "public catalog"}
+          </div>
+        </button>
+        <nav className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={`btn ${route === "browse" ? "btn-active" : ""}`}
+            onClick={() => onNavigate("browse")}
+          >
+            Browse
+          </button>
+          <button
+            type="button"
+            className={`btn ${route === "new" ? "btn-active" : ""}`}
+            onClick={() => onNavigate("new")}
+          >
+            New
+          </button>
+          {me ? (
+            <button
+              type="button"
+              className={`btn ${route === "my" ? "btn-active" : ""}`}
+              onClick={() => onNavigate("my")}
+            >
+              My harnesses
+            </button>
+          ) : null}
+          <a className="btn" href={DOCS_URL}>
+            Docs
+          </a>
+          {me ? (
+            <div className="btn flex items-center gap-2">
+              {me.avatarUrl ? (
+                <img
+                  src={me.avatarUrl}
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="rounded-full border border-line"
+                />
+              ) : null}
+              <span className="text-muted">@{me.login}</span>
+              <button
+                type="button"
+                className="border-l border-line pl-2 text-accent hover:underline"
+                onClick={onLogout}
+              >
+                sign out
+              </button>
+            </div>
+          ) : (
+            <a className="btn" href="/api/auth/login?next=/my">
+              Sign in with GitHub
+            </a>
+          )}
+        </nav>
+      </div>
+    </header>
+  );
+}
+
 function PublicShell({
   route,
   onNavigate,
@@ -286,83 +395,9 @@ function PublicShell({
   me: AuthMe | null;
   children: React.ReactNode;
 }) {
-  const onLogout = async () => {
-    await postLogout();
-    window.location.reload();
-  };
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <button
-            type="button"
-            className="text-left"
-            onClick={() => onNavigate("browse")}
-            title="Browse harnesses"
-          >
-            <div className="text-sm font-bold uppercase leading-none tracking-widest">
-              <div>Render</div>
-              <div>Harness</div>
-            </div>
-            <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
-              public catalog
-            </div>
-          </button>
-          <nav className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={`btn ${route === "browse" ? "btn-active" : ""}`}
-              onClick={() => onNavigate("browse")}
-            >
-              Browse
-            </button>
-            <button
-              type="button"
-              className={`btn ${route === "new" ? "btn-active" : ""}`}
-              onClick={() => onNavigate("new")}
-            >
-              New
-            </button>
-            {me ? (
-              <button
-                type="button"
-                className={`btn ${route === "my" ? "btn-active" : ""}`}
-                onClick={() => onNavigate("my")}
-              >
-                My harnesses
-              </button>
-            ) : null}
-            <a className="btn" href={DOCS_URL}>
-              Docs
-            </a>
-            {me ? (
-              <div className="btn flex items-center gap-2">
-                {me.avatarUrl ? (
-                  <img
-                    src={me.avatarUrl}
-                    alt=""
-                    width={18}
-                    height={18}
-                    className="rounded-full border border-line"
-                  />
-                ) : null}
-                <span className="text-muted">@{me.login}</span>
-                <button
-                  type="button"
-                  className="border-l border-line pl-2 text-accent hover:underline"
-                  onClick={onLogout}
-                >
-                  sign out
-                </button>
-              </div>
-            ) : (
-              <a className="btn" href="/api/auth/login?next=/my">
-                Sign in with GitHub
-              </a>
-            )}
-          </nav>
-        </div>
-      </header>
+      <TopNav route={route} onNavigate={onNavigate} me={me} />
       <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
     </div>
   );
@@ -383,52 +418,61 @@ function Shell({
   currentStep,
   totalSteps,
   stepTitle,
-  onHome,
+  me,
+  route,
+  onNavigate,
+  withAside = true,
   children,
 }: {
   currentStep: number;
   totalSteps?: number;
   stepTitle?: string;
-  onHome: () => void;
+  me: AuthMe | null;
+  route: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
+  withAside?: boolean;
   children: React.ReactNode;
 }) {
   const total = totalSteps ?? STEP_TITLES.length;
   const title = stepTitle ?? STEP_TITLES[currentStep] ?? "Wizard";
   return (
     <div className="min-h-screen">
-      <WizardHeader currentStep={currentStep} total={total} title={title} onHome={onHome} />
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
-        <section className="panel p-6">{children}</section>
-        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
-          <div className="panel p-4">
-            <div className="label mb-3">progress</div>
-            <Progress current={currentStep} total={total} />
-            <div className="mt-3 text-xs text-muted">
-              Choose a template, tune the runtime, then create a managed repo and deploy.
+      <TopNav route={route} onNavigate={onNavigate} me={me} subtitle="managed repo scaffold" />
+      <StepIndicator currentStep={currentStep} total={total} title={title} />
+      {withAside ? (
+        <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
+          <section className="panel p-6">{children}</section>
+          <aside className="space-y-4 lg:sticky lg:top-40 lg:self-start">
+            <div className="panel p-4">
+              <div className="label mb-3">progress</div>
+              <Progress current={currentStep} total={total} />
+              <div className="mt-3 text-xs text-muted">
+                Choose a template, tune the runtime, then create a managed repo and deploy.
+              </div>
             </div>
-          </div>
-          <div className="panel p-4 text-xs">
-            <div className="label mb-2">output</div>
-            <div>GitHub repo</div>
-            <div>render-harness.yaml</div>
-            <div>Deploy to Render link</div>
-          </div>
-        </aside>
-      </main>
+            <div className="panel p-4 text-xs">
+              <div className="label mb-2">output</div>
+              <div>GitHub repo</div>
+              <div>render-harness.yaml</div>
+              <div>Deploy to Render link</div>
+            </div>
+          </aside>
+        </main>
+      ) : (
+        <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
+      )}
     </div>
   );
 }
 
-function WizardHeader({
+function StepIndicator({
   currentStep,
   total,
   title,
-  onHome,
 }: {
   currentStep: number;
   total: number;
   title: string;
-  onHome: () => void;
 }) {
   const navItems =
     total === STEP_TITLES.length
@@ -438,28 +482,14 @@ function WizardHeader({
           { id: "current", label: title },
         ];
   return (
-    <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-3">
-        <button type="button" className="text-left" onClick={onHome} title="Return to wizard home">
-          <div className="text-sm font-bold uppercase leading-none tracking-widest">
-            <div>Render</div>
-            <div>Harness Wizard</div>
-          </div>
-          <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
-            managed repo scaffold
-          </div>
-        </button>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
-            <span>
-              step {currentStep + 1}/{total}
-            </span>
-            <span>/</span>
-            <span className="text-ink">{title}</span>
-          </div>
-          <a className="btn" href="/browse">
-            Browse
-          </a>
+    <div className="sticky top-[64px] z-10 border-b border-line bg-canvas/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-2">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted">
+          <span>
+            step {currentStep + 1}/{total}
+          </span>
+          <span>/</span>
+          <span className="text-ink">{title}</span>
         </div>
       </div>
       <div className="border-t border-line px-5 py-2">
@@ -485,7 +515,7 @@ function WizardHeader({
           })}
         </nav>
       </div>
-    </header>
+    </div>
   );
 }
 
@@ -508,11 +538,17 @@ function SubmittingScreen({
   state,
   jobId,
   events,
-  onHome,
+  me,
+  route,
+  onNavigate,
+  onHome: _onHome,
 }: {
   state: WizardState;
   jobId: string | null;
   events: ScaffoldProgressEvent[];
+  me: AuthMe | null;
+  route: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
   onHome: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
@@ -560,15 +596,16 @@ function SubmittingScreen({
       : Math.min(95, Math.round((displayEvents.length / 7) * 100));
 
   return (
-    <div className="min-h-screen">
-      <WizardHeader
-        currentStep={STEP_TITLES.length - 1}
-        total={STEP_TITLES.length}
-        title="Creating repository"
-        onHome={onHome}
-      />
-      <main className="flex h-[calc(100vh-7rem)] min-h-0 items-center justify-center px-6 py-8">
-        <div className="panel flex h-full min-h-0 w-full max-w-2xl flex-col p-6">
+    <Shell
+      currentStep={STEP_TITLES.length - 1}
+      stepTitle="Creating repository"
+      me={me}
+      route={route}
+      onNavigate={onNavigate}
+      withAside={false}
+    >
+      <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center">
+        <div className="panel flex w-full max-w-2xl flex-col p-6">
           <div className="hr-section">
             <span>{"// CREATING REPOSITORY"}</span>
           </div>
@@ -635,18 +672,21 @@ function SubmittingScreen({
             error instead of leaving this screen.
           </p>
         </div>
-      </main>
-    </div>
+      </div>
+    </Shell>
   );
 }
 
-function CenteredMessage({ children, onHome }: { children: React.ReactNode; onHome: () => void }) {
+function CenteredMessage({
+  children,
+  onHome: _onHome,
+}: {
+  children: React.ReactNode;
+  onHome: () => void;
+}) {
   return (
-    <div className="min-h-screen">
-      <WizardHeader currentStep={0} total={STEP_TITLES.length} title="Loading" onHome={onHome} />
-      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center text-muted">
-        <span className="label">{children}</span>
-      </main>
+    <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center text-muted">
+      <span className="label">{children}</span>
     </div>
   );
 }
@@ -661,24 +701,21 @@ function ErrorScreen({
   onHome: () => void;
 }) {
   return (
-    <div className="min-h-screen">
-      <WizardHeader currentStep={0} total={STEP_TITLES.length} title="Error" onHome={onHome} />
-      <main className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-6">
-        <div className="panel max-w-md border-err p-6">
-          <h2 className="label text-err">{"// SOMETHING WENT WRONG"}</h2>
-          <p className="mt-3 text-sm">{message}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {onRetry && (
-              <button type="button" onClick={onRetry} className="btn btn-danger">
-                Back to review
-              </button>
-            )}
-            <button type="button" onClick={onHome} className="btn">
-              Wizard home
+    <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center px-6">
+      <div className="panel max-w-md border-err p-6">
+        <h2 className="label text-err">{"// SOMETHING WENT WRONG"}</h2>
+        <p className="mt-3 text-sm">{message}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="btn btn-danger">
+              Back to review
             </button>
-          </div>
+          )}
+          <button type="button" onClick={onHome} className="btn">
+            Wizard home
+          </button>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
