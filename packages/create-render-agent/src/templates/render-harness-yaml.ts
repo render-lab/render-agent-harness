@@ -58,7 +58,8 @@ export function buildHarnessConfig(answers: Answers): Record<string, unknown> {
     const templateCaps = readTemplateCapabilities(answers.templateManifest);
     cfg.capabilities = answers.capabilities.map((c) => {
       const fromTemplate = templateCaps.get(c.pack);
-      return fromTemplate ?? { pack: c.pack };
+      const base = fromTemplate ?? { pack: c.pack };
+      return retargetCapabilityConfig(base, answers.agentName);
     });
   }
 
@@ -107,6 +108,25 @@ function readTemplateCapabilities(
     }
   }
   return map;
+}
+
+/**
+ * Capability packs carried over from a gallery template often pin the
+ * connector to the template's own agent id (e.g. `agent: support-bot`).
+ * The wizard is single-agent, so the scaffolded project has exactly one
+ * agent whose id is `answers.agentName`. Rewrite any `config.agent` value
+ * to point at that agent so the connector dispatches to the right place
+ * out-of-the-box.
+ */
+function retargetCapabilityConfig(
+  cap: Record<string, unknown>,
+  agentName: string,
+): Record<string, unknown> {
+  const config = cap.config;
+  if (!config || typeof config !== "object") return cap;
+  const original = config as Record<string, unknown>;
+  if (!("agent" in original)) return cap;
+  return { ...cap, config: { ...original, agent: agentName } };
 }
 
 function runtimeToYaml(r: RuntimeSelection): Record<string, unknown> {

@@ -1,7 +1,7 @@
 schemaVersion: 1
 name: render-lab-wizard
 description: Browser wizard that scaffolds Render agent projects and creates managed GitHub repos.
-harnessVersion: "^0.1"
+harnessVersion: "^0.2"
 license: MIT
 
 shared:

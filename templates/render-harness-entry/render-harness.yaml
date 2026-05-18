@@ -1,7 +1,7 @@
 schemaVersion: 1
 name: my-agent
 description: Replace this with a one-line description of your agent.
-harnessVersion: "^0.1"
+harnessVersion: "^0.2"
 license: MIT
 
 # Bundle-wide defaults applied to every agent unless overridden.

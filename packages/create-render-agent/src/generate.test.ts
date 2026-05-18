@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { buildFileMap, generate } from "./generate.js";
 import type { Answers, RuntimeSelection } from "./types.js";
+import { DEFAULT_HARNESS_VERSION_RANGE } from "./version-ranges.js";
 
 const BASE: Omit<Answers, "directory" | "runtimes"> = {
   agentName: "my-agent",
@@ -317,8 +318,11 @@ describe("buildFileMap", () => {
     const pkg = JSON.parse(map.get("package.json") ?? "{}") as {
       dependencies: Record<string, string>;
     };
-    expect(pkg.dependencies["@render-harness/core"]).toBe("^0.1.1");
-    expect(pkg.dependencies["@render-harness/registry"]).toBe("^0.1.1");
+    // Range is derived from the current workspace registry version at
+    // build time (see version-ranges.ts) — assert against the same source
+    // of truth so the test never drifts from what the scaffolder emits.
+    expect(pkg.dependencies["@render-harness/core"]).toBe(DEFAULT_HARNESS_VERSION_RANGE);
+    expect(pkg.dependencies["@render-harness/registry"]).toBe(DEFAULT_HARNESS_VERSION_RANGE);
     expect(map.get("README.md")).toContain("published npm packages");
   });
 
@@ -359,6 +363,51 @@ describe("buildFileMap", () => {
     expect(yamlText).toContain("defaultMaxResults: 10"); // preserved capability config
     expect(yamlText).toContain("mcpServers"); // preserved (lands on the one agent)
     expect(yamlText).toContain("RESEARCH_TOPIC"); // preserved (top-level envSchema)
+  });
+
+  it("rewrites capability config.agent to the scaffolded agent id", () => {
+    // Template pins the connector to its own agent id (`support-bot`).
+    // The wizard creates one agent named `slack-smoke` — the scaffolded
+    // capability config must point at that agent, not the template's.
+    const templateManifest = {
+      schemaVersion: 1,
+      name: "support-bot",
+      description: "from template",
+      harnessVersion: "^0.2",
+      shared: { model: { provider: "anthropic", model: "claude-sonnet-4-6" } },
+      capabilities: [
+        {
+          pack: "@render-harness/cap-slack",
+          config: {
+            agent: "support-bot",
+            accessMode: "read_write",
+            signingSecretEnv: "SLACK_SIGNING_SECRET",
+            botTokenEnv: "SLACK_BOT_TOKEN",
+          },
+        },
+      ],
+      agents: [
+        {
+          id: "support-bot",
+          agent: { kind: "builtin", ref: "chat", systemPrompt: "p" },
+          runtimes: [{ kind: "web", plan: "starter" }],
+        },
+      ],
+    };
+    const yamlText =
+      buildFileMap({
+        ...BASE,
+        directory: "/tmp/retarget",
+        agentName: "slack-smoke",
+        runtimes: [{ kind: "web" }, { kind: "worker", queue: "slack-smoke-runs" }],
+        capabilities: [{ pack: "@render-harness/cap-slack" }],
+        templateManifest,
+      }).get("render-harness.yaml") ?? "";
+    expect(yamlText).toContain("agent: slack-smoke");
+    expect(yamlText).not.toContain("agent: support-bot");
+    // Other template config fields are preserved unchanged.
+    expect(yamlText).toContain("accessMode: read_write");
+    expect(yamlText).toContain("signingSecretEnv: SLACK_SIGNING_SECRET");
   });
 
   it("emits dev:<kind> scripts only for multi-runtime layouts", () => {

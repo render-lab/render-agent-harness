@@ -1,7 +1,7 @@
 schemaVersion: 1
 name: citations-monitor
 description: Daily AEO audit cron. Queries an AI search engine, records whether your brand was cited, summarizes results.
-harnessVersion: "^0.1"
+harnessVersion: "^0.2"
 license: MIT
 categories: [cron, aeo, monitoring]
 

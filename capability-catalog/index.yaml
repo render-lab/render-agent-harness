@@ -9,8 +9,8 @@ capabilities:
     docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-webhook-generic
     license: MIT
     maintainer: render-harness
-    versionRange: "^0.1"
-    requiresHarness: "^0.1"
+    versionRange: "^0.2"
+    requiresHarness: "^0.2"
     features: [connectors]
     envVars:
       - name: WEBHOOK_SECRET
@@ -41,8 +41,8 @@ capabilities:
     docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-github
     license: MIT
     maintainer: render-harness
-    versionRange: "^0.1"
-    requiresHarness: "^0.1"
+    versionRange: "^0.2"
+    requiresHarness: "^0.2"
     features: [tools, connectors]
     envVars:
       - name: GITHUB_WEBHOOK_SECRET
@@ -85,8 +85,8 @@ capabilities:
     docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-linear
     license: MIT
     maintainer: render-harness
-    versionRange: "^0.1"
-    requiresHarness: "^0.1"
+    versionRange: "^0.2"
+    requiresHarness: "^0.2"
     features: [tools, connectors]
     envVars:
       - name: LINEAR_WEBHOOK_SECRET
@@ -126,8 +126,8 @@ capabilities:
     docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-slack
     license: MIT
     maintainer: render-harness
-    versionRange: "^0.1"
-    requiresHarness: "^0.1"
+    versionRange: "^0.2"
+    requiresHarness: "^0.2"
     features: [tools, connectors]
     envVars:
       - name: SLACK_SIGNING_SECRET

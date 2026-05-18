@@ -1,7 +1,7 @@
 schemaVersion: 1
 name: support-agent
 description: Slack-driven support agent. Public web receives Slack Events; private worker pserv runs the agent against the Slack MCP and posts replies.
-harnessVersion: "^0.1"
+harnessVersion: "^0.2"
 license: MIT
 categories: [slack, support, production-shape]
 
