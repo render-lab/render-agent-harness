@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-memory-pg",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Postgres-backed long-term memory for the Render agent harness.",
   "type": "module",
   "license": "MIT",

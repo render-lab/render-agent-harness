@@ -1,5 +1,12 @@
 # @render-harness/web
 
+## 0.8.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/registry@0.8.2
+
 ## 0.8.1
 
 ### Patch Changes

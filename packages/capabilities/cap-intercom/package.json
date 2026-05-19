@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-intercom",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Intercom capability pack for the Render agent harness. Inbound webhook + per-end-user OAuth tools for replying, assigning, tagging, closing, and snoozing conversations.",
   "type": "module",
   "license": "MIT",

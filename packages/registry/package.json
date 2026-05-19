@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/registry",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Config registry for the Render agent harness. Schema for render-harness.yaml, capability-pack contract, runtime loader, and Blueprint emitter.",
   "type": "module",
   "license": "MIT",

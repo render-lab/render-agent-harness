@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/wizard",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "description": "Browser wizard that scaffolds a Render agent project, creates a managed GitHub repo, and returns a Deploy-to-Render link. Phase 3 of the onboarding direction. Deployed as a Render web service from this repo; not published to npm.",
   "type": "module",

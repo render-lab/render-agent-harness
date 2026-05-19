@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-scrape-firecrawl",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Firecrawl scrape capability pack with optional Postgres persistence.",
   "type": "module",
   "license": "MIT",
