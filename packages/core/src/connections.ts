@@ -98,6 +98,23 @@ export interface OAuthProviderConfig {
    * swallowed; the label just stays null.
    */
   fetchAccountLabel?: (accessToken: string) => Promise<string | undefined>;
+  /**
+   * Set to `true` for providers that issue long-lived access tokens
+   * with no `refresh_token` (Notion's default flow, Stripe Connect's
+   * standard-account flow, some legacy SaaS). When unset (default),
+   * `exchangeAuthorizationCode` throws if the token endpoint omits a
+   * refresh_token — that's the right behaviour for Google / Microsoft /
+   * Atlassian / etc. where missing-refresh-token is almost always a
+   * misconfigured scope (Google's `access_type=offline + prompt=consent`,
+   * Microsoft's `offline_access`).
+   *
+   * When `true`, refresh-on-use becomes a no-op: the stored access
+   * token is returned unchanged from `SecretsContext.requireConnection`
+   * until the operator manually re-runs the connect flow. Pack tools
+   * should handle the eventual 401 from the provider with a clear
+   * "re-connect at /ui/connections" message.
+   */
+  refreshTokenOptional?: boolean;
 }
 
 export interface ParsedTokenResponse {
@@ -430,9 +447,9 @@ export async function exchangeAuthorizationCode(
   });
   const raw = await readJsonOrThrow(res);
   const parsed = (args.provider.parseTokenResponse ?? defaultParseTokenResponse)(raw);
-  if (!parsed.refreshToken) {
+  if (!parsed.refreshToken && !args.provider.refreshTokenOptional) {
     throw new Error(
-      `provider "${args.provider.id}" did not return a refresh_token. Check that scopes include offline access (e.g. Google's access_type=offline + prompt=consent, Microsoft's offline_access).`,
+      `provider "${args.provider.id}" did not return a refresh_token. Check that scopes include offline access (e.g. Google's access_type=offline + prompt=consent, Microsoft's offline_access). If this provider deliberately doesn't issue refresh tokens (Notion's default flow, Stripe Connect, etc.), set refreshTokenOptional: true on its OAuthProviderConfig.`,
     );
   }
   return parsed;
@@ -619,6 +636,15 @@ async function refreshAndLoad(args: {
     const expiresAt = new Date(bundle.expiresAt);
     const needsRefresh = expiresAt.getTime() - Date.now() < REFRESH_LEAD_MS;
     if (!needsRefresh) {
+      await client.query("COMMIT");
+      return toAccess(provider.id, bundle);
+    }
+    // Providers with `refreshTokenOptional: true` (Notion's default
+    // flow, etc.) don't issue refresh tokens, so refresh-on-use is a
+    // no-op: return the stored access token unchanged. The eventual
+    // provider-side 401 surfaces to the pack tool, which should tell
+    // the user to reconnect.
+    if (provider.refreshTokenOptional || !bundle.refreshToken) {
       await client.query("COMMIT");
       return toAccess(provider.id, bundle);
     }

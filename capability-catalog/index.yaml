@@ -191,6 +191,49 @@ capabilities:
       reviewStatus: maintainer-reviewed
     trustTier: official
 
+  - package: "@render-harness/cap-notion"
+    name: Notion
+    description: Notion pages, databases, and workspace search via per-end-user OAuth. 8 tools across pages, databases, and search; 2 skills. First non-Google validation of the connection API.
+    categories: [tools, notion, knowledge, wiki, oauth]
+    provider: Notion
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-notion
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.6"
+    requiresHarness: "^0.6"
+    features: [tools]
+    envVars:
+      - name: NOTION_OAUTH_CLIENT_ID
+        required: true
+        secret: false
+        description: Notion public integration OAuth client id.
+      - name: NOTION_OAUTH_CLIENT_SECRET
+        required: true
+        secret: true
+        description: Notion public integration OAuth client secret.
+      - name: CONNECTIONS_ENCRYPTION_KEY
+        required: true
+        secret: true
+        description: >-
+          32-byte base64 secret used by the harness to encrypt refresh tokens at rest.
+          Generate with `openssl rand -base64 32`.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        Per-end-user OAuth via the harness connection API. Notion issues long-lived access
+        tokens with no refresh token (refreshTokenOptional: true is set on the provider
+        config). End users also need to share each page/database with the integration via
+        Notion's "Add connections" menu.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-notion test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
   - package: "@render-harness/cap-google"
     name: Google Workspace
     description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.

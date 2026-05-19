@@ -254,7 +254,12 @@ export function registerConnectionsRoutes(app: Hono, ctx: ConnectionsRouteContex
       );
     }
 
-    const expiresAt = new Date(Date.now() + (parsed.expiresIn ?? 3600) * 1000);
+    // Providers with `refreshTokenOptional: true` issue long-lived
+    // tokens (Notion's default flow, etc.). When the response doesn't
+    // include `expires_in`, anchor the stored `expires_at` far in the
+    // future so refresh-on-use never fires.
+    const fallbackExpirySec = provider.refreshTokenOptional ? 60 * 60 * 24 * 365 * 100 : 3600;
+    const expiresAt = new Date(Date.now() + (parsed.expiresIn ?? fallbackExpirySec) * 1000);
     let accountLabel: string | undefined;
     if (provider.fetchAccountLabel) {
       try {
@@ -272,9 +277,10 @@ export function registerConnectionsRoutes(app: Hono, ctx: ConnectionsRouteContex
       {
         userId: claims.userId,
         provider: provider.id,
-        // refreshToken is guaranteed by exchangeAuthorizationCode (it
-        // throws if the provider didn't return one).
-        refreshToken: parsed.refreshToken as string,
+        // refreshToken is guaranteed by exchangeAuthorizationCode for
+        // standard providers; long-lived no-refresh providers
+        // (`refreshTokenOptional: true`) store an empty string sentinel.
+        refreshToken: parsed.refreshToken ?? "",
         accessToken: parsed.accessToken,
         expiresAt,
         scopes: parsed.scopes ?? provider.defaultScopes,
