@@ -169,6 +169,60 @@ agents:
       - "@render-harness/cap-slack"
     author: "render-harness"
 
+  - slug: release-notes-cron
+    name: "Release notes cron"
+    description: "Weekly cron that drafts release notes from merged GitHub PRs in the last 7 days."
+    path: ./agents/release-notes-cron
+    surface: ["github"]
+    audience: ["eng"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 3 — Email + calendar
+  # ----------------------------------------------------------------
+  - slug: gmail-triage
+    name: "Gmail triage"
+    description: "Per-user Gmail triage. Labels incoming mail and suggests follow-ups. Per-end-user OAuth via the harness connections API."
+    path: ./agents/gmail-triage
+    surface: ["email"]
+    audience: ["personal", "ops"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.5"
+    capabilities:
+      - "@render-harness/cap-google"
+    author: "render-harness"
+
+  - slug: inbox-digest-cron
+    name: "Inbox digest cron"
+    description: "Daily 8am cron that emails a morning 'what matters today' briefing pulled from Gmail + Calendar."
+    path: ./agents/inbox-digest-cron
+    surface: ["email", "calendar"]
+    audience: ["personal", "ops"]
+    runtimeKinds: ["cron", "web", "worker"]
+    requiresHarness: "^0.5"
+    capabilities:
+      - "@render-harness/cap-google"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: meeting-prepper
+    name: "Meeting prepper"
+    description: "Cron every 15 min — drops a 1-pager into memory for any meeting starting within the next hour."
+    path: ./agents/meeting-prepper
+    surface: ["calendar"]
+    audience: ["personal", "hiring"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.5"
+    capabilities:
+      - "@render-harness/cap-google"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
   # ----------------------------------------------------------------
   # Tier 4 — Research + content
   # ----------------------------------------------------------------
@@ -199,6 +253,34 @@ agents:
       - "@render-harness/cap-memory-pg"
     author: "render-harness"
 
+  - slug: competitive-intel
+    name: "Competitive intel"
+    description: "Weekly cron — scrapes competitor URLs, diffs against last week, and writes a memo into memory."
+    path: ./agents/competitive-intel
+    surface: []
+    audience: ["growth", "content"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-scrape-firecrawl"
+      - "@render-harness/cap-search-exa"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: topic-deep-dive
+    name: "Topic deep dive"
+    description: "Workflows-mode research agent. Takes a topic, drafts an outline (HITL), then produces a multi-section report grounded in scraped sources."
+    path: ./agents/topic-deep-dive
+    surface: []
+    audience: ["content", "growth", "eng"]
+    runtimeKinds: ["workflows"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-search-exa"
+      - "@render-harness/cap-scrape-firecrawl"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
   # ----------------------------------------------------------------
   # Tier 5 — Site + browser
   # ----------------------------------------------------------------
@@ -212,6 +294,78 @@ agents:
     requiresHarness: "^0.2"
     capabilities:
       - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  - slug: changelog-watcher
+    name: "Changelog watcher"
+    description: "Weekly cron — scrapes vendor changelog pages, diffs against last week's snapshot, and writes a 'what's new' memo."
+    path: ./agents/changelog-watcher
+    surface: []
+    audience: ["eng", "ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-scrape-firecrawl"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: browser-scout
+    name: "Browser scout"
+    description: "Web-research agent that uses a real headless browser (Browserbase) so it can read JS-heavy, Cloudflare-protected, or login-walled sites."
+    path: ./agents/browser-scout
+    surface: ["browser"]
+    audience: ["eng", "content", "growth"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-browser-browserbase"
+      - "@render-harness/cap-search-exa"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: form-filler
+    name: "Form filler"
+    description: "Workflows-mode agent that completes a multi-step web form using Browserbase. HITL approval before the final submit."
+    path: ./agents/form-filler
+    surface: ["browser"]
+    audience: ["ops", "personal"]
+    runtimeKinds: ["workflows"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-browser-browserbase"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 6 — Webhooks + integrations
+  # ----------------------------------------------------------------
+  - slug: webhook-router
+    name: "Webhook router"
+    description: "Generic HMAC-verified webhook → classify → fan out to Slack notify or Linear ticket."
+    path: ./agents/webhook-router
+    surface: ["webhook", "slack", "linear"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-webhook-generic"
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-linear"
+    author: "render-harness"
+
+  - slug: calendly-prep
+    name: "Calendly prep"
+    description: "Calendly webhook → calendar + memory lookup → 1-pager about the attendee posted to Slack."
+    path: ./agents/calendly-prep
+    surface: ["webhook", "calendar", "email", "slack"]
+    audience: ["sales", "hiring"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.5"
+    capabilities:
+      - "@render-harness/cap-webhook-generic"
+      - "@render-harness/cap-google"
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
     author: "render-harness"
 
   # ----------------------------------------------------------------
@@ -238,6 +392,19 @@ agents:
     requiresHarness: "^0.2"
     capabilities:
       - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  - slug: etl-cron
+    name: "ETL cron"
+    description: "Cron that pulls a public dataset (HTTP), snapshots it to a Render disk via cap-filesystem, and writes normalized rows to memory."
+    path: ./agents/etl-cron
+    surface: ["filesystem"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-filesystem"
+      - "@render-harness/cap-memory-pg"
     author: "render-harness"
 
   # ----------------------------------------------------------------

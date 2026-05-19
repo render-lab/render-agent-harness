@@ -1,0 +1,72 @@
+schemaVersion: 1
+name: meeting-prepper
+description: Cron every 15 min — drops a 1-pager into memory for any meeting starting within the next hour.
+harnessVersion: "^0.5"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  sampling:
+    temperature: 0.2
+  budget:
+    maxIterations: 30
+    maxWallSeconds: 600
+
+capabilities:
+  - pack: "@render-harness/cap-google"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    required: true
+    secret: false
+    description: Google Cloud OAuth 2.0 client id.
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    required: true
+    secret: true
+    description: Google Cloud OAuth 2.0 client secret.
+  - name: CONNECTIONS_ENCRYPTION_KEY
+    required: true
+    secret: true
+    description: 32-byte base64 secret; generate with `openssl rand -base64 32`.
+
+agents:
+  - id: meeting-prepper
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a meeting-prep agent that runs every 15 minutes on a cron.
+        Each invocation is one-shot — no user is typing to you.
+
+        Loop:
+
+        1. Call `current_time` to anchor "now" in the user's timezone.
+        2. Call `cap-google__calendar_list_events` for events starting in
+           the next 60 minutes (use the connected user's primary calendar).
+        3. For each upcoming event:
+           a. Call `cap-memory-pg__search` for the event id — skip if a
+              recent prep note already exists.
+           b. Search memory for any prior context with the attendees (by
+              name or email), recent decisions on the meeting topic, open
+              threads tagged for this person.
+           c. Compose a tight 1-page brief (markdown): attendees, what we
+              talked about last time, open threads, 2-3 suggested talking
+              points. Reference memory hits by key.
+           d. Store via `cap-memory-pg__write` with key
+              `meeting-prep:<event-id>` and tags `["meeting-prep"]`.
+        4. Return a short status line (e.g. "Drafted 2 briefs; skipped 3
+           already in memory; calendar had 5 upcoming").
+
+        Hard rules: one brief per event; never re-write existing briefs;
+        never invent attendees or topics; keep briefs under 400 words.
+        Exit cleanly if the calendar feed is empty.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "*/15 * * * *"
+      - kind: web
+        plan: starter

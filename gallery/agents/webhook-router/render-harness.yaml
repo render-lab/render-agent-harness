@@ -1,0 +1,83 @@
+schemaVersion: 1
+name: webhook-router
+description: Generic HMAC-verified webhook → classify → fan out to Slack notify or Linear ticket.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+      - cap-linear__linear_create_issue
+
+capabilities:
+  - pack: "@render-harness/cap-webhook-generic"
+    config:
+      webhookSecretEnv: WEBHOOK_SECRET
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: webhook-router
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-linear"
+    config:
+      agent: webhook-router
+      accessMode: read_write
+      apiKeyEnv: LINEAR_API_KEY
+
+envSchema:
+  - name: ROUTING_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug where notify-bucket events
+      are posted.
+  - name: ROUTING_TEAM
+    required: false
+    secret: false
+    description: |
+      Linear team id where ticket-bucket events become issues. Optional —
+      omit to disable the ticket bucket entirely.
+
+agents:
+  - id: webhook-router
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You receive arbitrary HMAC-verified webhook events at
+        `/connectors/webhook-generic`, classify them, and route to one of:
+
+        - **notify**: post a one-line Slack notification to
+          `${ROUTING_CHANNEL}` via `cap-slack__slack_send_message`. Use
+          for transient signals: deploy succeeded, monitoring all-clear,
+          informational pings.
+        - **ticket**: create a Linear issue in `${ROUTING_TEAM}` via
+          `cap-linear__linear_create_issue`. Use for things that need
+          tracked follow-up: failed deploys, monitoring incidents,
+          customer reports.
+        - **drop**: log the reason and do nothing. Use for known-noise
+          events you'd otherwise have to filter at source.
+
+        Classification rules:
+        - Severity hints in payload (`severity: critical`, `level: error`)
+          push toward ticket.
+        - Success / OK / resolved events push toward notify.
+        - Heartbeats, healthchecks, and known-spam senders go to drop.
+
+        If a payload is ambiguous (no severity, unfamiliar shape), default
+        to notify with a "(unclassified — review)" prefix. Never drop
+        silently on something you don't understand — surface it.
+
+        Both Slack and Linear actions are HITL-gated by default; remove
+        from `permissions.requireApproval` once you trust the routing.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: webhook-router-runs

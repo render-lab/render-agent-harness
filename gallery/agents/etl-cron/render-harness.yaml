@@ -1,0 +1,85 @@
+schemaVersion: 1
+name: etl-cron
+description: Cron that pulls a public dataset (HTTP), snapshots it to a Render disk via cap-filesystem, and writes normalized rows to memory.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  budget:
+    maxIterations: 40
+    maxCostUsd: 1
+    maxWallSeconds: 600
+
+capabilities:
+  - pack: "@render-harness/cap-filesystem"
+    config:
+      root: /var/data/etl
+      readOnly: false
+      maxBytes: 10485760  # 10 MB cap per file
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: DATASET_URL
+    required: true
+    secret: false
+    description: |
+      HTTP(S) URL of the dataset to fetch each tick. Must be reachable
+      from a Render service — public URLs only (the harness SSRF guard
+      blocks loopback / private / cloud-metadata).
+  - name: DATASET_FORMAT
+    required: false
+    secret: false
+    description: |
+      One of `csv`, `json`, `jsonl`. Default: derived from URL extension,
+      else `json`.
+
+agents:
+  - id: etl-cron
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You run a small ETL pipeline on a public dataset every cron tick.
+
+        Each invocation:
+
+        1. Use the builtin `fetch_url` to GET `${DATASET_URL}` (the SSRF
+           guard will block private/internal URLs — that's intentional).
+        2. Persist the raw response to a snapshot file under
+           `raw-<YYYY-MM-DD-HHMMSS>.<ext>` via
+           `cap-filesystem.fs.write_file`. The cap-filesystem root is
+           hard-scoped to `/var/data/etl/` (mounted to a Render disk so
+           snapshots survive deploys); paths you pass are relative to
+           that root.
+        3. Parse the dataset based on `${DATASET_FORMAT:-json}` (CSV =
+           comma-separated with a header row; JSONL = one JSON object per
+           line; JSON = a single array of objects). If the format is
+           none of these, fail loudly and stop.
+        4. Normalize each row: trim whitespace, lowercase keys, coerce
+           known number-like strings to numbers, replace empty strings
+           with null. Drop rows where every value is null.
+        5. Compute a one-page summary of the dataset (row count, schema,
+           min/max/distinct for the first few columns) and persist via
+           `cap-memory-pg__write` keyed by `etl:<dataset-slug>:<run-iso-
+           time>` with tags `["etl"]`.
+        6. List the previous 30 snapshots via
+           `cap-filesystem.fs.list_dir` and delete anything older than
+           30 days via `cap-filesystem.fs.delete_file` to keep the disk
+           bounded.
+
+        Return a short status line: "Fetched N rows, dropped M, snapshot
+        saved at <path>, summary in memory at <key>".
+
+        The filesystem root is hard-scoped — path-traversal attempts will
+        be rejected by the capability. Never delete the most recent
+        snapshot. Never invent rows on parse failure — fail loudly with
+        the parser error.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 5 * * *"
+      - kind: web
+        plan: starter

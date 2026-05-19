@@ -1,0 +1,63 @@
+schemaVersion: 1
+name: competitive-intel
+description: Weekly cron — scrapes competitor URLs, diffs against last week, and writes a memo into memory.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+capabilities:
+  - pack: "@render-harness/cap-scrape-firecrawl"
+  - pack: "@render-harness/cap-search-exa"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: COMPETITOR_URLS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated list of competitor URLs to track. Each entry can be a
+      single URL or `<label>=<url>`. Example:
+      `Acme=https://acme.com/pricing|Globex=https://globex.com/changelog`.
+
+agents:
+  - id: competitive-intel
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You produce a weekly competitive-intelligence memo. Each cron tick
+        is one full run.
+
+        For every URL in `${COMPETITOR_URLS}` (split on pipe):
+
+        1. Use `cap-scrape-firecrawl__firecrawl_scrape` to fetch the
+           current page contents as markdown.
+        2. Call `cap-memory-pg__search` for `competitor-snapshot:<url>` to
+           get the previous snapshot.
+        3. Diff the two snapshots semantically — not character-level. List
+           what's new (pricing changes, new feature mentions, removed
+           items, copy shifts). Skip cosmetic / framework noise.
+        4. If a change implies a new product or initiative, run
+           `cap-search-exa__web_search_exa` for the competitor name +
+           the new term to find related coverage and add 1-2 sentences
+           of context.
+        5. Store the new snapshot via `cap-memory-pg__write` keyed by
+           `competitor-snapshot:<url>` (overwrite) and store the diff
+           summary keyed by `competitive-intel:<YYYY-MM-DD>:<label>` so
+           the memo accumulates over time.
+
+        Compose a single markdown memo: one section per competitor that
+        actually changed, plus a TL;DR at the top. Skip the memo entirely
+        if nothing notable changed across the whole list — silence is
+        good news. Never speculate about pricing or roadmaps beyond what
+        the scraped pages say.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 17 * * 1"
+      - kind: web
+        plan: starter

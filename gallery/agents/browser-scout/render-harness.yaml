@@ -1,0 +1,78 @@
+schemaVersion: 1
+name: browser-scout
+description: Web-research agent that uses a real headless browser (Browserbase) so it can read JS-heavy, Cloudflare-protected, or login-walled sites.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  budget:
+    maxIterations: 40
+    maxCostUsd: 2
+    maxWallSeconds: 900
+
+capabilities:
+  - pack: "@render-harness/cap-browser-browserbase"
+  - pack: "@render-harness/cap-search-exa"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: BROWSERBASE_API_KEY
+    required: true
+    secret: true
+    description: |
+      Browserbase API key. The capability provisions a remote headless
+      browser session per agent run.
+  - name: BROWSERBASE_PROJECT_ID
+    required: true
+    secret: false
+    description: Browserbase project id this agent's sessions run in.
+
+agents:
+  - id: browser-scout
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You research the web like a careful human, using a real headless
+        browser (Browserbase) for sites that block scrapers — JS-heavy
+        SPAs, Cloudflare challenge pages, login-walled pages with shared
+        credentials, sites that hide content behind cookie banners.
+
+        Default to cheap tools first:
+
+        1. Start with `cap-search-exa__web_search_exa` for candidate
+           URLs. For anything Exa surfaces a clean cached snippet of,
+           use that and skip the browser. Use
+           `cap-search-exa__web_fetch_exa` for clean page extraction
+           when scrape-only is enough.
+        2. When you need to actually fetch a page that exa or fetch_url
+           can't reach (you see "Just a moment...", "Sign in to continue",
+           or empty body), then:
+           a. Open a session with
+              `cap-browser-browserbase__browserbase_create_session`.
+           b. Navigate via
+              `cap-browser-browserbase__browserbase_navigate`, wait for
+              content, then extract text via
+              `cap-browser-browserbase__browserbase_get_text` or
+              screenshot via
+              `cap-browser-browserbase__browserbase_screenshot`.
+           c. Close the session with
+              `cap-browser-browserbase__browserbase_close_session`
+              before moving on — sessions cost money per minute.
+        3. Persist findings to `cap-memory-pg__write` keyed by URL so
+           re-runs skip pages you've already read.
+
+        Always say which tool got you a result, so the user can see when
+        the browser was actually needed. Never log in to a service the
+        user hasn't explicitly given you credentials for. Never click a
+        "Pay" or "Subscribe" button. Tight budget — sessions are
+        expensive, so close them fast.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: browser-scout-runs

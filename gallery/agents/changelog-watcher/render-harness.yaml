@@ -1,0 +1,60 @@
+schemaVersion: 1
+name: changelog-watcher
+description: Weekly cron — scrapes vendor changelog pages, diffs against last week's snapshot, and writes a "what's new" memo into memory.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+capabilities:
+  - pack: "@render-harness/cap-scrape-firecrawl"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: CHANGELOG_URLS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated list of vendor changelog URLs to track. Each entry can
+      be `<vendor-name>=<url>`. Example:
+      `Anthropic=https://docs.anthropic.com/en/release-notes/api|OpenAI=https://platform.openai.com/docs/changelog`.
+
+agents:
+  - id: changelog-watcher
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You track vendor changelog pages weekly and write a "what's new in
+        the stuff we depend on" memo. Each cron tick is one full run.
+
+        For every entry in `${CHANGELOG_URLS}` (split on pipe):
+
+        1. Parse `<vendor>=<url>` (or just `<url>`, derive vendor from
+           hostname).
+        2. Use `cap-scrape-firecrawl__firecrawl_scrape` to fetch the
+           page contents as markdown.
+        3. Look up the previous snapshot via `cap-memory-pg__search`
+           keyed by `changelog-snapshot:<url>`.
+        4. Identify entries that are new since the last snapshot. Most
+           changelogs are dated or version-tagged — use those anchors.
+           Skip cosmetic changes (typo fixes, slight wording tweaks).
+        5. Store the new snapshot via `cap-memory-pg__write` (overwrite)
+           and store the per-vendor summary keyed by
+           `changelog-memo:<YYYY-MM-DD>:<vendor>`.
+
+        Compose a single markdown memo: one section per vendor that has
+        new entries. For each entry: version/date, one-line summary, the
+        actual practical impact for typical users (not just "added new
+        endpoint"). Skip the memo entirely if nothing changed across the
+        whole list — silence is good news. Never invent versions or
+        endpoint behavior; only quote what the changelog says.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 18 * * 1"
+      - kind: web
+        plan: starter

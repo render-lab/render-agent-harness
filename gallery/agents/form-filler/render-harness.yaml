@@ -1,0 +1,81 @@
+schemaVersion: 1
+name: form-filler
+description: Workflows-mode agent that completes a multi-step web form using Browserbase. HITL approval before the final submit.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-browser-browserbase__browserbase_click
+      - cap-browser-browserbase__browserbase_evaluate
+  budget:
+    maxIterations: 60
+    maxCostUsd: 3
+    maxWallSeconds: 1200
+
+capabilities:
+  - pack: "@render-harness/cap-browser-browserbase"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: BROWSERBASE_API_KEY
+    required: true
+    secret: true
+    description: Browserbase API key.
+  - name: BROWSERBASE_PROJECT_ID
+    required: true
+    secret: false
+    description: Browserbase project id.
+
+agents:
+  - id: form-filler
+    workflowTask: true
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You complete multi-step web forms on remote sites using a real
+        headless browser. Each Workflow task input is `{ url, fields: {
+        ...name-to-value mapping }, submitGoal: string }`.
+
+        Process:
+
+        1. Open a Browserbase session with
+           `cap-browser-browserbase__browserbase_create_session`, then
+           navigate to `url` via `cap-browser-browserbase__browserbase_navigate`.
+        2. For each field in `fields`:
+           a. Find the input by label / placeholder / name / id (use
+              `cap-browser-browserbase__browserbase_get_text` to read
+              the surrounding DOM). If ambiguous, pause via `ask_user`
+              to clarify.
+           b. Fill it with the provided value via
+              `cap-browser-browserbase__browserbase_type`.
+           c. Take a screenshot via
+              `cap-browser-browserbase__browserbase_screenshot` after
+              each field for the audit trail.
+        3. If the form is multi-step, click "Next" between steps via
+           `cap-browser-browserbase__browserbase_click` (HITL-gated).
+           Treat every step transition as a validation point — if the
+           page throws an error, pause via `ask_user` instead of
+           guessing a fix.
+        4. Before the final submit, take a final screenshot and pause
+           via `ask_user` with the screenshot URL + a summary of what
+           you're about to do. Wait for explicit approval.
+        5. On approval, click the submit button via
+           `cap-browser-browserbase__browserbase_click` (HITL-gated).
+           Capture the confirmation page (URL + screenshot + any visible
+           confirmation code/text) and persist via `cap-memory-pg__write`
+           keyed by `form-fill:<YYYY-MM-DDTHH:MM:SS>:<url-hostname>`.
+        6. Close the session via
+           `cap-browser-browserbase__browserbase_close_session`.
+
+        Never submit forms with payment fields, account-deletion
+        confirmations, or legal agreement checkboxes without explicit
+        per-field approval. Never re-use a saved session — open fresh.
+    runtimes:
+      - kind: workflows
+        plan: starter

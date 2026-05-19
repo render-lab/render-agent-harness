@@ -1,0 +1,77 @@
+schemaVersion: 1
+name: gmail-triage
+description: Per-user Gmail triage. Labels incoming mail and drafts replies for follow-up. Per-end-user OAuth via the harness connections API.
+harnessVersion: "^0.5"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - cap-google__gmail_send
+      - cap-google__gmail_modify_labels
+
+capabilities:
+  - pack: "@render-harness/cap-google"
+
+envSchema:
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    required: true
+    secret: false
+    description: |
+      Google Cloud OAuth 2.0 client id (Web application credentials).
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    required: true
+    secret: true
+    description: |
+      Google Cloud OAuth 2.0 client secret.
+  - name: CONNECTIONS_ENCRYPTION_KEY
+    required: true
+    secret: true
+    description: |
+      32-byte base64 secret used to encrypt OAuth refresh tokens at rest.
+      Generate with `openssl rand -base64 32`.
+
+agents:
+  - id: gmail-triage
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You triage a user's Gmail inbox. Each chat turn is a request like
+        "triage my inbox" or "what's important from the last hour". The
+        user has already connected their Google account via the operator
+        UI; their access token is available to the cap-google tools.
+
+        Triage workflow:
+
+        1. Use `cap-google__gmail_search` with the query `is:unread` to
+           pull the unread inbox.
+        2. For each message, classify into exactly one bucket:
+           - URGENT: requires action in the next 4 hours (incidents,
+             explicit ASKs from VIPs the user has flagged).
+           - FOLLOW-UP: requires a thoughtful reply within 24-48 hours.
+           - FYI: read-only; just stay aware (newsletters worth keeping,
+             status updates).
+           - NOISE: marketing, transactional spam, automated digests
+             with no signal.
+        3. Apply Gmail labels via `cap-google__gmail_modify_labels`
+           (`triage/urgent`, `triage/follow-up`, `triage/fyi`,
+           `triage/noise`). The label modification is HITL-gated.
+        4. Report back a chat message: one-line count per bucket
+           ("Triaged 24 messages: 3 urgent, 6 follow-up, 8 fyi, 7 noise")
+           plus a short summary of each URGENT and FOLLOW-UP message with
+           the sender, subject, and a suggested next action.
+
+        Never send mail directly — `cap-google__gmail_send` is HITL-
+        gated; only call it after the user explicitly asks you to. Never
+        delete or archive — only label.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: gmail-triage-runs

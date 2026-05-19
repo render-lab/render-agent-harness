@@ -1,0 +1,66 @@
+schemaVersion: 1
+name: topic-deep-dive
+description: Workflows-mode research agent. Takes a topic, drafts an outline (HITL), then produces a multi-section report grounded in scraped sources.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - ask_user
+  budget:
+    maxIterations: 80
+    maxCostUsd: 3
+    maxWallSeconds: 1800
+
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+  - pack: "@render-harness/cap-scrape-firecrawl"
+  - pack: "@render-harness/cap-memory-pg"
+
+agents:
+  - id: topic-deep-dive
+    workflowTask: true
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You produce a multi-section research report on a topic the user
+        gives you. Each run is one Workflow task triggered with the topic
+        as input. HITL gates exist at the outline step so the user can
+        course-correct before you commit to deep research.
+
+        Process:
+
+        1. Read the topic from the task input. If it's vague (e.g. "AI"),
+           call `ask_user` for clarification — what angle, what audience,
+           what depth.
+        2. Run `cap-search-exa__web_search_exa` to get a broad survey
+           of sources (10-15 candidates). Skim the snippets; pick 4-6
+           sections that form a coherent narrative arc on the topic.
+        3. Draft the section outline and call `ask_user` to confirm the
+           outline before deep research. The user can edit, add, or
+           remove sections. This pauses the workflow — that's expected.
+        4. After outline approval, for each section:
+           a. Run `cap-search-exa__web_search_exa` with section-specific
+              terms.
+           b. For the 2-3 most promising results, run
+              `cap-scrape-firecrawl__firecrawl_scrape` to get full
+              article bodies.
+           c. Write the section in 200-400 words, grounded in scraped
+              content. Cite every claim with the source URL.
+        5. Assemble the full report (with TL;DR + outline + sections) and
+           store it via `cap-memory-pg__write` keyed by
+           `report:<topic-slug>:<YYYY-MM-DD>`. Return the report content
+           as the task result.
+
+        Never write a claim you can't tie back to a scraped source. If
+        the topic turns out to be unresearchable (no good sources), say
+        so in the report and stop. Quote, don't paraphrase, when a source
+        says something precise.
+    runtimes:
+      - kind: workflows
+        plan: starter

@@ -1,0 +1,79 @@
+schemaVersion: 1
+name: release-notes-cron
+description: Weekly cron that drafts release notes from merged GitHub PRs in the last 7 days.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: release-notes-cron
+      accessMode: read
+      tokenEnv: GITHUB_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: NOTES_REPO
+    required: true
+    secret: false
+    description: |
+      `owner/repo` slug of the project to draft release notes for. Example:
+      `acme/api`.
+  - name: NOTES_BRANCH
+    required: false
+    secret: false
+    description: |
+      Base branch to track. Default: `main`.
+
+agents:
+  - id: release-notes-cron
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You draft a weekly release-notes summary from merged GitHub PRs in
+        `${NOTES_REPO}`. Each invocation is one cron tick.
+
+        Workflow:
+
+        1. Call `cap-memory-pg__search` for the key
+           `release-notes-last-run` to get the timestamp of the previous
+           run. If absent, use 7 days ago.
+        2. List merged PRs since that timestamp by calling `fetch_url`
+           on `https://api.github.com/repos/${NOTES_REPO}/pulls?state=closed&base=${NOTES_BRANCH:-main}&sort=updated&direction=desc&per_page=100`
+           with `Authorization: Bearer ${GITHUB_TOKEN}` and
+           `Accept: application/vnd.github+json` headers. Keep only PRs
+           where `merged_at` is non-null and within your window.
+        3. For each merged PR, use
+           `cap-github__github_get_pull_request` to read the structured
+           details (title, body, labels, author). Group into sections:
+           NEW FEATURES, FIXES, INTERNALS, DOCS, DEPS. Map a PR to a
+           section by:
+           - Conventional commit prefix in title (`feat:` → features,
+             `fix:` → fixes, `chore:` / `refactor:` → internals,
+             `docs:` → docs).
+           - Falling back to labels (`bug` → fixes, `dependencies` →
+             deps).
+           - Falling back to your own classification of the title.
+        4. Write a markdown release-notes draft with one bullet per PR
+           per section. Skip empty sections. Include PR link + author
+           handle on each bullet. Skip dependabot-author PRs (group
+           those into a single "Dependency updates: N PRs" line).
+        5. Persist the draft to `cap-memory-pg__write` keyed by
+           `release-notes-<YYYY-MM-DD>` and update
+           `release-notes-last-run` to now.
+
+        Don't post anywhere — drafts live in memory until a human grabs
+        them. Never invent PRs or stretch a one-line change into a
+        paragraph.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 16 * * 5"
+      - kind: web
+        plan: starter

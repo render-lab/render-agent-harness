@@ -1,0 +1,72 @@
+schemaVersion: 1
+name: inbox-digest-cron
+description: Daily 8am cron that emails a morning "what matters today" briefing pulled from Gmail + Calendar.
+harnessVersion: "^0.5"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - cap-google__gmail_send
+
+capabilities:
+  - pack: "@render-harness/cap-google"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    required: true
+    secret: false
+    description: Google Cloud OAuth 2.0 client id.
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    required: true
+    secret: true
+    description: Google Cloud OAuth 2.0 client secret.
+  - name: CONNECTIONS_ENCRYPTION_KEY
+    required: true
+    secret: true
+    description: 32-byte base64 secret; generate with `openssl rand -base64 32`.
+
+agents:
+  - id: inbox-digest-cron
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You write a morning briefing for the signed-in user once a day on a
+        cron. The user has connected their Google account (Gmail + Calendar)
+        via the operator UI. Each cron tick is one run per connected user.
+
+        Briefing structure:
+
+        1. **Today's calendar** (read via `cap-google__calendar_list_events`,
+           today's date in the user's timezone). For each event, one line:
+           time, title, attendee count, conferencing link if present. Flag
+           back-to-back gaps under 15 minutes.
+        2. **Pending replies** (read via `cap-google__gmail_search`
+           with the query `in:inbox is:unread is:starred`). List up to
+           5; include sender + first line of subject.
+        3. **Memory carryovers** (read via `cap-memory-pg__search` keyed by
+           "follow-up"). Pull anything tagged for today.
+        4. Pick one item from the above as the **focus** for the day —
+           biggest meeting, most overdue follow-up, or memory-flagged
+           priority. Highlight it.
+
+        Send the briefing via `cap-google__gmail_send` (HITL-gated) to the
+        user's own address. Keep it under 400 words; bullets, no prose.
+
+        Skip the briefing if the calendar is empty AND there are no pending
+        replies AND memory yields nothing. Don't fabricate a focus item.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 8 * * *"
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: inbox-digest-cron-runs

@@ -1,0 +1,96 @@
+schemaVersion: 1
+name: calendly-prep
+description: Calendly webhook → calendar + memory lookup → 1-pager about the attendee posted to Slack.
+harnessVersion: "^0.5"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-webhook-generic"
+    config:
+      webhookSecretEnv: CALENDLY_WEBHOOK_SECRET
+  - pack: "@render-harness/cap-google"
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: calendly-prep
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: CALENDLY_WEBHOOK_SECRET
+    required: true
+    secret: true
+    description: |
+      HMAC signing secret you configure in Calendly → Webhooks.
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    required: true
+    secret: false
+    description: Google Cloud OAuth 2.0 client id.
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    required: true
+    secret: true
+    description: Google Cloud OAuth 2.0 client secret.
+  - name: CONNECTIONS_ENCRYPTION_KEY
+    required: true
+    secret: true
+    description: 32-byte base64 secret; generate with `openssl rand -base64 32`.
+  - name: PREP_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug where prep notes are posted.
+
+agents:
+  - id: calendly-prep
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You receive Calendly `invitee.created` webhooks at
+        `/connectors/webhook-generic` and produce a 1-pager Slack post
+        about the attendee before the meeting.
+
+        Per webhook:
+
+        1. Parse the payload — pull invitee name, email, event name,
+           event start time.
+        2. Search memory via `cap-memory-pg__search` for the invitee email
+           and name. Pull any prior context.
+        3. Look up the invitee's email in the host's Gmail via
+           `cap-google__gmail_search` (query `from:<email> OR
+           to:<email>`). Use `cap-google__gmail_get_message` on the
+           most recent hits to read thread context — what's the
+           relationship, what's been discussed.
+        4. Find the matching calendar event via
+           `cap-google__calendar_list_events` to confirm the time and
+           pick up any extra notes the host added.
+        5. Compose a one-pager: who they are (from email signature +
+           memory), why this meeting (event name + any thread context),
+           talking points (3-4 bullets), recent context (most recent
+           email exchange one-line summary).
+        6. Post to `${PREP_CHANNEL}` via `cap-slack__slack_send_message`
+           at least 30 minutes before the meeting (if event start is
+           sooner, post immediately).
+        7. Persist the prep to `cap-memory-pg__write` keyed by
+           `meeting-prep:<invitee-email>:<event-iso-time>` so meeting-
+           prepper and chief-of-staff bundles can surface it later.
+
+        Never fabricate context. If memory and email yield nothing, say so
+        ("first meeting, no prior context on file") instead of making up
+        a relationship.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: calendly-prep-runs
