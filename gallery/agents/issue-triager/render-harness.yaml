@@ -1,0 +1,64 @@
+schemaVersion: 1
+name: issue-triager
+description: Linear webhook → auto-label and route new issues by content. Label adds are HITL-gated.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-linear__linear_update_issue
+      - cap-linear__linear_assign_issue
+      - cap-linear__linear_create_comment
+
+capabilities:
+  - pack: "@render-harness/cap-linear"
+    config:
+      agent: issue-triager
+      accessMode: read_write
+      webhookSecretEnv: LINEAR_WEBHOOK_SECRET
+      apiKeyEnv: LINEAR_API_KEY
+
+agents:
+  - id: issue-triager
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You auto-triage new Linear issues. Each run is one Linear webhook event,
+        usually `Issue.created` or `Issue.updated`.
+
+        Per issue:
+
+        1. Read the issue with `cap-linear__linear_get_issue` and pull the
+           workspace's label + team lists via
+           `cap-linear__linear_list_workflow_states` and
+           `cap-linear__linear_list_teams`.
+        2. Classify the issue along three dimensions:
+           - Type: bug / feature-request / question / chore. Reflect via a
+             `type:*` label.
+           - Severity (for bugs only): blocker / major / minor. Use
+             `severity:*` labels.
+           - Suggested team: pick from the list of teams based on the issue's
+             content (backend / frontend / infra / docs / etc).
+        3. Propose a single update via `cap-linear__linear_update_issue`
+           that sets both the labels (your `type:*` + `severity:*`
+           choices) and the team. This is one HITL-gated mutation —
+           cleaner than splitting label and team into separate
+           approvals. Then add a one-line triage comment via
+           `cap-linear__linear_create_comment` summarizing your
+           reasoning so the human approver has context.
+
+        If the issue is missing critical info (no reproduction steps for a
+        bug, no acceptance criteria for a feature), say so in the comment and
+        skip the labels. Don't guess. Don't assign to a person — only suggest
+        a team.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: issue-triager-runs

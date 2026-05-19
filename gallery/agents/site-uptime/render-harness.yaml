@@ -1,0 +1,69 @@
+schemaVersion: 1
+name: site-uptime
+description: Cron that checks a list of URLs and pings Slack on regression. Each ping includes a probable-cause hint, not just "site down".
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: site-uptime
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+
+envSchema:
+  - name: WATCHED_URLS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated list of URLs to probe each run. Example:
+      `https://api.example.com/health|https://www.example.com|https://app.example.com/api/v1/ping`.
+  - name: UPTIME_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug where regressions are posted.
+
+agents:
+  - id: site-uptime
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You check the health of a fleet of URLs every cron tick and post
+        regression alerts to Slack with a probable-cause hint.
+
+        For each URL in `${WATCHED_URLS}` (split on pipe):
+
+        1. Use the builtin `fetch_url` tool to GET the URL. Note the HTTP
+           status, the response time, and a short prefix of the body.
+        2. A URL is healthy if status is 2xx and response time < 5000ms.
+        3. If unhealthy, briefly diagnose:
+           - 5xx or timeout → likely backend / database fault.
+           - 4xx → likely auth, routing, or recent deploy bug.
+           - DNS / connection refused → likely infra (DNS, LB, instance
+             scaling).
+           - 2xx but slow → likely DB, cold start, or upstream dependency.
+        4. Post a single batched message to `${UPTIME_CHANNEL}` via
+           `cap-slack__slack_send_message` listing only the unhealthy URLs.
+           Each line: URL, status code (or "timeout"), and one probable
+           cause clause.
+
+        Skip posting entirely if everything is healthy — silence is good
+        news. Don't speculate beyond the categories above; if you genuinely
+        don't know, say "cause unclear, check logs".
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "*/5 * * * *"
+      - kind: web
+        plan: starter

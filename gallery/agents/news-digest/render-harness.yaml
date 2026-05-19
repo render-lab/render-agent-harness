@@ -1,0 +1,56 @@
+schemaVersion: 1
+name: news-digest
+description: Daily cron that produces a topic-scoped news roundup with deduping against memory. Stores the digest so the next run skips repeats.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+capabilities:
+  - pack: "@render-harness/cap-search-tavily"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: DIGEST_TOPICS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated topic strings to search each run. Example:
+      `LLM evaluation|Postgres performance|edge inference`. Each topic gets
+      its own search + summary.
+
+agents:
+  - id: news-digest
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You produce a daily news digest scoped to a small set of topics.
+        Each invocation is a cron tick.
+
+        For every topic in `${DIGEST_TOPICS}` (split on pipe):
+
+        1. Call `cap-search-tavily__tavily-search` with the topic plus
+           "in the last 24 hours" framing. Set the depth to "basic" to
+           keep latency low.
+        2. For every candidate article, query `cap-memory-pg__search` with
+           the article URL to check if you've already covered it on a prior
+           run. Skip duplicates.
+        3. Pick the 2-3 most substantive new items for the topic. Write a
+           one-paragraph summary per item with the source URL.
+        4. Persist each covered URL to `cap-memory-pg__write` with the
+           article title as the value and tags `["news-digest", topic]` so
+           tomorrow's run dedupes correctly.
+
+        Output one markdown section per topic; skip topics where nothing new
+        landed. Never invent sources. If a search returns zero results, say
+        so and move on. Cite the publication name in each summary.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 12 * * *"
+      - kind: web
+        plan: starter

@@ -1,0 +1,72 @@
+schemaVersion: 1
+name: slack-pr-notifier
+description: GitHub webhook → opinionated PR summary in a Slack channel. Posts when PRs open, get reviewed, or merge.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: slack-pr-notifier
+      accessMode: read
+      webhookSecretEnv: GITHUB_WEBHOOK_SECRET
+      tokenEnv: GITHUB_TOKEN
+      events:
+        - pull_request
+        - pull_request_review
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: slack-pr-notifier
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: PR_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug where PR summaries are posted.
+      The bot must be a member of this channel.
+
+agents:
+  - id: slack-pr-notifier
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You post opinionated, useful PR summaries to a Slack channel. Each run
+        is triggered by a GitHub webhook (`pull_request` or
+        `pull_request_review`).
+
+        On `pull_request.opened`: use `cap-github__github_get_pull_request` +
+        `cap-github__github_list_pull_request_files` to gather diff and
+        metadata. Post a 3-4 line summary to `${PR_CHANNEL}` covering: what the
+        PR changes (in plain English, not "modifies X.ts"), what risk it
+        carries (migration? public API? large diff?), and who should review.
+
+        On `pull_request_review.submitted`: post only if the review is
+        `changes_requested` or `approved` from a code owner. Include the
+        reviewer's headline comment.
+
+        On `pull_request.closed` (merged=true): post a one-line ship note.
+
+        Always include the PR link as the first line. Skip drafts. Skip
+        dependabot. Write findings to `cap-memory-pg__write` keyed by PR number
+        so the standup agent can read them later. Be honest — call out
+        sketchy-looking diffs.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: slack-pr-notifier-runs

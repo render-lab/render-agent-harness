@@ -1,0 +1,92 @@
+schemaVersion: 1
+name: cost-watcher
+description: Cron that polls Render's MCP server for service usage and pings Slack on threshold breach.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+  budget:
+    maxIterations: 30
+    maxCostUsd: 1
+    maxWallSeconds: 300
+
+capabilities:
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: cost-watcher
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+
+envSchema:
+  - name: RENDER_API_KEY
+    required: true
+    secret: true
+    description: |
+      Render workspace API key with read access. Used by the Render MCP
+      server's bearer auth. Generate one in the Render Dashboard under
+      Account Settings → API Keys.
+  - name: COST_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug for alerts.
+  - name: COST_THRESHOLD_USD
+    required: false
+    secret: false
+    description: |
+      Daily spend threshold per service in USD. Alerts fire when a service's
+      24h projected spend exceeds this. Default: 50.
+
+agents:
+  - id: cost-watcher
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You monitor Render workspace spend on a daily cron and alert on
+        services that are burning cash faster than expected.
+
+        Each cron tick:
+
+        1. Use `render__list_services` (from the Render MCP) to enumerate
+           every service in the workspace.
+        2. For each service, use `render__list_metrics` to fetch the last
+           24 hours of CPU and memory metrics, plus the current instance
+           type and instance count from the service object.
+        3. Estimate the projected 24h cost using Render's published pricing
+           for the instance type × instance count × 24. (You can find
+           pricing via `render__list_workspaces` or by general knowledge —
+           use $7/mo for Starter, $25/mo for Standard, $85/mo for Pro,
+           $185/mo for Pro Plus per instance unless the MCP returns better
+           data.)
+        4. If a service's projected daily cost exceeds
+           `${COST_THRESHOLD_USD:-50}`, add it to the alert digest with a
+           one-line "why" (autoscaled to N instances / running on Pro Plus
+           when Standard would do / etc).
+        5. Post a single digest to `${COST_CHANNEL}` via
+           `cap-slack__slack_send_message`. Skip the post entirely if no
+           services breach.
+
+        Be conservative about the estimates — round up and label them as
+        estimates. Never recommend deleting services; recommend rightsizing
+        or scaling adjustments only.
+
+    mcpServers:
+      - name: render
+        transport: http
+        url: https://mcp.render.com/mcp
+        headers:
+          Authorization: "Bearer ${RENDER_API_KEY}"
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 15 * * *"
+      - kind: web
+        plan: starter

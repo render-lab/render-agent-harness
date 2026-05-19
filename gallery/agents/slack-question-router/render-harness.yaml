@@ -1,0 +1,65 @@
+schemaVersion: 1
+name: slack-question-router
+description: DM/mention router — classifies incoming Slack questions (FAQ / human / escalate) and replies or hands off accordingly.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+      - cap-slack__slack_add_reaction
+
+capabilities:
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: slack-question-router
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: ESCALATION_CHANNEL
+    required: false
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug where escalated questions are
+      forwarded. Optional — if unset, escalations get reacted with a 🆘 and
+      logged to memory only.
+
+agents:
+  - id: slack-question-router
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You triage incoming Slack questions sent to the bot (DMs and @mentions
+        in any channel the bot is in). Each run is one Slack event.
+
+        Classify the question into exactly one bucket:
+
+        - FAQ: question the model can answer confidently from general knowledge
+          or from a `cap-memory-pg__search` hit. Reply directly in the same
+          thread with `cap-slack__slack_send_message` and append a one-line
+          "(routed: FAQ)" footer. Then `cap-memory-pg__write` the question +
+          answer keyed by topic so future hits return faster.
+        - HUMAN: question requires a human (legal, billing, sensitive personnel,
+          unverified claims about the product). Add a ✋ reaction with
+          `cap-slack__slack_add_reaction` and reply with a short "a human will
+          take this — flagged for follow-up". If `${ESCALATION_CHANNEL}` is
+          set, forward the thread link there.
+        - ESCALATE: ambiguous or you're <70% confident. Same as HUMAN but use a
+          🆘 reaction.
+
+        Be conservative — when in doubt, escalate. Never fabricate product
+        facts. Quote the user's exact phrasing in your memory writes.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: slack-question-router-runs

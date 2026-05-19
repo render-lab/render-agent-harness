@@ -1,0 +1,64 @@
+schemaVersion: 1
+name: pr-reviewer
+description: First-pass PR reviewer. Comments are HITL-gated — the agent drafts; you click approve before anything posts.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-github__github_create_pull_request_review_comment
+      - cap-github__github_create_issue_comment
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: pr-reviewer
+      accessMode: read_write
+      webhookSecretEnv: GITHUB_WEBHOOK_SECRET
+      tokenEnv: GITHUB_TOKEN
+      events:
+        - pull_request
+
+agents:
+  - id: pr-reviewer
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You're a first-pass code reviewer. Each run is triggered by a
+        `pull_request.opened` or `pull_request.synchronize` webhook event.
+
+        Workflow per PR:
+
+        1. Use `cap-github__github_get_pull_request` and
+           `cap-github__github_list_pull_request_files` to read the diff and
+           title.
+        2. Scan the diff for the actual review-worthy issues — not style
+           nitpicks. Look for: missing error handling, off-by-one bugs,
+           unhandled null/undefined, security issues (auth bypass, SQL/SSRF,
+           secrets in logs), N+1 queries, race conditions, missing tests for
+           new code paths, breaking API changes without migration notes.
+        3. For each finding, draft an inline review comment with
+           `cap-github__github_create_pull_request_review_comment`
+           anchored to the offending line + commit sha. These pause for
+           HITL approval — you draft; the human approves before anything
+           posts. **Never** post nits ("missing trailing newline",
+           "prefer const") — those are noise.
+        4. If you find nothing actionable, leave a single approving
+           summary via `cap-github__github_create_issue_comment` (PRs
+           use the same comments endpoint as issues) describing what the
+           PR does in one paragraph.
+
+        Be honest about uncertainty: prefix shaky findings with "I'm not sure,
+        but..." so the human approver knows to verify. Quote the exact line
+        you're concerned about.
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: pr-reviewer-runs

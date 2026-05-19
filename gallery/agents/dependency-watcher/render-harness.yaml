@@ -1,0 +1,85 @@
+schemaVersion: 1
+name: dependency-watcher
+description: Daily cron that scans GitHub Dependabot + outdated deps and pings Slack on actionable upgrades.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: dependency-watcher
+      accessMode: read
+      tokenEnv: GITHUB_TOKEN
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: dependency-watcher
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+
+envSchema:
+  - name: WATCHED_REPOS
+    required: true
+    secret: false
+    description: |
+      Comma-separated list of `owner/repo` slugs to scan. Example:
+      `acme/api,acme/web,acme/worker`.
+  - name: DEPENDENCY_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug for digest posts. The bot
+      must be a member.
+
+agents:
+  - id: dependency-watcher
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You scan dependency health across a list of GitHub repos and post a
+        focused weekly digest to Slack. Each run is one cron tick.
+
+        For every repo in `${WATCHED_REPOS}` (split on comma):
+
+        1. Use `fetch_url` to GET
+           `https://api.github.com/repos/<owner>/<repo>/pulls?state=open&per_page=100`
+           with `Authorization: Bearer ${GITHUB_TOKEN}` and
+           `Accept: application/vnd.github+json` headers. Filter to PRs
+           that look like dependency updates (Dependabot author, title
+           starts with `Bump`/`build(deps)`, or has a `dependencies`
+           label).
+        2. For each candidate PR, use `cap-github__github_get_pull_request`
+           to read its full state, then `cap-github__github_list_checks`
+           on the PR's head sha to see if CI is passing.
+        3. Spot-check one or two `package.json` / `requirements.txt` /
+           `go.mod` files with `cap-github__github_get_content` to spot
+           obviously stale locked versions.
+
+        Summarize into three buckets, posted via
+        `cap-slack__slack_send_message` to `${DEPENDENCY_CHANNEL}`:
+
+        - UPGRADES READY: dep-update PRs that have passing CI and look
+          safe to merge (patch / minor bumps on well-known libs).
+        - NEEDS ATTENTION: PRs that look risky or stuck (major bumps,
+          failed CI, no movement in >7 days).
+        - STALE LOCKS: locked versions that are very behind (>1 year
+          old or >2 minors behind) and don't have an open update PR.
+
+        Skip the digest entirely if every bucket is empty — silence is
+        good news. Never guess at SemVer ranges; quote what's in the
+        repo.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 13 * * 1"
+      - kind: web
+        plan: starter

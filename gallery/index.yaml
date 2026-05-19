@@ -23,6 +23,9 @@ schemaVersion: 1
 # `GalleryAgentEntrySchema` in `packages/registry/src/gallery.ts`.
 
 agents:
+  # ----------------------------------------------------------------
+  # Tier 0 — Trivial baselines
+  # ----------------------------------------------------------------
   - slug: chat
     name: "Chat assistant"
     description: "Minimal single-turn HTTP chat agent. The simplest starting point."
@@ -34,29 +37,16 @@ agents:
     capabilities: []
     author: "render-harness"
 
-  - slug: support-bot
-    name: "Support bot"
-    description: "Slack-driven web + worker support flow with threaded replies."
-    path: ./agents/support-bot
-    surface: ["slack"]
-    audience: ["support"]
+  - slug: chat-with-memory
+    name: "Chat with memory"
+    description: "Multi-turn HTTP + worker chat agent with persistent long-term memory."
+    path: ./agents/chat-with-memory
+    surface: ["web-chat"]
+    audience: ["personal", "eng"]
     runtimeKinds: ["web", "worker"]
-    requiresHarness: "^0.1"
+    requiresHarness: "^0.2"
     capabilities:
-      - "@render-harness/cap-slack"
-    author: "render-harness"
-
-  - slug: work-monitor
-    name: "Work monitor"
-    description: "GitHub + Linear work monitor that watches PRs, issues, checks, projects, and comments."
-    path: ./agents/work-monitor
-    surface: ["github", "linear", "webhook"]
-    audience: ["eng"]
-    runtimeKinds: ["web", "worker"]
-    requiresHarness: "^0.1"
-    capabilities:
-      - "@render-harness/cap-github"
-      - "@render-harness/cap-linear"
+      - "@render-harness/cap-memory-pg"
     author: "render-harness"
 
   - slug: research-cron
@@ -71,6 +61,188 @@ agents:
       - "@render-harness/cap-search-exa"
     author: "render-harness"
 
+  # ----------------------------------------------------------------
+  # Tier 1 — Slack-rooted
+  # ----------------------------------------------------------------
+  - slug: support-bot
+    name: "Support bot"
+    description: "Slack-driven web + worker support flow with threaded replies."
+    path: ./agents/support-bot
+    surface: ["slack"]
+    audience: ["support"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.1"
+    capabilities:
+      - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  - slug: slack-standup
+    name: "Slack standup"
+    description: "Mon-Fri cron that posts a 'what shipped yesterday' digest to a Slack channel from memory + linked sources."
+    path: ./agents/slack-standup
+    surface: ["slack"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: slack-pr-notifier
+    name: "Slack PR notifier"
+    description: "GitHub webhook → opinionated PR summary in a Slack channel. Posts when PRs open, get reviewed, or merge."
+    path: ./agents/slack-pr-notifier
+    surface: ["slack", "github"]
+    audience: ["eng"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: slack-question-router
+    name: "Slack question router"
+    description: "DM/mention router — classifies incoming Slack questions (FAQ / human / escalate) and replies or hands off accordingly."
+    path: ./agents/slack-question-router
+    surface: ["slack"]
+    audience: ["support"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 2 — Engineering work
+  # ----------------------------------------------------------------
+  - slug: work-monitor
+    name: "Work monitor"
+    description: "GitHub + Linear work monitor that watches PRs, issues, checks, projects, and comments."
+    path: ./agents/work-monitor
+    surface: ["github", "linear", "webhook"]
+    audience: ["eng"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.1"
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-linear"
+    author: "render-harness"
+
+  - slug: pr-reviewer
+    name: "PR reviewer"
+    description: "First-pass PR reviewer. Comments are HITL-gated — the agent drafts; you click approve before anything posts."
+    path: ./agents/pr-reviewer
+    surface: ["github"]
+    audience: ["eng"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-github"
+    author: "render-harness"
+
+  - slug: issue-triager
+    name: "Issue triager"
+    description: "Linear webhook → auto-label and route new issues by content. Label adds are HITL-gated."
+    path: ./agents/issue-triager
+    surface: ["linear"]
+    audience: ["eng"]
+    runtimeKinds: ["web", "worker"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-linear"
+    author: "render-harness"
+
+  - slug: dependency-watcher
+    name: "Dependency watcher"
+    description: "Weekly cron that scans GitHub Dependabot + outdated deps and pings Slack on actionable upgrades."
+    path: ./agents/dependency-watcher
+    surface: ["github", "slack"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 4 — Research + content
+  # ----------------------------------------------------------------
+  - slug: news-digest
+    name: "News digest"
+    description: "Daily cron that produces a topic-scoped news roundup with deduping against memory."
+    path: ./agents/news-digest
+    surface: []
+    audience: ["content", "growth"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-search-tavily"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: rss-watcher
+    name: "RSS watcher"
+    description: "Cron that polls a list of RSS/Atom feeds, summarizes new items, and posts notable ones to Slack."
+    path: ./agents/rss-watcher
+    surface: ["slack"]
+    audience: ["content", "growth"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-scrape-firecrawl"
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 5 — Site + browser
+  # ----------------------------------------------------------------
+  - slug: site-uptime
+    name: "Site uptime"
+    description: "Cron that checks a list of URLs and pings Slack on regression. Each ping includes a probable-cause hint, not just 'site down'."
+    path: ./agents/site-uptime
+    surface: ["slack"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 7 — Ops + Render
+  # ----------------------------------------------------------------
+  - slug: deploy-agent
+    name: "Deploy agent"
+    description: "Workflows-driven agent that deploys a GitHub repo to Render via Render MCP. Every destructive call pauses for human approval."
+    path: ./agents/deploy-agent
+    surface: ["render-mcp", "github"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["workflows"]
+    requiresHarness: "^0.2"
+    capabilities: []
+    author: "render-harness"
+
+  - slug: cost-watcher
+    name: "Cost watcher"
+    description: "Cron that polls Render's MCP server for service usage and pings Slack on threshold breach."
+    path: ./agents/cost-watcher
+    surface: ["render-mcp", "slack"]
+    audience: ["ops"]
+    runtimeKinds: ["cron", "web"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-slack"
+    author: "render-harness"
+
+  # ----------------------------------------------------------------
+  # Tier 8 — Compounding bundles
+  # ----------------------------------------------------------------
   - slug: chief-of-staff
     name: "Chief of Staff"
     description: "Sealed bundle — chat, meeting prep, weekly recap, interview prep + feedback. Cron for cheap checks; Workflows for durable runs."

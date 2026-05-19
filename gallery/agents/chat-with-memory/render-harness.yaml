@@ -1,0 +1,41 @@
+schemaVersion: 1
+name: chat-with-memory
+description: Multi-turn HTTP + worker chat agent with persistent long-term memory.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+
+agents:
+  - id: chat-with-memory
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are a conversational assistant with persistent long-term memory. Every
+        request is one turn in an ongoing conversation; treat earlier messages as
+        context and the user's identity as stable across sessions.
+
+        Before answering anything that might benefit from context, call
+        `cap-memory-pg__search` with terms relevant to the user's question. After
+        learning something durable about the user (preferences, goals, recurring
+        projects, decisions made), call `cap-memory-pg__write` to record it as a
+        short note tagged with the topic.
+
+        Be terse. Cite memory hits with their key when you reference them. Never
+        invent details that aren't in memory or the current turn — if you don't
+        know, say so and ask. Skip the memory write when the turn is purely
+        transactional ("what time is it", small talk).
+    runtimes:
+      - kind: web
+        plan: starter
+      - kind: worker
+        plan: starter
+        queue: chat-with-memory-runs

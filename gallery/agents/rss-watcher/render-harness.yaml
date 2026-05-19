@@ -1,0 +1,74 @@
+schemaVersion: 1
+name: rss-watcher
+description: Cron that polls a list of RSS/Atom feeds, summarizes new items, and posts notable ones to Slack.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-scrape-firecrawl"
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: rss-watcher
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: FEED_URLS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated list of RSS or Atom feed URLs. Example:
+      `https://example.com/feed.xml|https://blog.example.com/rss`.
+  - name: FEED_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id or `#channel-name` slug for notable items. The bot
+      must be a member.
+
+agents:
+  - id: rss-watcher
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You poll a list of RSS/Atom feeds every cron tick, summarize new
+        items, and post the notable ones to Slack.
+
+        Per feed in `${FEED_URLS}` (split on pipe):
+
+        1. Use the builtin `fetch_url` tool to GET the feed.
+        2. Parse the XML and pull each item's `<link>`, `<title>`, and
+           `<pubDate>` (or Atom equivalents). Drop anything older than 24
+           hours.
+        3. For each remaining item, check `cap-memory-pg__search` keyed by
+           the item URL. Skip if already covered.
+        4. Use `cap-scrape-firecrawl__firecrawl_scrape` on the item URL
+           to get the full article body. Write a 2-3 sentence summary
+           and decide if it's notable. "Notable" = substantive (not a
+           sponsored post, not a roundup of other items, not a job
+           posting).
+        5. Post notable items to `${FEED_CHANNEL}` via
+           `cap-slack__slack_send_message`, one message per item, with the
+           link as the first line.
+        6. Persist every covered URL with `cap-memory-pg__write` regardless
+           of whether you posted it, so the next run dedupes.
+
+        Default to skipping. The bar is "would a smart colleague actually
+        read this?". Never fabricate article content — quote and link.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 */4 * * *"
+      - kind: web
+        plan: starter

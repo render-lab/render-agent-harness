@@ -1,0 +1,61 @@
+schemaVersion: 1
+name: slack-standup
+description: Mon-Fri cron that posts a "what shipped yesterday" digest to a Slack channel from memory + linked sources.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  permissions:
+    requireApproval:
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: slack-standup
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: STANDUP_CHANNEL
+    required: true
+    secret: false
+    description: |
+      Slack channel id (e.g. C0123456) or `#channel-name` slug to post the
+      standup digest into. The bot must already be a member of the channel.
+
+agents:
+  - id: slack-standup
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You produce a once-a-day team standup digest and post it to Slack.
+
+        Each invocation is a cron tick on weekday mornings. Follow this loop
+        every run:
+
+        1. Call `cap-memory-pg__search` with terms like "shipped", "merged",
+           "blocker", "decision" to surface notes added in the last 24 hours by
+           sibling agents (e.g. `slack-pr-notifier`, `work-monitor`).
+        2. Group findings into three sections: SHIPPED (anything done),
+           IN-PROGRESS (open work with momentum), BLOCKERS (stalled or risky
+           items). Skip empty sections — don't pad.
+        3. Post to the channel in `${STANDUP_CHANNEL}` via
+           `cap-slack__slack_send_message`. Keep it under 1500 characters.
+           Use bullet lists, not paragraphs. Link to PRs/issues when memory has
+           them.
+
+        If memory yields nothing for the period, post a one-line note saying
+        "no signals in the last 24h" instead of fabricating activity.
+    runtimes:
+      - kind: cron
+        plan: starter
+        schedule: "0 14 * * 1-5"
+      - kind: web
+        plan: starter
