@@ -1,7 +1,7 @@
 schemaVersion: 1
 name: deploy-agent
 description: Workflows-driven agent that deploys a GitHub repo to Render via Render MCP. Every destructive call pauses for human approval.
-harnessVersion: "^0.2"
+harnessVersion: "^0.5"
 license: MIT
 
 shared:
@@ -9,19 +9,22 @@ shared:
     provider: anthropic
     model: claude-sonnet-4-6
   permissions:
+    # Mirrors RENDER_MCP_MUTATING_TOOLS from @render-harness/cap-render.
+    # Names are the fully-namespaced exposed form (cap_render__render__<tool>)
+    # the harness sees at runtime — see cap-render/README.md for the derivation.
     requireApproval:
-      - render__create_web_service
-      - render__update_web_service
-      - render__delete_service
-      - render__create_postgres
-      - render__update_postgres
-      - render__delete_postgres
-      - render__create_keyvalue
-      - render__update_keyvalue
-      - render__delete_keyvalue
-      - render__update_environment_variables
-      - render__create_environment_variable
-      - render__delete_environment_variable
+      - cap_render__render__create_web_service
+      - cap_render__render__update_web_service
+      - cap_render__render__delete_service
+      - cap_render__render__create_postgres
+      - cap_render__render__update_postgres
+      - cap_render__render__delete_postgres
+      - cap_render__render__create_keyvalue
+      - cap_render__render__update_keyvalue
+      - cap_render__render__delete_keyvalue
+      - cap_render__render__update_environment_variables
+      - cap_render__render__create_environment_variable
+      - cap_render__render__delete_environment_variable
   budget:
     maxIterations: 60
     maxCostUsd: 5
@@ -30,13 +33,16 @@ shared:
     temperature: 0.2
     maxOutputTokens: 4096
 
+capabilities:
+  - pack: "@render-harness/cap-render"
+
 envSchema:
   - name: RENDER_API_KEY
     required: true
     secret: true
     description: |
-      Render workspace API key. Required for the Render MCP and for the
-      Workflows SDK to trigger tasks.
+      Render workspace API key. Required for cap-render's MCP wiring and for
+      the Workflows SDK to trigger tasks.
 
 agents:
   - id: deploy-agent
@@ -50,37 +56,36 @@ agents:
         environment-variable hints). You produce a running Render web
         service — or a clear failure with a documented next step.
 
+        Use the cap-render skills (`render-overview`, `render-deploy-flow`,
+        `render-logs-and-debug`) for orientation before touching tools.
+
         Workflow:
 
-        1. Use the Render MCP to read the workspace (`render__list_services`,
-           `render__list_workspaces`) and confirm you're targeting the
-           intended workspace.
+        1. Use the Render MCP to read the workspace
+           (`cap_render__render__list_services`,
+           `cap_render__render__list_workspaces`) and confirm you're
+           targeting the intended workspace.
         2. Inspect the repo (it's public — use `fetch_url` to grab the
            Dockerfile or render.yaml if present; otherwise read package.json,
            pyproject.toml, requirements.txt, etc to infer runtime).
         3. Pick a build/start command, port, and instance type. Prefer the
            cheapest plan that will plausibly work; the user can scale later.
         4. Propose the full service spec back to the user as a single
-           summary message, then call `render__create_web_service`. This
-           pauses for HITL approval — the user reviews every parameter
+           summary message, then call `cap_render__render__create_web_service`.
+           This pauses for HITL approval — the user reviews every parameter
            before anything is created.
         5. If the service depends on Postgres or Key Value, propose those
            too (separate HITL approvals).
         6. After approval and creation, watch the deploy status. If the
            first deploy fails, read the build logs via
-           `render__list_deploys` + `render__get_deploy_logs`, diagnose,
-           and propose a fix (env var, build command, or Dockerfile patch).
+           `cap_render__render__list_deploys` +
+           `cap_render__render__get_deploy_logs`, diagnose, and propose a
+           fix (env var, build command, or Dockerfile patch).
 
-        Never call destructive endpoints (`delete_*`, `update_*`) without
-        explicit user request in the same turn. Never assume the user wants
+        Never call destructive endpoints (delete, update) without explicit
+        user request in the same turn. Never assume the user wants
         autoscaling, custom domains, or paid plans.
 
-    mcpServers:
-      - name: render
-        transport: http
-        url: https://mcp.render.com/mcp
-        headers:
-          Authorization: "Bearer ${RENDER_API_KEY}"
     runtimes:
       - kind: workflows
         plan: starter

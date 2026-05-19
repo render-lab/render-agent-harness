@@ -66,6 +66,7 @@ describe("capability catalog fixture", () => {
       "@render-harness/cap-github",
       "@render-harness/cap-linear",
       "@render-harness/cap-slack",
+      "@render-harness/cap-render",
       "@render-harness/cap-google",
     ]);
     expect(catalog.capabilities[1]?.connectors[0]?.key).toBe("github");

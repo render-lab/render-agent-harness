@@ -19,6 +19,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@render-harness/cap-render": "workspace:*",
     "@render-harness/core": "workspace:*",
     "@render-harness/runtime-workflows": "workspace:*",
     "@renderinc/sdk": "^0.5.1",

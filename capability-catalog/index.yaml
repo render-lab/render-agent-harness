@@ -157,6 +157,40 @@ capabilities:
       reviewStatus: maintainer-reviewed
     trustTier: official
 
+  - package: "@render-harness/cap-render"
+    name: Render (deploys + services)
+    description: First-party pack wrapping the hosted Render MCP for managing services, deploys, databases, env vars, and logs. Ships 3 skills and a curated mutating-tool list for HITL gating.
+    categories: [tools, render, mcp, deploy, infrastructure]
+    provider: Render
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-render
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.5"
+    requiresHarness: "^0.5"
+    features: [tools]
+    envVars:
+      - name: RENDER_API_KEY
+        required: true
+        secret: true
+        description: >-
+          Render workspace API key (https://dashboard.render.com/u/settings#api-keys).
+          Used as a bearer token to the hosted Render MCP at https://mcp.render.com/mcp.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        The Render MCP exposes destructive tools (create_*, update_*, delete_*).
+        The pack exports RENDER_MCP_MUTATING_TOOLS — paste it into
+        permissions.requireApproval to gate mutations behind HITL approval.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-render test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
   - package: "@render-harness/cap-google"
     name: Google Workspace
     description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.
