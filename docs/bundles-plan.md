@@ -90,7 +90,7 @@ Single change: `packages/runtime-cron/src/index.ts`. Currently takes one `AgentD
 - `packages/create-render-agent/scripts/bundle-gallery.ts` is extended to inline that `src/` tree into `bundled-gallery/gallery.json` per entry. Today it only embeds the manifest and README (`packages/registry/src/gallery.ts:108-110`).
 - `Answers` gains an optional `bundle?: { sourceFiles: Map<string, string>, sealed: true }` field.
 - `buildFileMap` branches: if `answers.bundle` is set, it materializes the manifest + every embedded source file verbatim, **bypassing** the single-agent templating (`agent/index.ts`, `src/main.ts`, etc.). Single-agent path is untouched.
-- The TTY wizard (`packages/create-render-agent/src/prompts.ts:35-145`) and the browser wizard (`packages/wizard/web/src/App.tsx`) detect a bundle pick and short-circuit the per-agent questions — bundles are sealed, the user only picks project name + fills env vars + optionally swaps `shared.model`.
+- The TTY wizard (`packages/create-render-agent/src/prompts.ts:35-145`) and the browser wizard (`apps/wizard/web/src/App.tsx`) detect a bundle pick and short-circuit the per-agent questions — bundles are sealed, the user only picks project name + fills env vars + optionally swaps `shared.model`.
 
 ### Gallery cross-check
 
@@ -123,7 +123,7 @@ Each phase is a self-contained PR that leaves main green.
 4. **Scaffolder sealed-bundle path** (`packages/create-render-agent/src/generate.ts`, `prompts.ts`, `scripts/bundle-gallery.ts`, `bundled-gallery/`). 2-3 days.
 5. **Gallery cross-check + bundle discriminator** (`packages/registry/src/gallery.ts`, `gallery.test.ts`, `gallery/index.yaml` schema). 0.5 day.
 6. **Chief of Staff bundle** (`gallery/agents/chief-of-staff/`). System prompts, three agent defs, README, bundled-gallery rebuild. 2-3 days.
-7. **Browser wizard bundle UI** (`packages/wizard/web/src/steps/`, `packages/wizard/src/routes/scaffold.ts`). Bundle-aware Template step + collapsed remaining steps. 1-2 days.
+7. **Browser wizard bundle UI** (`apps/wizard/web/src/steps/`, `apps/wizard/src/routes/scaffold.ts`). Bundle-aware Template step + collapsed remaining steps. 1-2 days.
 8. **Docs** (`docs/gallery-plan.md` update, `docs/bundle-authoring.md` new). 1 day.
 
 Realistic total: **2.5-3 weeks** of focused work. Phases 1-3 can land before any user-facing change; phase 6-7 is the headline ship.
@@ -141,8 +141,8 @@ Realistic total: **2.5-3 weeks** of focused work. Phases 1-3 can land before any
 | `packages/create-render-agent/src/generate.ts:31-53` | Sealed-bundle branch in `buildFileMap` |
 | `packages/create-render-agent/src/prompts.ts:35-145` | Detect bundle pick; collapse per-agent questions |
 | `packages/create-render-agent/scripts/bundle-gallery.ts` | Inline bundle `src/` trees into `gallery.json` |
-| `packages/wizard/web/src/steps/Template.tsx` | Render bundle entries differently (badge + agents preview) |
-| `packages/wizard/src/routes/scaffold.ts:96-110` | Wire `bundle.sourceFiles` into Answers when a bundle is picked |
+| `apps/wizard/web/src/steps/Template.tsx` | Render bundle entries differently (badge + agents preview) |
+| `apps/wizard/src/routes/scaffold.ts:96-110` | Wire `bundle.sourceFiles` into Answers when a bundle is picked |
 | `gallery/agents/chief-of-staff/` (new) | Manifest + 3 agent defs + README |
 | `gallery/index.yaml` | New row with `kind: bundle` discriminator |
 

@@ -260,4 +260,4 @@ The `kind` is *derived* from the manifest at load time (single agent whose id ma
 - `kind: "agent" | "bundle"`
 - `sourceFiles: Record<string, string>` — populated for bundles (empty for single-agent entries)
 
-Both the CLI (`packages/create-render-agent/src/prompts.ts:runBundleWizard`) and the browser wizard (`packages/wizard/web/src/steps/BundleReview.tsx`) detect bundle entries on the Template step and route to a sealed-bundle review screen instead of the per-agent wizard.
+Both the CLI (`packages/create-render-agent/src/prompts.ts:runBundleWizard`) and the browser wizard (`apps/wizard/web/src/steps/BundleReview.tsx`) detect bundle entries on the Template step and route to a sealed-bundle review screen instead of the per-agent wizard.

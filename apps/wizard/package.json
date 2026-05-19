@@ -1,8 +1,8 @@
 {
   "name": "@render-harness/wizard",
   "version": "0.5.3",
-  "private": false,
-  "description": "Browser wizard that scaffolds a Render agent project, creates a managed GitHub repo, and returns a Deploy-to-Render link. Phase 3 of the onboarding direction.",
+  "private": true,
+  "description": "Browser wizard that scaffolds a Render agent project, creates a managed GitHub repo, and returns a Deploy-to-Render link. Phase 3 of the onboarding direction. Deployed as a Render web service from this repo; not published to npm.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/main.js",
@@ -10,13 +10,11 @@
     "dist",
     "sql"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "pnpm run build:server && pnpm run build:web",
     "build:server": "tsup",
     "build:web": "vite build --config web/vite.config.ts",
+    "dev": "concurrently -k -n server,web -c magenta,cyan \"MOCK_SCAFFOLD=true pnpm dev:server\" \"pnpm dev:web\"",
     "dev:web": "vite --config web/vite.config.ts",
     "dev:server": "tsx watch src/main.ts",
     "start": "node dist/main.js",
@@ -32,6 +30,7 @@
     "create-render-agent": "workspace:*",
     "hono": "^4.12.18",
     "pg": "^8.16.0",
+    "react-icons": "^5.6.0",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
@@ -42,6 +41,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.1.13",
@@ -54,6 +54,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/render-lab/render-agent-harness.git",
-    "directory": "packages/wizard"
+    "directory": "apps/wizard"
   }
 }

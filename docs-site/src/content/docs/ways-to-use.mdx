@@ -43,8 +43,8 @@ flowchart LR
 | Surface | Use it to | Where it lives |
 | --- | --- | --- |
 | CLI scaffolder | Create a new local project from a blank prompt or starter template. | `packages/create-render-agent` |
-| Public `/browse` | Browse official templates and community harness submissions. | `packages/wizard` |
-| Public `/new` | Create a manual managed GitHub repo and deployment flow from a web UI. | `packages/wizard` |
+| Public `/browse` | Browse official templates and community harness submissions. | `apps/wizard` |
+| Public `/new` | Create a manual managed GitHub repo and deployment flow from a web UI. | `apps/wizard` |
 | Operator UI | Chat with deployed agents, inspect runs, view agents, edit config, and read in-product guides. | `packages/ui` mounted by `packages/web` |
 | HTTP API | Create runs, stream results, send conversation turns, cancel work, and inspect usage. | `packages/web` |
 | Template catalog | Store starter agents and bundles consumed by the CLI and wizard. | `gallery/` |
@@ -86,7 +86,7 @@ The public site is the right surface when:
 - You want a deploy link instead of a local-only project.
 - You want to compare official templates with community harnesses before starting.
 
-The public site is implemented as a Hono server plus React SPA in `packages/wizard`.
+The public site is implemented as a Hono server plus React SPA in `apps/wizard`.
 
 ```mermaid
 flowchart LR

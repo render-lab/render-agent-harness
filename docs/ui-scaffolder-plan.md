@@ -9,7 +9,7 @@ What's missing is the **no-code path** — a browser wizard end users can hit wi
 Three decisions locked in conversation before this plan:
 
 - **v1 scope: wizard SPA only.** No "my agents" dashboard, no edit-after-deploy, no graduation/transfer flow. Each wizard run creates a fresh managed repo and returns a one-click Deploy-to-Render Blueprint URL. The user's persistent identity for that agent lives on Render's side once they deploy — we don't carry it on the wizard side.
-- **The wizard runs on Render itself.** A new `packages/wizard` Render web service. Eats own dogfood; ships via the same Blueprint we're asking users to use; no Render dashboard/marketing-site coordination required to ship.
+- **The wizard runs on Render itself.** A new `apps/wizard` Render web service. Eats own dogfood; ships via the same Blueprint we're asking users to use; no Render dashboard/marketing-site coordination required to ship. (Originally scaffolded under `packages/wizard`; relocated to `apps/wizard` once it became clear the wizard is a deployable app, not a library.)
 - **Bot identity: new GitHub App.** Render-owned GitHub App with permissions scoped to the managed-agents org, installed once. The wizard backend authenticates as the App (JWT-signed installation tokens) to create repos and push commits.
 
 This plan is the wizard frontend, the wizard backend, the GitHub App integration, the deploy-link generation, and the abuse-mitigation. Everything beyond that (managed dashboard, runtime admin edits, graduation transfer) is explicitly deferred to a future "Phase 3.x — managed dashboard" plan.
@@ -34,7 +34,7 @@ A single new Render service: a Hono web app deployed from this repo. The same se
 
 ```
                        ┌──────────────────────────────────────┐
-                       │   packages/wizard/  (Render web)     │
+                       │   apps/wizard/  (Render web)         │
    User browser  ──►   │   ┌─────────────┐   ┌────────────┐   │
                        │   │  React SPA  │   │  Hono API  │   │
                        │   │  (static)   │   │  /api/*    │   │
@@ -54,7 +54,7 @@ A single new Render service: a Hono web app deployed from this repo. The same se
 
 No database, no queue, no auth provider for v1. The service is stateless beyond its in-process session cache. This is intentional — when v2 adds the managed dashboard, the persistence layer comes with it.
 
-### 3.2 Wizard frontend (`packages/wizard/web`)
+### 3.2 Wizard frontend (`apps/wizard/web`)
 
 Vite + React + Tailwind, matching [`packages/ui/web`](../packages/ui/web)'s stack. Single-page wizard with the same prompts as the CLI, in the same order:
 
@@ -79,7 +79,7 @@ After "Create agent":
 
 The SPA fetches `/api/gallery` once at boot to populate the template + capability selectors, mirroring the CLI's `resolveGallery()`.
 
-### 3.3 Wizard backend (`packages/wizard/server`)
+### 3.3 Wizard backend (`apps/wizard/server`)
 
 Hono routes:
 
@@ -188,7 +188,7 @@ Anonymous + repo-creation = spam vector. v1 controls:
 2. **Per-IP rate limit** in the Hono service: max N scaffolds per IP per hour (in-memory token bucket; precise threshold tuned post-launch). Survives a single-instance pserv; if we scale-out, move to KV-backed.
 3. **Janitor cron** (separate Render cron service or a daily `setInterval` on the wizard service): deletes managed repos older than 14 days that have zero commits beyond the initial scaffold and have no associated Render deploy. This keeps the managed org tidy and reduces the cost of spam getting through.
 
-The janitor is a new tiny package (or a script within `packages/wizard`); fine either way. Plan describes it as part of v1 but it can ship as a follow-up commit if needed.
+The janitor is a new tiny package (or a script within `apps/wizard`); fine either way. Plan describes it as part of v1 but it can ship as a follow-up commit if needed.
 
 ## Wizard UX flow (end-to-end)
 
@@ -214,10 +214,10 @@ No persistent session after step 13. The user doesn't return to the wizard for t
 
 ## File-by-file changes
 
-### New: `packages/wizard/`
+### New: `apps/wizard/`
 
 ```
-packages/wizard/
+apps/wizard/
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts                      # builds the server entry
@@ -324,7 +324,7 @@ pnpm --filter @render-harness/wizard test        # server unit tests
 ## Execution order
 
 1. **Export `buildFileMap` from `create-render-agent`** (1-line change in `src/index.ts`). Unblocks everything else.
-2. **Scaffold `packages/wizard/`** (package.json, tsconfig, tsup, vite configs; empty `src/main.ts` + `web/index.html`). PR is a no-op functionally but stakes out the package.
+2. **Scaffold `apps/wizard/`** (package.json, tsconfig, tsup, vite configs; empty `src/main.ts` + `web/index.html`). PR is a no-op functionally but stakes out the package.
 3. **Server-side scaffolding logic** — `github-app.ts`, `routes/scaffold.ts`, `routes/gallery.ts`. Unit-tested with Octokit mocks. The GitHub App credentials live in env vars; tests use a fake.
 4. **Cloudflare Turnstile + rate limit** before the SPA. Pure server-side. Tested in isolation.
 5. **The SPA itself** — one step component per wizard step, the API client, the success screen. Vite-built into `web/dist/`. The server's `main.ts` serves this as static content.

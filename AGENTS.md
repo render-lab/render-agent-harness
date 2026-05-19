@@ -4,14 +4,26 @@ Repo-specific guidance for AI coding agents (Claude Code, Cursor, Codex, etc.). 
 
 Read this whenever a task touches versioning, publishing, scaffolding, snapshots, or capability packs.
 
+## The wizard is private (deployed-from-repo, not published to npm)
+
+`apps/wizard` is `"private": true`. It lives under `apps/` (not `packages/`) because it's a deployable application, not a library — nothing imports it. It's still a workspace package — `core`, `registry`, and `create-render-agent` are wired in via `workspace:*` and tsup builds it into `dist/main.js` — but `pnpm release` / `scripts/publish-unpublished.mjs` walk only `packages/*` and `packages/capabilities/*`, so the wizard is invisible to publishing by both placement and `private: true`. Changesets' publish step does the same. The wizard ships to production via `git push` to the Render service that runs `https://wizard.render-harness.example` (and any self-hosters); npm has no role in that path.
+
+Practical consequences for anything in this file that still mentions `wizard`:
+
+- It does **not** need to appear in coordinated minor changesets. Nothing imports `@render-harness/wizard`, no `harnessVersion` range is checked against it, so its version drifting one minor behind the family is invisible.
+- Its `"version"` field still moves (Changesets bumps private packages on `version-packages` like any other), but only the local repo cares.
+- The historical incidents below where wizard appears alongside `web` / `create-render-agent` were partial-minor publish failures. Today the same failure mode would only involve `web` and `create-render-agent`; wizard is effectively a deployable app.
+- Do not flip wizard back to `private: false` without re-reading the rationale at the bottom of this file's history — the operator-UI feature work routinely touches wizard alongside `web` and `ui`, and re-publishing it puts the May 2026 partial-minor footgun back on the table.
+
 ## Versioning model: independent within a minor line, coordinated across minor bumps
 
-The `@render-harness/*` family does **not** patch in lockstep, but every package **must** stay on the same `0.<minor>.x` line. Different packages live on slightly different patch tracks for deliberate reasons:
+The published `@render-harness/*` family does **not** patch in lockstep, but every package **must** stay on the same `0.<minor>.x` line. Different packages live on slightly different patch tracks for deliberate reasons:
 
 - **Core (`core`, `contracts`, `registry`, `runtime-*`)** — bump together when the shared substrate changes.
-- **Dependents (`web`, `wizard`, `create-render-agent`)** — cascade-bumped at PATCH (per Changesets' `updateInternalDependencies: "patch"` policy) whenever their internal harness deps change inside the same minor line. They will always be one patch ahead of `core` after a routine patch cut. For coordinated minor cuts they must be listed explicitly in the changeset alongside the rest of the family — see "Minor bumps must be coordinated across the whole family" below for why.
+- **Dependents (`web`, `create-render-agent`)** — cascade-bumped at PATCH (per Changesets' `updateInternalDependencies: "patch"` policy) whenever their internal harness deps change inside the same minor line. They will always be one patch ahead of `core` after a routine patch cut. For coordinated minor cuts they must be listed explicitly in the changeset alongside the rest of the family — see "Minor bumps must be coordinated across the whole family" below for why.
 - **UI (`ui`)** — has its own line because the SPA bundle changes independently of the harness substrate.
 - **Capabilities (`packages/capabilities/cap-*`)** — patch-independent. Bump only when the capability itself changes; they ship their own patch deltas.
+- **Wizard (`wizard`)** — private; see "The wizard is private" above. Not subject to any of the coordination rules below; cascade-patch on it is fine because it has no consumers.
 
 `@render-harness/registry`'s `buildHarnessVersionInfo` enforces this: it walks every running `@render-harness/*` package (including capability packs declared in the consumer's `render-harness.yaml`) and validates each version against the declared `harnessVersion` range. Patch-level drift inside the range is fine — minor drift across siblings is **not** and trips the "Harness version needs attention" red banner in the deployed harness's Config tab. **Do not add a "strict uniqueness" check back in** beyond the existing per-package range check.
 
@@ -21,21 +33,21 @@ The Changesets config (`.changeset/config.json`) keeps `linked: []` empty on pur
 
 In semver-zero, `^0.X.Y` does **not** span the `0.X → 0.(X+1)` boundary. So the moment any one `@render-harness/*` package crosses a minor, the runtime version check fails for every consumer whose `harnessVersion` range still anchors at the old minor. There is no scaffolded range short of a multi-clause `>=0.2.0 <0.4.0` that satisfies a partial minor cut, and no scaffolder ever writes one.
 
-**Rule:** a minor bump on any one first-party harness package (core, contracts, registry, runtime-\*, web, ui, wizard, **and every capability pack**) requires a single Changeset that bumps **every** first-party harness package to the same `0.(X+1).0` baseline.
+**Rule:** a minor bump on any one published first-party harness package (core, contracts, registry, runtime-\*, web, ui, **and every capability pack**) requires a single Changeset that bumps **every** published first-party harness package to the same `0.(X+1).0` baseline. `wizard` is private and intentionally excluded — see "The wizard is private" above.
 
 How to do it:
 
-1. One changeset file in `.changeset/` with a `minor` bump line for **every** first-party package, including `web`, `wizard`, and `create-render-agent`. Use the script:
+1. One changeset file in `.changeset/` with a `minor` bump line for **every** published first-party package, including `web` and `create-render-agent`. Use the script:
 
  ```sh
- for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui web wizard \
+ for pkg in core contracts registry runtime-cron runtime-web runtime-worker runtime-workflows ui web \
  $(ls packages/capabilities); do
  echo "\"@render-harness/$pkg\": minor"
  done
  echo "\"create-render-agent\": minor"
  ```
 
- **Do not** rely on cascade-patch for `web` / `wizard` / `create-render-agent`. Changesets cascade-patches from each package's **current** version, not into the family's new minor line — so `web@0.(X-1).0 + cascade-patch = 0.(X-1).1`, **not** `0.X.1`. Leaving them off the changeset produces a partial-minor cut where the runtime harness version check turns red for every deployed harness (no single `harnessVersion` range satisfies both `web@0.(X-1).1` and `core@0.X.0`). The May 2026 partial-minor incident and the May 2026 0.3 → 0.4 cut both reproduced this exact bug; see "Things that bit us recently" below.
+ **Do not** rely on cascade-patch for `web` / `create-render-agent`. Changesets cascade-patches from each package's **current** version, not into the family's new minor line — so `web@0.(X-1).0 + cascade-patch = 0.(X-1).1`, **not** `0.X.1`. Leaving them off the changeset produces a partial-minor cut where the runtime harness version check turns red for every deployed harness (no single `harnessVersion` range satisfies both `web@0.(X-1).1` and `core@0.X.0`). The May 2026 partial-minor incident and the May 2026 0.3 → 0.4 cut both reproduced this exact bug; see "Things that bit us recently" below.
 
  Sanity-check with `pnpm changeset status` before consuming: every first-party package should appear under "minor", the patch and major buckets should be empty (or contain only legitimately separate concurrent patches).
 
@@ -43,7 +55,7 @@ How to do it:
 3. Commit + push. CI's `changesets/action` runs the publish step with no remaining changesets and publishes the whole family in one go.
 4. Each managed harness then needs `harnessVersion: "^0.(X+1).0"` in `render-harness.yaml` and `"@render-harness/<name>": "^0.(X+1).0"` for every first-party dep in `package.json`. The scaffolder writes these automatically for *new* harnesses (per-package ranges from the rebuilt `bundled-gallery/harness-version.json`), but **existing managed harnesses need a manual bump**.
 
-Until the wizard's `POST /api/agents/add` / `POST /api/capabilities/install` / `PATCH /api/agents/:slug/model` paths grow auto-bump-the-deps logic, every coordinated minor cut leaves a follow-up chore for every existing deployment. Plan accordingly.
+Until the wizard's `POST /api/agents/add` / `POST /api/capabilities/install` / `PATCH /api/agents/:slug/model` paths grow auto-bump-the-deps logic, every coordinated minor cut leaves a follow-up chore for every existing deployment. Plan accordingly. (The wizard itself is private and not part of the cut, but managed harnesses created *via* the wizard still need their `@render-harness/*` deps re-pointed.)
 
 ## Realigning a drifted package
 
@@ -111,9 +123,10 @@ Consequence: bumping a literal in the catalog YAML is fine for documentation acc
 
 | Scenario | What to do |
 |---|---|
-| Bug fix in `core`/`registry`/runtime/contracts/ui | Changeset `patch` on the affected package. Dependents (`web`, `wizard`) cascade-bump automatically. |
+| Bug fix in `core`/`registry`/runtime/contracts/ui | Changeset `patch` on the affected package. Dependents (`web`, `wizard`, `create-render-agent`) cascade-bump automatically; only `web` and `create-render-agent` actually publish. |
 | Bug fix in a capability pack | Changeset `patch` on just that capability. |
-| New public API in any first-party package (`core`, `contracts`, `registry`, `runtime-*`, `web`, `ui`, `wizard`, **cap-\***) | **Coordinated minor cut.** One changeset, `minor` on every first-party harness package — see "Minor bumps must be coordinated across the whole family" above. Never partial. |
+| Wizard-only change (Hono routes, SPA, scaffolder UX) | Changeset `patch` on `@render-harness/wizard` if you want to track the version, or none at all (it's private and never publishes). The `pnpm release` step skips it. |
+| New public API in any published first-party package (`core`, `contracts`, `registry`, `runtime-*`, `web`, `ui`, **cap-\***) | **Coordinated minor cut.** One changeset, `minor` on every published first-party harness package — see "Minor bumps must be coordinated across the whole family" above. Never partial. |
 | Realign a drifted package onto the family version | Direct `package.json` + `CHANGELOG.md` edit. No changeset. (See "Realigning a drifted package" above.) |
 | Catalog metadata change for an existing capability | Edit `capability-catalog/index.yaml`. No version bump needed unless the cap's code also changes. |
 

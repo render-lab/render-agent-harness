@@ -61,7 +61,7 @@ pnpm db:up                 # local Postgres + Valkey via docker-compose
 pnpm dev
 ```
 
-There's also a **browser wizard** (`@render-harness/wizard`, Phase 3) that runs the same flow no-code: pick template → fill prompt → click Deploy. It creates a managed GitHub repo and returns a one-click Deploy-to-Render link. See [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
+There's also a **browser wizard** (in `apps/wizard`, Phase 3) that runs the same flow no-code: pick template → fill prompt → click Deploy. It creates a managed GitHub repo and returns a one-click Deploy-to-Render link. The wizard is deployed as a Render web service from this repo (it isn't published to npm). See [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
 
 **Note:** until the harness publishes to npm (see [`docs/publish-plan.md`](docs/publish-plan.md)), use `npx create-render-agent --harness-root /path/to/render-harness my-agent` to wire `link:` deps to a local checkout. Once published, the flag becomes a contributor-only convenience.
 
@@ -169,18 +169,16 @@ Three first-class ways to ship an agent on Render, in order of friction:
 
 ### 1. Browser wizard (Phase 3 v1)
 
-`packages/wizard` — a Hono service serving a React SPA at `/`. Pick a template, fill the prompt, click Create. Backend creates a managed GitHub repo and returns a Deploy-to-Render URL. Anonymous; no login needed.
+`apps/wizard` — a Hono service serving a React SPA at `/`. Pick a template, fill the prompt, click Create. Backend creates a managed GitHub repo and returns a Deploy-to-Render URL. Anonymous; no login needed.
 
-Local dev:
+Local dev (mock mode, two-terminal-free):
 
 ```sh
-cd packages/wizard
-pnpm build
-MOCK_SCAFFOLD=1 pnpm start
-# open http://127.0.0.1:8090
+pnpm dev:wizard
+# open http://127.0.0.1:5185
 ```
 
-See [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
+See [`apps/wizard/README.md`](apps/wizard/README.md) and [`docs/ui-scaffolder-plan.md`](docs/ui-scaffolder-plan.md).
 
 ### 2. CLI scaffolder (Phase 1)
 
@@ -344,11 +342,11 @@ pnpm dev:operator-worker   # terminal 2
 ### Run the browser wizard locally
 
 ```sh
-cd packages/wizard
-pnpm build
-MOCK_SCAFFOLD=1 pnpm start
-# open http://127.0.0.1:8090 to click through the no-code scaffolder
+pnpm dev:wizard
+# open http://127.0.0.1:5185 to click through the no-code scaffolder
 ```
+
+That runs the Hono server (port 8090) and the Vite SPA (port 5185) concurrently in mock mode, so you don't need a GitHub App or Postgres to click around. See [`apps/wizard/README.md`](apps/wizard/README.md) for the production-shape env vars and Postgres-backed sessions.
 
 ### Cancel a running agent
 

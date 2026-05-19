@@ -66,8 +66,8 @@ export const architectureNodes: ArchitectureNode[] = [
     summary: "Creates managed repos and deploy links from a browser flow.",
     owns: ["Browser onboarding", "GitHub repo creation", "Deploy-to-Render links"],
     files: [
-      { label: "Wizard server", path: "packages/wizard/src/main.ts" },
-      { label: "Wizard app", path: "packages/wizard/web/src/App.tsx" },
+      { label: "Wizard server", path: "apps/wizard/src/main.ts" },
+      { label: "Wizard app", path: "apps/wizard/web/src/App.tsx" },
     ],
     talksTo: ["create-render-agent", "registry"],
     position: { x: -160, y: 80 },
