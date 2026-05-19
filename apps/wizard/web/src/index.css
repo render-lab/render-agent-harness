@@ -23,6 +23,7 @@
   --color-surface: #f8f8f8;
   --color-surface-hover: #eeeeee;
   --color-accent: #a855f7;
+  --color-accent-deep: #6b21a8;
   --color-err: #b40000;
   --color-code-bg: #e4e4e7;
 }
@@ -41,6 +42,7 @@
       --color-surface: #050505;
       --color-surface-hover: #101010;
       --color-accent: #c084fc;
+      --color-accent-deep: #6b21a8;
       --color-err: #ff5555;
       --color-code-bg: #27272a;
     }

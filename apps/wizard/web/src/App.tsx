@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { BrowsePage } from "./BrowsePage.js";
+import { Footer } from "./components/Footer.js";
 import {
   type AuthMe,
   fetchGallery,
@@ -396,9 +397,10 @@ function PublicShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <TopNav route={route} onNavigate={onNavigate} me={me} />
-      <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">{children}</main>
+      <Footer />
     </div>
   );
 }
@@ -436,11 +438,11 @@ function Shell({
   const total = totalSteps ?? STEP_TITLES.length;
   const title = stepTitle ?? STEP_TITLES[currentStep] ?? "Wizard";
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <TopNav route={route} onNavigate={onNavigate} me={me} subtitle="managed repo scaffold" />
       <StepIndicator currentStep={currentStep} total={total} title={title} />
       {withAside ? (
-        <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
+        <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
           <section className="panel p-6">{children}</section>
           <aside className="space-y-4 lg:sticky lg:top-40 lg:self-start">
             <div className="panel p-4">
@@ -459,8 +461,9 @@ function Shell({
           </aside>
         </main>
       ) : (
-        <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">{children}</main>
       )}
+      <Footer />
     </div>
   );
 }
