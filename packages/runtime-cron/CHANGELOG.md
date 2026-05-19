@@ -1,5 +1,12 @@
 # @render-harness/runtime-cron
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [ab4dbd1]
+  - @render-harness/core@0.6.1
+
 ## 0.6.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @render-harness/cap-render
 
+## 0.6.1
+
+### Patch Changes
+
+- @render-harness/registry@0.6.1
+
 ## 0.6.0
 
 ### Minor Changes

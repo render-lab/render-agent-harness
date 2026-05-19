@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-browser-browserbase",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Browserbase headless-browser capability pack for the Render agent harness.",
   "type": "module",
   "license": "MIT",

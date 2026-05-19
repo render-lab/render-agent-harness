@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-render",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "First-party capability pack for the Render agent harness that wires the hosted Render MCP (https://mcp.render.com/mcp) for managing services, deploys, databases, and env vars — with a curated list of mutating tools agents should require approval for.",
   "type": "module",
   "license": "MIT",

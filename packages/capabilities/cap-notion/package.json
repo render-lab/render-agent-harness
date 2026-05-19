@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-notion",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Notion capability pack for the Render agent harness. Per-end-user OAuth via the harness's connections API; tools for pages, databases, and workspace search.",
   "type": "module",
   "license": "MIT",
