@@ -26,7 +26,7 @@ Status legend:
 | Multi-agent bundles (`schemaVersion: 2`, fan-out emitter, `chief-of-staff` gallery entry) | Shipped | `gallery/agents/chief-of-staff` |
 | `trigger_workflow` builtin + cron-triggers-workflow mode | Shipped | Three-mode scheduling for V2 bundles |
 | Per-end-user OAuth connection API (`SecretsContext`, `oauthProviders` pack contract, `agent_user_connections`, `/connections` routes, Connections UI tab) | Shipped | See §11 |
-| npm publishing via Trusted Publishing OIDC | Shipped | Family live on npm at `0.5.x` |
+| npm publishing via Trusted Publishing OIDC | Shipped | Family live on npm at `0.6.x` (coordinated 0.6.0 minor cut shipped the pack-level migration runner) |
 | **Hardened deployment mode** (`blueprints/render.hardened.yaml` — egress allowlist + audit) | **Planned** | Phase 5 |
 
 ## 2. Built-in tools (`packages/core/src/builtins/`)
@@ -46,29 +46,22 @@ Status legend:
 
 > **Full pack-by-pack roadmap (14 categories, 50+ targeted integrations) lives in [`docs/roadmap-capabilities.md`](./roadmap-capabilities.md). Sequenced execution plan for the next 7 packs lives in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).** This section keeps the high-level shape only.
 
-11 packs shipped today. **Active shipping plan: the next 7 packs in order.** Full per-pack spec in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).
+**14 packs shipped today** — the wave-1 next-7 completed in May 2026 (Phases 1 → 7 plus the Phase 1.5 pack-migration-runner platform substrate). Active priorities now point at batch 2; see [`docs/roadmap-capabilities.md`](./roadmap-capabilities.md) §5 for the full batch-2 list and §6 for the wave-1 retro decisions.
 
 | Front | Status | Notes |
 |---|---|---|
-| Shipped: `cap-search-exa`, `cap-search-tavily`, `cap-scrape-firecrawl`, `cap-browser-browserbase`, `cap-memory-pg`, `cap-filesystem`, `cap-webhook-generic`, `cap-github`, `cap-linear`, `cap-slack`, `cap-google` | Shipped | Search, scraping, browser, memory, filesystem, inbound webhook, code repos, project management, chat, productivity (OAuth). |
-| **Next-7 #1 — `cap-render`** | **Planned** | First-party pack wrapping the existing Render MCP; on-brand, ~50 lines, showcases HITL. |
-| **Next-7 #2 — `cap-rag-pgvector`** (pgvector mode in `cap-memory-pg`) | **Planned** | Embeddings + pgvector unlock PDF/doc Q&A agents. |
-| **Next-7 #3 — `cap-notion`** | **Planned** | First non-Google OAuth provider; validates the connection API past one consumer. |
-| **Next-7 #4 — `cap-google` Drive / Docs / Sheets expansion** | **Planned** | Same Google OAuth provider, additional scopes — inside the shipped pack. |
-| **Next-7 #5 — `cap-intercom`** | **Planned** | First dual inbound+outbound support pack. |
-| **Next-7 #6 — `cap-granola`** | **Planned** | First API-key + polling pack; meeting-notes assistant pairs with cap-notion. |
-| **Next-7 #7 — `cap-figma`** | **Planned** | First pack with granular per-action OAuth scopes (post-Nov-2025 platform update). |
-| `cap-whatsapp` | Planned | Biggest net-new chat surface. Demoted from the next-7 list but design is locked in §5; first pick for batch 2. |
+| Shipped (14): `cap-search-exa`, `cap-search-tavily`, `cap-scrape-firecrawl`, `cap-browser-browserbase`, `cap-memory-pg` (trigram + pgvector modes), `cap-filesystem`, `cap-webhook-generic`, `cap-github`, `cap-linear`, `cap-slack`, `cap-google` (Gmail + Calendar + opt-in Drive/Docs/Sheets), `cap-render`, `cap-notion`, `cap-intercom`, `cap-granola`, `cap-figma` | Shipped | See §1 of `roadmap-capabilities.md` for the table. |
+| **Batch-2 #1 — `cap-whatsapp`** | **Planned** | Biggest net-new chat surface still on the deck. Design locked in §5. First pick unless customer signal shifts. |
+| `cap-microsoft`, `cap-atlassian`, `cap-airtable` | Planned (batch 2) | Productivity OAuth wave. `cap-atlassian` lands the granular-scope helper extraction (see retro Q2). |
+| `cap-resend`, `cap-stripe`, `cap-shopify` | Planned (batch 2) | Trivial API-key packs — ship when a clear gallery story / customer ask pairs with each. |
 | `cap-gitlab`, `cap-jira` | Planned | Work-monitoring wave alongside cap-github / cap-linear. |
 | `cap-sandbox` + first provider adapter | Planned | See §8. |
-| Productivity OAuth wave (rest): `cap-microsoft`, `cap-atlassian`, `cap-airtable`, `cap-zoom`, `cap-coda` | Direction | All fit the connection API (§11). `cap-microsoft` waits for an Office 365 customer ask. |
-| CRM wave (rest): `cap-hubspot`, `cap-salesforce`, `cap-zendesk`, `cap-front` | Direction | Intercom/Zendesk/Front are dual inbound+outbound. |
-| Outbound transactional email: `cap-resend`, `cap-sendgrid`, `cap-postmark` | Direction | Demoted from the next-7 list; build when there's a clear gallery story to pair it with. |
 | Observability: `cap-sentry`, `cap-posthog`, `cap-datadog`, `cap-pagerduty` | Direction | Debugging / product / incident agents. |
-| Payments / commerce: `cap-stripe`, `cap-shopify`, `cap-paddle`, `cap-lemon-squeezy` | Direction | Tiny packs, useful when a customer asks. |
-| Design tooling (beyond cap-figma): `cap-figjam` | Direction | Future companion to cap-figma if Figma exposes FigJam-specific endpoints. |
-| Other inbound chat surfaces: `cap-discord`, `cap-telegram`, `cap-twilio-sms`, `cap-email-*` | Direction | See §5; need lifecycle design per surface. |
-| Long tail (project mgmt beyond Linear/Jira, design tooling beyond Figma, e-sign, HR, banking, storage, voice, more RAG providers) | Direction | See [`roadmap-capabilities.md`](./roadmap-capabilities.md) §3.7–3.14. |
+| CRM (rest): `cap-hubspot`, `cap-salesforce`, `cap-zendesk`, `cap-front` | Direction | Intercom/Zendesk/Front are dual inbound+outbound. |
+| Productivity OAuth (long tail): `cap-zoom`, `cap-coda`, `cap-dropbox`, `cap-box`, `cap-cal-com` | Direction | All fit the connection API (§11). |
+| Inbound chat (long tail): `cap-discord`, `cap-telegram`, `cap-twilio-sms`, `cap-email-*` | Direction | See §5; need lifecycle design per surface. |
+| Design tooling (beyond cap-figma): `cap-figjam` | Direction | Future companion. |
+| Long tail (project mgmt beyond Linear/Jira, e-sign, HR, banking, storage, voice, more RAG providers) | Direction | See [`roadmap-capabilities.md`](./roadmap-capabilities.md) §3.7–3.14. |
 
 ## 4. Onboarding & distribution
 

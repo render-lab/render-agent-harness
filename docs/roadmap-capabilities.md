@@ -23,33 +23,42 @@ Status legend matches the main roadmap:
 | `cap-search-tavily` | Search | Tavily fallback |
 | `cap-scrape-firecrawl` | Web scraping | Firecrawl MCP + `scrape_and_store` |
 | `cap-browser-browserbase` | Browser automation | Hosted browser MCP |
-| `cap-memory-pg` | Memory / retrieval | `pg_trgm`-backed long-term memory (text trigram, not vector) |
+| `cap-memory-pg` | Memory / retrieval | Trigram (default) OR `pgvector` mode for embedding-based RAG. Embedding-provider chain (OpenAI / Voyage / Cohere) with `HARNESS_EMBEDDING_PROVIDER` override. Schema for pgvector mode registered via the pack-migration runner. |
 | `cap-filesystem` | Local I/O | Path-scoped, opt-in (worker is multi-tenant so this is never on by default) |
 | `cap-webhook-generic` | Inbound chat surface | HMAC-verified webhook |
 | `cap-github` | Code repo + inbound | Webhook + read/write tools |
 | `cap-linear` | Project management + inbound | Webhook + read/write tools |
 | `cap-slack` | Chat + inbound | Slack Events, thread reads, opt-in replies. Permissive `channels:read` / `groups:read` handling. |
-| `cap-google` | Productivity (OAuth) | Gmail + Calendar via per-end-user OAuth. **Only pack in-tree that registers `oauthProviders`** — validates the connection API. |
+| `cap-google` | Productivity (OAuth) | Gmail + Calendar + opt-in Drive / Docs / Sheets via per-end-user OAuth. `surfaces` config picks the bundle, `withScopeHint` translates 403 scope-drift into operator-actionable reconnect guidance. |
+| `cap-render` | Render platform | Wraps the hosted Render MCP via `mcpServers` + ships `RENDER_MCP_MUTATING_TOOLS` for HITL gating. Smallest possible cap-pack — wave-1 warm-up. |
+| `cap-notion` | Productivity (OAuth) | Pages, databases, workspace search via per-end-user OAuth. First non-Google OAuth provider; surfaced the `refreshTokenOptional` flag added to `OAuthProviderConfig` in 0.6.1 (Notion's public flow issues long-lived tokens with no refresh). |
+| `cap-intercom` | CRM + connector | First **dual inbound+outbound** pack — HMAC-verified webhook on `/connectors/intercom` plus per-end-user OAuth tools (reply, assign, tag, close, snooze). Workspace-scoped in v1; conversation key `intercom-${sha256(workspace_id:conversation_id)}`. |
+| `cap-granola` | Productivity | First **API-key + polling** pack. Three read tools (list_notes, read_note, poll_recent). The `poll_recent` dedup table (`granola_seen_notes`) is the second real consumer of the pack-migration runner. |
+| `cap-figma` | Design tooling (OAuth) | First **granular per-action OAuth scopes** pack (post-Nov-2025 Figma platform update). 7 tools across files, projects/teams, comments. `accessMode` → scope-list assembly via `assembleFigmaScopes`. |
 
 ---
 
 ## 2. In flight / Planned
 
-The next batch of work, scoped enough to start.
+Next batch of work, scoped enough to start. (The wave-1 next-7 — cap-render, cap-rag-pgvector, cap-notion, cap-google expansion, cap-intercom, cap-granola, cap-figma — all shipped; see §1.)
 
 | Pack | Status | Why now | Effort |
 |---|---|---|---|
-| `cap-render` | **Planned (next-7 #1)** | The harness deploys on Render and there is no first-party pack to talk to Render's own API. `examples/deploy-agent` wires Render MCP raw via `mcpServers`. Bundling it as `cap-render` with skills + sensible `requireApproval` defaults is ~50 lines and showcases the HITL pattern. | Tiny — wraps the existing Render MCP. |
-| `cap-rag-pgvector` (or `cap-memory-pg` pgvector mode) | **Planned (next-7 #2)** | `cap-memory-pg` is text-trigram only. Modern agents doing "summarize this PDF" / "answer questions about my docs" need embedding-based retrieval. Extends `cap-memory-pg` with an `index: "trigram" \| "pgvector"` option to avoid a parallel pack. | Medium — needs an embedding-provider abstraction (OpenAI vs voyage vs Cohere). |
-| `cap-notion` | **Planned (next-7 #3)** | First non-Google OAuth provider; validates the connection API past one consumer before we extend cap-google. | Small — standard OAuth + REST. |
-| `cap-google` Drive / Docs / Sheets expansion | **Planned (next-7 #4)** | Same Google OAuth provider, additional scopes + tools. Agents that "summarize my docs" or "create a sheet from this data" need this. Lives inside the existing `cap-google` package — no new platform plumbing. | Small — additive on a shipped pack. |
-| `cap-intercom` | **Planned (next-7 #5)** | First dual inbound+outbound support pack. Combines the chat-surface pattern with the OAuth pattern. | Medium — webhook + OAuth + REST. |
-| `cap-granola` | **Planned (next-7 #6)** | First API-key-based productivity pack and first pack using polling for inbound (Granola has no webhooks yet). Meeting-notes assistant pairs well with cap-notion. | Tiny — 2 REST endpoints + a polling primitive. |
-| `cap-figma` | **Planned (next-7 #7)** | First pack with granular per-action OAuth scopes (post-Nov-2025 platform update). Validates the granular-scope pattern needed for cap-atlassian / cap-hubspot / cap-salesforce. | Small — standard OAuth (granular scopes) + REST. |
-| `cap-whatsapp` | Planned (next batch) | Highest-impact net-new chat surface. Slots into existing connectors infra, no platform work. See main roadmap §5 for v1 design. Likely first pick for batch 2. | Medium — Meta Cloud API, 24h customer-service window state, no SDK. |
+| `cap-whatsapp` | **Planned (batch-2 #1)** | Highest-impact net-new chat surface. Slots into existing connectors infra, no platform work. See main roadmap §5 for v1 design. First pick for batch 2 unless customer signal shifts it. | Medium — Meta Cloud API, 24h customer-service window state, no SDK. |
 | `cap-gitlab` | Planned | Work-monitoring wave alongside cap-github. Same shape: webhook + REST. | Medium. |
 | `cap-jira` | Planned | Work-monitoring wave alongside cap-linear. Webhook + REST. | Medium. |
 | `cap-sandbox` + first provider adapter | Planned | Modal or Daytona first. Unlocks code-execution agents without weakening the multi-tenant worker boundary. See main roadmap §8 for the provider contract. | Large (contract + first adapter), then medium per additional adapter. |
+
+### Wave-1 gallery follow-ups (deferred)
+
+Each of the five OAuth-shaped packs that shipped in wave 1 was supposed to land with a gallery example. They were deferred because validating the demos end-to-end needs a real external account per provider (Notion, Intercom, Granola, Figma, plus a Google account with Drive/Docs/Sheets scopes). They're tracked as a single follow-up:
+
+- `doc-qa-agent` — cap-memory-pg pgvector mode (Phase 2).
+- `notion-knowledge-agent` — cap-notion (Phase 3).
+- `chief-of-staff` extension — cap-google Drive/Docs/Sheets (Phase 4).
+- `intercom-support-agent` — cap-intercom (Phase 5).
+- `meeting-notes-assistant` — cap-granola + cap-notion cross-pack pairing (Phase 6).
+- `design-review-agent` — cap-figma (Phase 7).
 
 ---
 
@@ -63,11 +72,9 @@ These mostly fit the standard OAuth 2.0 refresh-token flow already in the connec
 
 | Pack | Notes |
 |---|---|
-| `cap-microsoft` (Outlook + Graph) | Direct mirror of cap-google for Office 365. Refresh tokens rotate on every refresh (already handled in core). |
-| `cap-notion` | Pages, databases, blocks. Standard OAuth. |
-| `cap-atlassian` (Confluence + Jira) | Combines two surfaces under one OAuth app. Confluence read/write + Jira if `cap-jira` doesn't ship separately first. |
+| `cap-microsoft` (Outlook + Graph) | Direct mirror of cap-google for Office 365. Refresh tokens rotate on every refresh (already handled in core). Top candidate to validate the granular-scope helper extraction (see §6 retro). |
+| `cap-atlassian` (Confluence + Jira) | Combines two surfaces under one OAuth app. Granular scopes — second consumer of cap-figma's `assembleFigmaScopes`-style pattern; lands the scope-list helper extraction into `@render-harness/registry`. |
 | `cap-airtable` | Frequently requested for lightweight CRM / project-tracker agents. OAuth 2.0. |
-| `cap-granola` | Meeting notes + transcripts. API-key auth (Personal/Enterprise keys); polling for inbound until webhooks ship. **In the next-7 shipping plan.** |
 | `cap-zoom` | Meetings, recordings, transcripts. |
 | `cap-coda` | Niche but similar shape to Notion. |
 | `cap-cal-com` | Open-source scheduling, mirror of Google Calendar. |
@@ -144,7 +151,6 @@ These mostly fit the standard OAuth 2.0 refresh-token flow already in the connec
 
 | Pack | Notes |
 |---|---|
-| `cap-figma` | Files, comments, projects. OAuth 2.0 with granular per-action scopes (post-Nov-2025 platform update). **In the next-7 shipping plan.** |
 | `cap-figjam` | Future companion to cap-figma if Figma exposes FigJam-specific endpoints. |
 
 ### 3.10 E-sign / contracts
@@ -198,17 +204,51 @@ These are connectors (mount `POST /connectors/:key`), not tool packs. Listed her
 
 ---
 
-## 5. Prioritisation guide
+## 5. Prioritisation guide — batch 2
 
-The next 7 packs to ship, in order. Full sequenced execution plan with scope, API surface, tools, env schema, skills, tests, risks, and effort estimate for each lives in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).
+Wave 1 (the next-7) shipped — see §1 "Shipped today" for the 5 new packs (cap-render, cap-notion, cap-intercom, cap-granola, cap-figma) plus the two existing-pack expansions (cap-memory-pg pgvector mode, cap-google Drive/Docs/Sheets). The wave-1 execution plan history is preserved in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).
 
-1. **`cap-render`** — on-brand, tiny, showcases the HITL pattern, every Render-hosted harness will install it. Probably day-one work.
-2. **`cap-rag-pgvector`** (extend `cap-memory-pg`) — current memory pack is text-only; modern agents need embeddings. Standalone subsystem, doesn't need OAuth validation first.
-3. **`cap-notion`** — first non-Google OAuth provider. Validates the connection API past one consumer *before* we extend cap-google, so any Google-specific assumptions in core get flushed out first.
-4. **`cap-google` Drive / Docs / Sheets expansion** — multiplies cap-google's usefulness without a new OAuth flow. Done after cap-notion so we know the connection API isn't Google-locked.
-5. **`cap-intercom`** — first dual inbound+outbound support pack. Combines the chat-surface pattern (cap-slack/cap-github connectors) with the OAuth pattern (cap-notion/cap-google).
-6. **`cap-granola`** — first API-key-based productivity pack and first pack using polling as the inbound signal (Granola has no webhooks). New patterns we'll re-use for other ingestion-only providers.
-7. **`cap-figma`** — first pack with granular per-action OAuth scopes (Figma's `file_content:read` / `file_comments:write` etc.). Validates the granular-scope pattern needed for cap-atlassian / cap-hubspot / cap-salesforce on a relatively small surface.
+Batch 2, in rough order of leverage:
+
+1. **`cap-whatsapp`** — biggest net-new chat surface still on the deck. Design is locked in main roadmap §5; slots into the existing connectors infra with no platform work. First pick unless a customer ask shifts the order.
+2. **`cap-microsoft`** (Outlook + Graph) — Office 365 mirror of cap-google's `surfaces` pattern. Refresh tokens rotate on every refresh (already handled in core). Customer-ask gated but cheap when one arrives.
+3. **`cap-atlassian`** (Confluence + Jira) — second consumer of cap-figma's granular-scope pattern. **Lands the scope-list helper extraction into `@render-harness/registry`** (see §6 retro decision Q2).
+4. **`cap-resend`** — trivial pack, lands the "agent emails me when done" UX. Pair with a gallery example to validate.
+5. **`cap-airtable`** — long-tail customer reach for lightweight CRM / project-tracker agents. OAuth 2.0 (or PAT for single-tenant).
+6. **`cap-stripe`** — universal SaaS-agent need (refunds, MRR, invoices). Server-side API key, no OAuth. Build when a customer asks.
+7. **`cap-sentry` / `cap-posthog` / `cap-datadog` / `cap-pagerduty`** — observability cluster, all read-only first cuts.
+
+Everything else stays in §3 Direction; promote to batch-3 when a customer ask or a pattern-validation need lines up.
+
+## 6. Wave-1 retro decisions
+
+Three open calls were resolved before kickoff (Q1/Q2/Q3 in the [shipping plan](./capabilities-shipping-plan.md)). Two new questions surfaced *during* the wave; resolved here:
+
+### Q1 (carried) — extract `definePollingConnector` into `@render-harness/registry`?
+
+**Decision: defer.** Only one in-tree consumer in wave 1 (`cap-granola.poll_recent`). cap-figma was the candidate second consumer but its webhook story is fine — the granular-scope work was the design challenge, not polling. Per the kickoff threshold ("two real in-tree consumers + a clear third on the horizon"), one consumer is below bar.
+
+Re-evaluate when **cap-email-google / cap-email-microsoft** lands (those packs are polling-shaped because push subscriptions are heavier than they're worth for one-mailbox-per-deployment cases) or **cap-twilio-sms** lands (Twilio webhooks are first-class, but fallback polling for outage windows would reuse the same shape).
+
+### Q2 (new) — extract granular-scope helper into `@render-harness/registry`?
+
+Two consumers in-tree now: `cap-google.assembleGoogleScopes(accessMode, surfaces)` (Phase 4) and `cap-figma.assembleFigmaScopes(accessMode)` (Phase 7). Both follow the same shape — config → scope-list assembly — but the surface inputs differ (cap-google has a `surfaces` axis; cap-figma has only `accessMode`).
+
+**Decision: defer; extract when cap-atlassian lands.** The two existing consumers diverge slightly because their config axes differ, so the abstraction would need to support both shapes. With `cap-atlassian` (Confluence + Jira, granular scopes) as the natural third consumer, we'd have three concrete shapes to design against. Extracting now would either over-fit cap-google's or cap-figma's specifics, or invent a general-purpose API that nothing exercises beyond its first user.
+
+Until then both packs keep their inline assembler. The extraction issue is documented in `cap-atlassian`'s eventual planning notes.
+
+### Q3 (new) — scope-drift error helper (`withScopeHint` / `formatFigmaError`) — extract?
+
+Two consumers: `cap-google.withScopeHint(surface, fn)` (wrapper function) and `cap-figma.formatFigmaError(tool, expectedAction, err)` (error-formatter). Different ergonomics, same purpose — translate 403/scope errors into operator-actionable "reconnect at /ui/connections" messages.
+
+**Decision: defer pending shape convergence.** Wrapper vs formatter is a real choice — wrapper is more terse at tool sites, formatter is more flexible for non-API-call errors. The next granular-scope pack picks one and the helper extracts at that point. Both shapes are well-documented in the existing packs.
+
+### Coordinated 0.7.0 minor — needed?
+
+**No.** Only Phase 1.5 added new public API to core / contracts / registry / runtime-* / web (the `migrations` slot + `applyMigrations` second arg). That triggered the wave's only coordinated minor (0.6.0). Phase 3 added the additive `OAuthProviderConfig.refreshTokenOptional` field — shipped as a patch on core + web per the additive-opt-in rule (Q2=A from kickoff). Phases 4-7 didn't touch core/registry/contracts; they're all pack-internal patches.
+
+Family stays on 0.6.x. Operators upgrading from 0.5.x bump `harnessVersion` and `@render-harness/*` dep ranges to `"^0.6.0"`; everything else is automatic.
 
 Demoted from the top list (still tracked in §2 / §3 above):
 

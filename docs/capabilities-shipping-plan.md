@@ -1,5 +1,7 @@
 # Capabilities shipping plan — the next 7 packs
 
+> **Status: WAVE 1 COMPLETE.** All 7 packs shipped in May 2026 across 8 commits (Phases 1 → 7, plus Phase 1.5 platform substrate). See [`docs/roadmap-capabilities.md`](./roadmap-capabilities.md) §1 for the resulting shipped pack list, §5 for the batch-2 priority list, and §6 for the wave retro decisions. The phase-by-phase plan below is preserved as the historical record.
+
 Execution plan for the top 7 capability packs to ship, one after the other. Companion to `docs/roadmap-capabilities.md` (which lists the full target surface) and `docs/roadmap.md` (which covers platform substrate).
 
 Order is deliberate: every later pack benefits from validation done in an earlier one. Don't reorder casually.
