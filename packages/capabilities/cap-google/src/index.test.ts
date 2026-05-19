@@ -415,3 +415,173 @@ describe("buildRfc2822", () => {
     expect(out).toContain("References: <orig@example.com>");
   });
 });
+
+describe("cap-google surfaces config (Drive / Docs / Sheets expansion)", () => {
+  it("default surfaces are [gmail, calendar] — existing users see no change", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = { config: {}, env: () => undefined, entryName: "t" };
+    const tools = await pack.localTools(ctx);
+    const names = tools.map((t) => t.definition.name);
+    expect(names.filter((n) => n.startsWith("drive."))).toHaveLength(0);
+    expect(names.filter((n) => n.startsWith("docs."))).toHaveLength(0);
+    expect(names.filter((n) => n.startsWith("sheets."))).toHaveLength(0);
+
+    const providers = await pack.oauthProviders(ctx);
+    const scopes = providers[0]?.defaultScopes ?? [];
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/drive.file");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/documents");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/spreadsheets");
+  });
+
+  it("opting into drive adds drive.file scope (read_write) and 4 drive tools", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = {
+      config: { surfaces: ["gmail", "calendar", "drive"] },
+      env: () => undefined,
+      entryName: "t",
+    };
+    const tools = await pack.localTools(ctx);
+    const names = tools.map((t) => t.definition.name);
+    expect(names).toContain("drive.list_files");
+    expect(names).toContain("drive.search");
+    expect(names).toContain("drive.read_file");
+    expect(names).toContain("drive.upload_file");
+
+    const providers = await pack.oauthProviders(ctx);
+    expect(providers[0]?.defaultScopes).toContain("https://www.googleapis.com/auth/drive.file");
+  });
+
+  it("drive in `read` mode uses drive.readonly (broader read) and no upload tool", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = {
+      config: { surfaces: ["drive"], accessMode: "read" },
+      env: () => undefined,
+      entryName: "t",
+    };
+    const tools = await pack.localTools(ctx);
+    const names = tools.map((t) => t.definition.name);
+    expect(names).toContain("drive.read_file");
+    expect(names).not.toContain("drive.upload_file");
+
+    const providers = await pack.oauthProviders(ctx);
+    expect(providers[0]?.defaultScopes).toContain("https://www.googleapis.com/auth/drive.readonly");
+    expect(providers[0]?.defaultScopes).not.toContain("https://www.googleapis.com/auth/drive.file");
+  });
+
+  it("opting into docs adds documents scope and 3 docs tools in read_write", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = {
+      config: { surfaces: ["docs"] },
+      env: () => undefined,
+      entryName: "t",
+    };
+    const tools = await pack.localTools(ctx);
+    const names = tools.map((t) => t.definition.name);
+    expect(names).toEqual(["docs.read_doc", "docs.create_doc", "docs.append_text"]);
+
+    const providers = await pack.oauthProviders(ctx);
+    expect(providers[0]?.defaultScopes).toContain("https://www.googleapis.com/auth/documents");
+  });
+
+  it("opting into sheets adds spreadsheets scope and 5 sheets tools in read_write", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = {
+      config: { surfaces: ["sheets"] },
+      env: () => undefined,
+      entryName: "t",
+    };
+    const tools = await pack.localTools(ctx);
+    const names = tools.map((t) => t.definition.name);
+    expect(names).toEqual([
+      "sheets.read_range",
+      "sheets.read_sheet_metadata",
+      "sheets.append_row",
+      "sheets.update_range",
+      "sheets.create_sheet",
+    ]);
+
+    const providers = await pack.oauthProviders(ctx);
+    expect(providers[0]?.defaultScopes).toContain("https://www.googleapis.com/auth/spreadsheets");
+  });
+
+  it("all five surfaces in read_write contribute ~22 tools and 6 user-data scopes", async () => {
+    if (!pack.localTools || !pack.oauthProviders) throw new Error("hooks missing");
+    const ctx = {
+      config: { surfaces: ["gmail", "calendar", "drive", "docs", "sheets"] },
+      env: () => undefined,
+      entryName: "t",
+    };
+    const tools = await pack.localTools(ctx);
+    // 4 gmail + 6 calendar + 4 drive + 3 docs + 5 sheets = 22
+    expect(tools).toHaveLength(22);
+    const providers = await pack.oauthProviders(ctx);
+    const scopes = providers[0]?.defaultScopes ?? [];
+    // gmail.modify + gmail.send + calendar + drive.file + documents +
+    // spreadsheets + userinfo.email = 7
+    expect(scopes).toHaveLength(7);
+  });
+
+  it("garbage surfaces config falls back to defaults", async () => {
+    if (!pack.localTools) throw new Error("localTools missing");
+    const tools = await pack.localTools({
+      config: { surfaces: ["not-a-surface", 123, null] },
+      env: () => undefined,
+      entryName: "t",
+    });
+    const names = tools.map((t) => t.definition.name);
+    expect(names.some((n) => n.startsWith("gmail."))).toBe(true);
+    expect(names.some((n) => n.startsWith("calendar."))).toBe(true);
+    expect(names.some((n) => n.startsWith("drive."))).toBe(false);
+  });
+
+  it("dedupes duplicate surface entries", async () => {
+    if (!pack.localTools) throw new Error("localTools missing");
+    const tools = await pack.localTools({
+      config: { surfaces: ["docs", "docs", "docs"] },
+      env: () => undefined,
+      entryName: "t",
+    });
+    const docTools = tools.filter((t) => t.definition.name.startsWith("docs."));
+    expect(docTools).toHaveLength(3);
+  });
+
+  it("contributes a skill per opted-in non-default surface", async () => {
+    if (!pack.skills) throw new Error("skills hook missing");
+    const justDefaults = await pack.skills({
+      config: {},
+      env: () => undefined,
+      entryName: "t",
+    });
+    expect(justDefaults).toHaveLength(0); // gmail+calendar have no skills in this pack
+
+    const all = await pack.skills({
+      config: { surfaces: ["gmail", "calendar", "drive", "docs", "sheets"] },
+      env: () => undefined,
+      entryName: "t",
+    });
+    const names = all.map((s) => s.name);
+    expect(names).toEqual(["google-drive", "google-docs", "google-sheets"]);
+  });
+});
+
+describe("withScopeHint", () => {
+  it("rewrites insufficient-scopes errors into actionable connection guidance", async () => {
+    const { withScopeHint } = await import("./lib.js");
+    await expect(
+      withScopeHint("drive", async () => {
+        throw new Error(
+          "Google API 403: PERMISSION_DENIED: Request had insufficient authentication scopes",
+        );
+      }),
+    ).rejects.toThrow(/Your Google connection doesn't include drive access/);
+  });
+
+  it("passes other errors through unchanged", async () => {
+    const { withScopeHint } = await import("./lib.js");
+    await expect(
+      withScopeHint("drive", async () => {
+        throw new Error("Google API 404: not found");
+      }),
+    ).rejects.toThrow(/not found/);
+  });
+});

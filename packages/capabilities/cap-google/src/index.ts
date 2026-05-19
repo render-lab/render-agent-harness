@@ -46,24 +46,43 @@
  *     harness service.
  */
 
-import type { LocalToolHandler, OAuthProviderConfig } from "@render-harness/core";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { LocalToolHandler, OAuthProviderConfig, SkillMetadata } from "@render-harness/core";
 import { definePack, type PackContext } from "@render-harness/registry";
 import pkg from "../package.json" with { type: "json" };
-import { GOOGLE_PROVIDER_ID, type GoogleAccessMode, googleProvider } from "./oauth.js";
+import {
+  assembleGoogleScopes,
+  DEFAULT_SURFACES,
+  GOOGLE_PROVIDER_ID,
+  type GoogleAccessMode,
+  type GoogleSurface,
+  googleProvider,
+} from "./oauth.js";
 import { calendarTools } from "./tools/calendar.js";
+import { docsTools } from "./tools/docs.js";
+import { driveTools } from "./tools/drive.js";
 import { gmailTools } from "./tools/gmail.js";
+import { sheetsTools } from "./tools/sheets.js";
 
-export type { GoogleAccessMode } from "./oauth.js";
-export { GOOGLE_PROVIDER_ID, googleProvider } from "./oauth.js";
+export type { GoogleAccessMode, GoogleSurface } from "./oauth.js";
+export {
+  assembleGoogleScopes,
+  DEFAULT_SURFACES,
+  GOOGLE_PROVIDER_ID,
+  googleProvider,
+} from "./oauth.js";
 
-interface GoogleConfig {
-  accessMode?: GoogleAccessMode;
-  clientIdEnv?: string;
-  clientSecretEnv?: string;
+interface ResolvedGoogleConfig {
+  accessMode: GoogleAccessMode;
+  surfaces: GoogleSurface[];
+  clientIdEnv: string;
+  clientSecretEnv: string;
 }
 
 const DEFAULT_CLIENT_ID_ENV = "GOOGLE_OAUTH_CLIENT_ID";
 const DEFAULT_CLIENT_SECRET_ENV = "GOOGLE_OAUTH_CLIENT_SECRET";
+const VALID_SURFACES: GoogleSurface[] = ["gmail", "calendar", "drive", "docs", "sheets"];
 
 const pack = definePack({
   name: "cap-google",
@@ -92,6 +111,12 @@ const pack = definePack({
   connectionsRequired: [
     {
       provider: GOOGLE_PROVIDER_ID,
+      // Required scopes here reflect the default (gmail + calendar)
+      // surface set. When operators opt into drive/docs/sheets via
+      // surfaces, the OAuth flow requests the extra scopes — but the
+      // connectionsRequired hint stays minimal so the operator UI
+      // doesn't show stale "missing scope" warnings for surfaces the
+      // pack isn't using.
       scopes: ["gmail.modify", "gmail.send", "calendar", "userinfo.email"],
     },
   ],
@@ -99,23 +124,63 @@ const pack = definePack({
     const cfg = readConfig(ctx.config);
     return [
       googleProvider({
-        ...(cfg.clientIdEnv ? { clientIdEnv: cfg.clientIdEnv } : {}),
-        ...(cfg.clientSecretEnv ? { clientSecretEnv: cfg.clientSecretEnv } : {}),
-        ...(cfg.accessMode ? { accessMode: cfg.accessMode } : {}),
+        clientIdEnv: cfg.clientIdEnv,
+        clientSecretEnv: cfg.clientSecretEnv,
+        accessMode: cfg.accessMode,
+        surfaces: cfg.surfaces,
       }),
     ];
   },
   localTools(ctx: PackContext): LocalToolHandler[] {
     const cfg = readConfig(ctx.config);
-    const accessMode = cfg.accessMode ?? "read_write";
-    return [...gmailTools({ accessMode }), ...calendarTools({ accessMode })];
+    const tools: LocalToolHandler[] = [];
+    if (cfg.surfaces.includes("gmail")) tools.push(...gmailTools({ accessMode: cfg.accessMode }));
+    if (cfg.surfaces.includes("calendar"))
+      tools.push(...calendarTools({ accessMode: cfg.accessMode }));
+    if (cfg.surfaces.includes("drive")) tools.push(...driveTools({ accessMode: cfg.accessMode }));
+    if (cfg.surfaces.includes("docs")) tools.push(...docsTools({ accessMode: cfg.accessMode }));
+    if (cfg.surfaces.includes("sheets")) tools.push(...sheetsTools({ accessMode: cfg.accessMode }));
+    return tools;
+  },
+  skills(ctx: PackContext): SkillMetadata[] {
+    const cfg = readConfig(ctx.config);
+    const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "skills");
+    const out: SkillMetadata[] = [];
+    if (cfg.surfaces.includes("drive")) {
+      out.push({
+        name: "google-drive",
+        description: "List, search, read, and upload files in the user's Google Drive.",
+        whenToUse:
+          "When the user references a Drive file (by name or URL), asks you to summarize a document, or wants you to drop a result file in Drive.",
+        contentPath: join(SKILLS_DIR, "google-drive.md"),
+      });
+    }
+    if (cfg.surfaces.includes("docs")) {
+      out.push({
+        name: "google-docs",
+        description: "Read, create, and append text to Google Docs.",
+        whenToUse:
+          "When the user references a Google Doc, asks you to draft something into a doc, or wants you to add a paragraph to an existing doc.",
+        contentPath: join(SKILLS_DIR, "google-docs.md"),
+      });
+    }
+    if (cfg.surfaces.includes("sheets")) {
+      out.push({
+        name: "google-sheets",
+        description: "Read ranges, append rows, update cells, and create Google Sheets.",
+        whenToUse:
+          "When the user references a Google Sheet, asks you to pull tabular data, or wants you to record results in a sheet.",
+        contentPath: join(SKILLS_DIR, "google-sheets.md"),
+      });
+    }
+    return out;
   },
 });
 
 export default pack;
 
-function readConfig(raw: Record<string, unknown>): Required<GoogleConfig> {
-  const accessMode = raw.accessMode === "read" ? "read" : "read_write";
+function readConfig(raw: Record<string, unknown>): ResolvedGoogleConfig {
+  const accessMode: GoogleAccessMode = raw.accessMode === "read" ? "read" : "read_write";
   const clientIdEnv =
     typeof raw.clientIdEnv === "string" && raw.clientIdEnv.length > 0
       ? raw.clientIdEnv
@@ -124,5 +189,20 @@ function readConfig(raw: Record<string, unknown>): Required<GoogleConfig> {
     typeof raw.clientSecretEnv === "string" && raw.clientSecretEnv.length > 0
       ? raw.clientSecretEnv
       : DEFAULT_CLIENT_SECRET_ENV;
-  return { accessMode, clientIdEnv, clientSecretEnv };
+  const surfaces = parseSurfaces(raw.surfaces);
+  return { accessMode, surfaces, clientIdEnv, clientSecretEnv };
 }
+
+function parseSurfaces(raw: unknown): GoogleSurface[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_SURFACES];
+  const filtered = raw.filter(
+    (s): s is GoogleSurface => typeof s === "string" && (VALID_SURFACES as string[]).includes(s),
+  );
+  if (filtered.length === 0) return [...DEFAULT_SURFACES];
+  // Dedup while preserving order.
+  return [...new Set(filtered)];
+}
+
+// Re-export for callers that want to introspect the assembled scope
+// set (e.g. ops tooling, scope-drift detectors).
+export { assembleGoogleScopes as resolveGoogleScopes };

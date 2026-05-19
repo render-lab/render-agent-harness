@@ -87,6 +87,39 @@ function extractGoogleErrorMessage(parsed: unknown, status: number): string {
   return `HTTP ${status}`;
 }
 
+/**
+ * Wrap a Google API call so that an "insufficient authentication
+ * scopes" 403 gets rewritten into an operator-actionable error
+ * naming the surface the agent was trying to use. Without this,
+ * the model sees a raw "Request had insufficient authentication
+ * scopes" and has to guess what to tell the user.
+ *
+ * Catches errors thrown by `googleFetch`, inspects the message for
+ * the known Google scope-drift signals, and re-throws an Error
+ * pointing at the operator UI's Connections tab with concrete
+ * remediation. Other errors pass through unchanged.
+ */
+export async function withScopeHint<T>(
+  surface: "drive" | "docs" | "sheets" | "gmail" | "calendar",
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      /insufficient authentication scopes/i.test(msg) ||
+      /Request had insufficient authentication scopes/i.test(msg) ||
+      /PERMISSION_DENIED/i.test(msg)
+    ) {
+      throw new Error(
+        `Your Google connection doesn't include ${surface} access — open the Connections tab in the operator UI, disconnect Google, and reconnect after adding "${surface}" to the pack's \`surfaces:\` config in render-harness.yaml. (Underlying Google error: ${msg.slice(0, 240)})`,
+      );
+    }
+    throw err;
+  }
+}
+
 // --------------------------------------------------------------------
 // Tool wrapper that handles SecretsContext, errors, and JSON
 // serialization uniformly.
