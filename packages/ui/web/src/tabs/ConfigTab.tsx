@@ -72,7 +72,7 @@ export function ConfigTab() {
           empty={{
             when: envVars.length === 0,
             message:
-              "// no env vars declared in render-harness.yaml — capability packs and the harness manifest can add entries to envSchema",
+              "// no env vars declared in render-harness.yaml. Capability packs and the loop manifest can add entries to envSchema",
           }}
         >
           <ul className="space-y-1.5">
@@ -253,7 +253,7 @@ function HarnessVersionPanel({ deployment }: { deployment: ReturnType<typeof use
   const rows = Object.entries(harness.running).sort(([a], [b]) => a.localeCompare(b));
   return (
     <section>
-      <SectionHeader title="HARNESS VERSION" />
+        <SectionHeader title="LOOPS VERSION" />
       <div className="border border-line p-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           <span className="badge">{harness.status}</span>

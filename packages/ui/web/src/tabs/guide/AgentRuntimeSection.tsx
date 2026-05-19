@@ -5,7 +5,7 @@ import { useDeployment, useDeploymentName } from "../../deployment-context.js";
 import { CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 const PROSE_AGENT = `
-Every agent in the harness is just a value passed to \`defineAgent()\`. There's no class hierarchy and no implicit registry — what you write is what runs. The example below shows the canonical shape of an agent declaration:
+Every agent in Render Loops is just a value passed to \`defineAgent()\`. There's no class hierarchy and no implicit registry. What you write is what runs. The example below shows the canonical shape of an agent declaration:
 `;
 
 function buildRuntimeProse(name: string, hasWorker: boolean): string {
@@ -16,7 +16,7 @@ function buildRuntimeProse(name: string, hasWorker: boolean): string {
       : "- `@render-harness/runtime-web` — single-process synchronous shape. Runs the agent loop inline in the request handler. Best for sub-30s interactions.",
   ];
   return `
-The agent is a value; the runtime is what actually drives it. The harness ships four runtime adapters that share the same loop in \`@render-harness/core\`. **${name}** uses ${
+The agent is a value; the runtime is what actually drives it. Render Loops ships four runtime adapters that share the same core loop in \`@render-harness/core\`. **${name}** uses ${
     hasWorker ? "the web + worker pair" : "the single-process web runtime"
   }:
 
@@ -28,7 +28,7 @@ ${
     : "The web service loads the agent definition from `render-harness.yaml` via `defineFromConfig()` and runs the agent loop in-process — no separate worker needed."
 }
 
-For other shapes the harness has \`@render-harness/runtime-cron\` (one-shot scheduled runs) and \`@render-harness/runtime-workflows\` (durable, multi-day, human-in-the-loop). Same \`AgentDefinition\` runs unchanged on any of them.
+For other shapes Render Loops has \`@render-harness/runtime-cron\` (one-shot scheduled runs) and \`@render-harness/runtime-workflows\` (durable, multi-day, human-in-the-loop). Same \`AgentDefinition\` runs unchanged on any of them.
 `;
 }
 

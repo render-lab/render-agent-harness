@@ -1,5 +1,20 @@
 # @render-harness/ui
 
+## 0.8.1
+
+### Patch Changes
+
+- Rebrand the operator UI to **Render Loops**.
+  - Sidebar logo flips `Render / Harness` → `Render / Loops`.
+  - Compact version badge changes from `Harness X.Y.Z` (and `Harness mixed` / `Harness unknown`) to `Loops X.Y.Z` (and `Loops mixed` / `Loops unknown`).
+  - Browser tab title goes from `render-harness / operator` to `render-loops / operator` (same for the sign-in and build-missing pages served by `serveUi`).
+  - Config tab section header `HARNESS VERSION` → `LOOPS VERSION`.
+  - Docs tab iframe `title="Render Harness documentation"` → `title="Render Loops documentation"`.
+  - Guide tab long-form sections (Tour, Capabilities, Agent runtime, Customizing, Deploy) and the Connections tab subtitle now read as Render Loops + loop (the deployable) instead of "the harness".
+  - Modal error copy on Add agent / Edit model / Edit system prompt switched "this harness" → "this loop".
+
+  Operator-facing copy only. No exported APIs, schemas, env vars, or routes change. Package name (`@render-harness/ui`), file paths (`render-harness.yaml`, `.render-harness/agent.json`), the `harnessVersion` schema field, and the deployed GitHub App name remain on the existing `render-harness` spellings.
+
 ## 0.8.0
 
 ### Minor Changes

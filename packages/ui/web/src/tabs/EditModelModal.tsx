@@ -142,7 +142,7 @@ function explainError(code: string | undefined, details: string | undefined): st
     case "repo_locator_missing":
       return "`.render-harness/agent.json` is missing or has null org/repo. The wizard's scaffolder writes this; CLI-scaffolded repos need the install flow to populate it.";
     case "agent_not_found":
-      return "Agent id wasn't found in the deployed render-harness.yaml — has it been renamed since this deploy?";
+      return "Agent id wasn't found in the deployed render-harness.yaml. Has it been renamed since this deploy?";
     case "stale_sha":
       return "Someone else committed to render-harness.yaml under us. Reload and retry.";
     case "invalid_model_spec":

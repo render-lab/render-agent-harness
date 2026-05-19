@@ -57,10 +57,10 @@ export function useDeploymentName(fallback = "agent"): string {
 export function useHarnessVersionLabel(): string {
   const d = useDeployment();
   const harness = d?.harness;
-  if (!harness) return "Harness unknown";
+  if (!harness) return "Loops unknown";
   const versions = Object.values(harness.running);
   const unique = [...new Set(versions)];
-  if (harness.status === "unknown" || unique.length === 0) return "Harness unknown";
-  if (unique.length > 1) return "Harness mixed";
-  return `Harness ${unique[0]}`;
+  if (harness.status === "unknown" || unique.length === 0) return "Loops unknown";
+  if (unique.length > 1) return "Loops mixed";
+  return `Loops ${unique[0]}`;
 }

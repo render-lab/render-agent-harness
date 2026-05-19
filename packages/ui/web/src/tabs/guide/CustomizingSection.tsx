@@ -20,13 +20,13 @@ It's a string. Replace it with whatever shape you want the agent to take — a c
 const PROSE_MODEL = `
 ### 2. Swap the model
 
-The harness has two model adapters: \`anthropic\` (direct Anthropic SDK) and \`openai-compat\` (any OpenAI-compatible gateway, including OpenRouter, Bedrock-via-LiteLLM, vLLM, Ollama, etc.). Switching providers is one config block.
+Render Loops has two model adapters: \`anthropic\` (direct Anthropic SDK) and \`openai-compat\` (any OpenAI-compatible gateway, including OpenRouter, Bedrock-via-LiteLLM, vLLM, Ollama, etc.). Switching providers is one config block.
 `;
 
 const PROSE_MCP = `
 ### 3. Add an MCP server
 
-MCP gives the agent tools without you writing tool code. Drop a server into \`mcpServers\` and the harness connects, lists the tools, and exposes them to the model. Render's own MCP works as a read-only example — the agent can list services, fetch deploy logs, and inspect Postgres / Key Value resources.
+MCP gives the agent tools without you writing tool code. Drop a server into \`mcpServers\` and Render Loops connects, lists the tools, and exposes them to the model. Render's own MCP works as a read-only example: the agent can list services, fetch deploy logs, and inspect Postgres / Key Value resources.
 `;
 
 const PROSE_CLOSE = `

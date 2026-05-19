@@ -6,7 +6,7 @@ import { CmdBadge, CodeBlock, CTA, GuideSectionShell, KV, LivePanel } from "./la
 
 function buildIntro(name: string): string {
   return `
-The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render resource: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`${name}-web\` becomes a public web service, and \`${name}-worker\` becomes a background worker. The harness uses the same image and same code; only the runtime layout changes.
+The local Compose stack you're running has a one-to-one mapping to a Render Blueprint. Every container becomes a Render resource: \`postgres\` becomes a Managed Postgres, \`valkey\` becomes Render Key Value, \`${name}-web\` becomes a public web service, and \`${name}-worker\` becomes a background worker. Render Loops uses the same image and same code; only the runtime layout changes.
 `;
 }
 
@@ -66,9 +66,9 @@ function buildOtherRuntimes(used: Set<string>): string {
     );
   }
   if (remaining.length === 0) {
-    return `\n### Other runtimes\n\nThis bundle already uses every runtime adapter the harness ships (${usedList}). Same \`AgentDefinition\` would run unchanged on any of them — different deploy shape, same code.\n`;
+    return `\n### Other runtimes\n\nThis bundle already uses every runtime adapter Render Loops ships (${usedList}). Same \`AgentDefinition\` would run unchanged on any of them. Different deploy shape, same code.\n`;
   }
-  return `\n### Other runtimes\n\nThis bundle uses ${usedList}. The harness also ships:\n\n${remaining.join("\n")}\n\nSame \`AgentDefinition\`. Same skills. Same MCP wiring. Different deploy shape.\n`;
+  return `\n### Other runtimes\n\nThis bundle uses ${usedList}. Render Loops also ships:\n\n${remaining.join("\n")}\n\nSame \`AgentDefinition\`. Same skills. Same MCP wiring. Different deploy shape.\n`;
 }
 
 export function DeploySection() {

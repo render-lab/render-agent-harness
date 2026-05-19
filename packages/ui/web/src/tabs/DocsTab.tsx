@@ -4,7 +4,7 @@ export function DocsTab() {
   return (
     <div className="h-screen overflow-hidden">
       <iframe
-        title="Render Harness documentation"
+        title="Render Loops documentation"
         src={DOCS_URL}
         className="h-full w-full bg-canvas"
       />

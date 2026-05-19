@@ -354,7 +354,7 @@ function renderLoginPage(args: { uiPath: string; error: string | null }): string
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>render-harness / operator / sign-in</title>
+    <title>render-loops / operator / sign-in</title>
     <style>
       ${INLINE_THEME_CSS}
       main { min-height: 100vh; display: grid; place-items: center; padding: 2rem 1rem; }
@@ -385,7 +385,7 @@ function renderLoginPage(args: { uiPath: string; error: string | null }): string
     <main>
       <form class="panel card" method="post" action="${escapeHtml(args.uiPath)}/login">
         <h1>
-          <span class="muted">render-harness</span> / operator<span class="cursor blink" aria-hidden="true">▊</span>
+          <span class="muted">render-loops</span> / operator<span class="cursor blink" aria-hidden="true">▊</span>
         </h1>
         <p class="sub">/sign-in</p>
         <p class="help">// enter the api key configured for this service (<code>WEB_API_KEY</code>)</p>
@@ -409,7 +409,7 @@ function renderBuildMissingPage(args: { uiPath: string }): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>render-harness / operator / build-missing</title>
+    <title>render-loops / operator / build-missing</title>
     <style>
       ${INLINE_THEME_CSS}
       main { max-width: 60ch; margin: 4rem auto; padding: 0 1.5rem; }

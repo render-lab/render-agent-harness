@@ -159,7 +159,7 @@ function AppInner() {
         <div className="border-b border-line p-4">
           <div className="text-base font-bold uppercase leading-none tracking-widest">
             <div>Render</div>
-            <div>Harness</div>
+            <div>Loops</div>
           </div>
           <div className="mt-3 text-[10px] uppercase tracking-wider text-muted">
             {deploymentName}

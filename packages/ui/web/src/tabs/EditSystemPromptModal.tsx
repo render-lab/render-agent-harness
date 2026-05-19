@@ -168,12 +168,12 @@ function explainError(code: string | undefined, details: string | undefined): st
     case "wizard_shared_secret_not_configured":
       return "Set WIZARD_SHARED_SECRET on both the worker and wizard services. They must match.";
     case "edit_in_ui_not_configured":
-      return `Edit-in-UI commits aren't configured on this harness. ${details ?? ""}`.trim();
+      return `Edit-in-UI commits aren't configured on this loop. ${details ?? ""}`.trim();
     case "repo_locator_missing":
       return "`.render-harness/agent.json` is missing or has null org/repo. The wizard's scaffolder writes this; CLI-scaffolded repos need the install flow to populate it.";
     case "agent_not_found":
     case "agent_not_found_in_manifest":
-      return "Agent id wasn't found in the deployed render-harness.yaml — has it been renamed since this deploy?";
+      return "Agent id wasn't found in the deployed render-harness.yaml. Has it been renamed since this deploy?";
     case "stale_sha":
       return "Someone else committed to render-harness.yaml under us. Reload and retry.";
     case "invalid_manifest":

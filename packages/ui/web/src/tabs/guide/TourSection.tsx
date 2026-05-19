@@ -15,7 +15,7 @@ import { CmdBadge, CTA, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 function buildProse(name: string): string {
   return `
-You're looking at the **${name}** stack — an end-to-end agent deployment built on the Render agent harness. Everything you see in the UI is powered by four cooperating containers running locally via Docker Compose:
+You're looking at the **${name}** loop, an end-to-end agent deployment built on Render Loops. Everything you see in the UI is powered by four cooperating containers running locally via Docker Compose:
 
 - \`${name}-web\` — the public web service. It serves this UI, exposes the JSON+SSE API (\`/runs\`, \`/agents\`, \`/usage\`, \`/diagnostics\`), and enqueues new run jobs onto a Postgres-backed queue.
 - \`${name}-worker\` — a separate process that pulls jobs off the queue and actually drives the agent loop. Same image as the web service, just a different command.

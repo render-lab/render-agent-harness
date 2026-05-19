@@ -104,7 +104,7 @@ export function AddAgentModal({ onClose, onAdded }: AddAgentModalProps) {
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wide">add agent</h2>
             <p className="mt-1 text-[11px] text-muted">
-              {"// pulled from the render-harness gallery; commits to your managed repo"}
+              {"// pulled from the Render Loops gallery; commits to your managed repo"}
             </p>
           </div>
           <button type="button" onClick={onClose} className="border border-line px-2 py-1 text-xs">
@@ -293,7 +293,7 @@ function surfaceError(
   }
   if (code === "repo_locator_missing") {
     setError(
-      "Repo metadata is missing (.render-harness/agent.json). This usually means the harness was scaffolded outside the wizard's managed-repo flow.",
+      "Repo metadata is missing (.render-harness/agent.json). This usually means the loop was scaffolded outside the wizard's managed-repo flow.",
     );
     setHint(null);
     return;

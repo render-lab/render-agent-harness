@@ -5,11 +5,11 @@ import { useDeployment } from "../../deployment-context.js";
 import { CmdBadge, CodeBlock, GuideSectionShell, KV, LivePanel } from "./layout.js";
 
 const PROSE_INTRO = `
-**Capability packs** are the harness's extension surface for "give the agent a new ability without me writing tool code." A pack is a small TypeScript module that exposes some combination of:
+**Capability packs** are Render Loops' extension surface for "give the agent a new ability without me writing tool code." A pack is a small TypeScript module that exposes some combination of:
 
 - one or more MCP servers,
 - a skills directory the model can pull into context,
-- env-var declarations the harness validates at boot,
+- env-var declarations Render Loops validates at boot,
 - and a pre-validated default config.
 
 First-party packs live in [\`packages/capabilities/\`](https://github.com/render/render-harness/tree/main/packages/capabilities) and on npm with the \`render-harness-cap\` keyword. Community packs follow the same shape.
@@ -36,7 +36,7 @@ Three steps. After this, the agent can search the web mid-conversation.
 const PROSE_DECLARATIVE = `
 ### The declarative path
 
-Inside the harness's config registry, capabilities compose declaratively in \`render-harness.yaml\` instead of TypeScript. The same pack works in either path; \`defineFromConfig()\` reads the YAML, the build emits a Render Blueprint, and one click deploys it. See [\`docs/registry-guide.md\`](https://github.com/render/render-harness/blob/main/docs/registry-guide.md) for the full walkthrough.
+Inside Render Loops' config registry, capabilities compose declaratively in \`render-harness.yaml\` instead of TypeScript. The same pack works in either path; \`defineFromConfig()\` reads the YAML, the build emits a Render Blueprint, and one click deploys it. See [\`docs/registry-guide.md\`](https://github.com/render/render-harness/blob/main/docs/registry-guide.md) for the full walkthrough.
 `;
 
 export function CapabilitiesSection() {
@@ -58,7 +58,7 @@ export function CapabilitiesSection() {
             <li>
               <p>
                 Reference it in <code className="bg-code-bg px-1">render-harness.yaml</code> under{" "}
-                <code className="bg-code-bg px-1">capabilities</code>. The harness materializes the
+                <code className="bg-code-bg px-1">capabilities</code>. Render Loops materializes the
                 pack at boot, wires its MCP servers into each agent, and the live panel below reads
                 the pack list to show what's installed:
               </p>

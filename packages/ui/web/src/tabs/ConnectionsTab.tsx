@@ -138,7 +138,7 @@ export function ConnectionsTab() {
       <section>
         <SectionHeader title="CONNECTIONS" />
         <p className="mb-3 text-[11px] text-muted">
-          {"// per-end-user OAuth tokens stored encrypted in the harness DB and refreshed on use"}
+          {"// per-end-user OAuth tokens stored encrypted in the loop's database and refreshed on use"}
         </p>
         <AsyncBoundary
           loading={loading}
