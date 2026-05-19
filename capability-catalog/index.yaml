@@ -234,6 +234,60 @@ capabilities:
       reviewStatus: maintainer-reviewed
     trustTier: official
 
+  - package: "@render-harness/cap-intercom"
+    name: Intercom
+    description: First dual inbound+outbound pack — HMAC-verified webhook for conversation events plus per-end-user OAuth tools for replying, assigning, tagging, closing, and snoozing.
+    categories: [tools, connector, intercom, support, webhook, oauth]
+    provider: Intercom
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-intercom
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.6"
+    requiresHarness: "^0.6"
+    features: [tools, connectors]
+    envVars:
+      - name: INTERCOM_OAUTH_CLIENT_ID
+        required: true
+        secret: false
+        description: Intercom OAuth app client id (from the Developer Hub).
+      - name: INTERCOM_OAUTH_CLIENT_SECRET
+        required: true
+        secret: true
+        description: >-
+          Intercom OAuth app client secret. Doubles as the HMAC key for webhook
+          signature verification (Intercom signs every delivery with this).
+      - name: CONNECTIONS_ENCRYPTION_KEY
+        required: true
+        secret: true
+        description: >-
+          32-byte base64 secret used by the harness to encrypt refresh tokens at rest.
+          Generate with `openssl rand -base64 32`.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        Per-end-user OAuth via the harness connection API. Workspace-scoped in v1
+        (one Intercom workspace per pack instance). Scopes configured server-side
+        on the Intercom app; the pack requests no specific scope list at OAuth
+        time. Default accessMode is read_write; set to "read" to drop the 5
+        write tools.
+    connectors:
+      - key: intercom
+        auth: hmac
+        eventTypes:
+          - conversation.user.created
+          - conversation.user.replied
+          - conversation.admin.assigned
+          - conversation.admin.closed
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-intercom test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
   - package: "@render-harness/cap-google"
     name: Google Workspace
     description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.
