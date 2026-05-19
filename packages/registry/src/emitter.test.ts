@@ -319,9 +319,19 @@ describe("emitBlueprint — V2 multi-agent bundle", () => {
     });
     expect(web?.envVars?.find((e) => e.key === "WEB_API_KEY")?.sync).toBe(false);
     expect(web?.envVars?.find((e) => e.key === "UI_COOKIE_SECRET")?.generateValue).toBe(true);
+    // Deploy-key commit creds land on the web shell when UI is mounted.
+    // Both are sync:false (PEMs can't be generateValue'd by Render and
+    // we want the operator to paste from the scaffold-done page or the
+    // CLI subcommand at deploy time).
+    expect(web?.envVars?.find((e) => e.key === "GITHUB_DEPLOY_KEY")?.sync).toBe(false);
+    expect(web?.envVars?.find((e) => e.key === "GITHUB_DEPLOY_REPO_SSH_URL")?.sync).toBe(false);
     expect(
       blueprint.envVarGroups?.[0]?.envVars.some(
-        (e) => e.key === "WEB_API_KEY" || e.key === "UI_COOKIE_SECRET",
+        (e) =>
+          e.key === "WEB_API_KEY" ||
+          e.key === "UI_COOKIE_SECRET" ||
+          e.key === "GITHUB_DEPLOY_KEY" ||
+          e.key === "GITHUB_DEPLOY_REPO_SSH_URL",
       ),
     ).toBe(false);
   });

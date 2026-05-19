@@ -571,6 +571,20 @@ function uiEnvIfNeeded(cfg: HarnessConfig): BlueprintEnvVar[] {
   return [
     { key: "WEB_API_KEY", sync: false },
     { key: "UI_COOKIE_SECRET", generateValue: true },
+    // Deploy-key commit creds. These are the post-WIZARD_SHARED_SECRET
+    // model for edit-in-UI: when both are set, the harness commits
+    // edit-in-UI changes directly to the managed repo via SSH instead
+    // of proxying through the wizard. Both are sync:false because PEM
+    // keys can't be generateValue'd by Render and we never want to
+    // bake the private key into the rendered Blueprint.
+    //
+    // Wizard scaffold provisions and prints these at scaffold-done time
+    // (`apps/wizard/src/routes/scaffold.ts`); CLI-scaffolded harnesses
+    // generate them with `npx create-render-agent deploy-key`. Either
+    // way the operator pastes them into the Render env-var prompt at
+    // first deploy.
+    { key: "GITHUB_DEPLOY_KEY", sync: false },
+    { key: "GITHUB_DEPLOY_REPO_SSH_URL", sync: false },
   ];
 }
 

@@ -550,11 +550,17 @@ export interface DeploymentInfo {
    * `.render-harness/agent.json` at boot. `installationId` is null for
    * CLI-scaffolded repos until the user installs the render-harness
    * GitHub App on their own repo via the wizard's install flow.
+   *
+   * `repoSshUrl` is derived from `org` + `repo` at boot and is the
+   * target the harness clones + pushes to when committing edit-in-UI
+   * changes via the deploy-key path (paired with `GITHUB_DEPLOY_KEY`
+   * in env). Absent when `org` or `repo` is missing.
    */
   repoLocator?: {
     org: string | null;
     repo: string | null;
     installationId: string | null;
+    repoSshUrl?: string | null;
   };
   /**
    * Merged env-var requirements (from `config.envSchema` + each

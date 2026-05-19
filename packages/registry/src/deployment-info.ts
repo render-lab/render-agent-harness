@@ -111,11 +111,22 @@ export async function enrichDeploymentInfo(
         org?: unknown;
         repo?: unknown;
         installationId?: unknown;
+        repoSshUrl?: unknown;
       };
+      const org = typeof m.org === "string" ? m.org : null;
+      const repo = typeof m.repo === "string" ? m.repo : null;
+      // Prefer an explicit `repoSshUrl` in agent.json (e.g. for self-hosted
+      // GitHub Enterprise where the SSH host isn't github.com); fall back to
+      // the standard github.com form when org+repo are both present. Leave
+      // null when either piece is missing — the harness commit shim refuses
+      // to act without both.
+      const explicitSsh = typeof m.repoSshUrl === "string" ? m.repoSshUrl : null;
+      const repoSshUrl = explicitSsh ?? (org && repo ? `git@github.com:${org}/${repo}.git` : null);
       out.repoLocator = {
-        org: typeof m.org === "string" ? m.org : null,
-        repo: typeof m.repo === "string" ? m.repo : null,
+        org,
+        repo,
         installationId: typeof m.installationId === "string" ? m.installationId : null,
+        repoSshUrl,
       };
     }
   } catch {
@@ -304,7 +315,21 @@ function implicitOperationalVars(config: HarnessConfig): EnvVarSpec[] {
       required: false,
       secret: true,
       description:
-        "Shared secret for server-to-server commits into the wizard (add agent, install capability, edit model). The managed-repo flow injects this for you; self-hosted operators wire it manually.",
+        "Legacy V1 server-to-server commit auth (the harness proxied edit-in-UI requests through the wizard). New scaffolds use GITHUB_DEPLOY_KEY + GITHUB_DEPLOY_REPO_SSH_URL instead, which commit directly. Only set this if your harness scaffolded before May 2026 and you haven't rotated to the deploy-key flow yet.",
+    },
+    {
+      name: "GITHUB_DEPLOY_KEY",
+      required: false,
+      secret: true,
+      description:
+        "Per-harness SSH private key (OpenSSH PEM) the harness uses to commit edit-in-UI changes directly to its managed repo. Wizard-scaffolded harnesses get this generated for them on the scaffold-done screen; CLI-scaffolded harnesses generate one with `npx create-render-agent deploy-key`. When this and GITHUB_DEPLOY_REPO_SSH_URL are set, the harness skips the wizard proxy entirely.",
+    },
+    {
+      name: "GITHUB_DEPLOY_REPO_SSH_URL",
+      required: false,
+      secret: false,
+      description:
+        "SSH clone URL for the managed repo, e.g. git@github.com:render-lab-agents/my-agent-7af3.git. Paired with GITHUB_DEPLOY_KEY to commit edit-in-UI changes directly.",
     },
   );
   return out;
