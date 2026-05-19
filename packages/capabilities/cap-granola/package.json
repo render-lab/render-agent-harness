@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-granola",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Granola.ai meeting-notes capability pack for the Render agent harness. API-key auth + polling primitive for ingesting new meeting notes.",
   "type": "module",
   "license": "MIT",

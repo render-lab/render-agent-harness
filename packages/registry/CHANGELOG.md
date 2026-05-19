@@ -1,5 +1,17 @@
 # @render-harness/registry
 
+## 0.8.1
+
+### Patch Changes
+
+- Fix `OFFICIAL_CAPABILITY_INSTALLS` version drift after the 0.7 → 0.8 coordinated minor cut.
+
+  Every entry in `packages/registry/src/repo-mutations/capability-install.ts` still carried `versionRange: "^0.7.0"` after the family rolled to 0.8.0. Installing any capability from the operator UI on an 0.8.0 loop pinned the new cap dep to the 0.7.x line in `package.json`, mixing minors across the family and tripping the runtime version check (red "Loops mixed" banner).
+
+  Bumped all 16 entries to `^0.8.0`. The regression test at `packages/registry/src/repo-mutations/capability-install.versions.test.ts` (added in the 0.8.0 cut) now passes.
+
+  This is the recurring footgun documented in `AGENTS.md` under "Things that bit us recently" — `OFFICIAL_CAPABILITY_INSTALLS` literals must bump alongside every coordinated minor cut. Re-running `pnpm --filter @render-harness/registry test` in the same commit as the cut would have caught it; the test fixture is the canonical regression for next time.
+
 ## 0.8.0
 
 ### Minor Changes

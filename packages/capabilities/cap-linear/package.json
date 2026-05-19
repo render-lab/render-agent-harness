@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-linear",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Linear monitoring capability pack for the Render agent harness.",
   "type": "module",
   "license": "MIT",
