@@ -1,11 +1,11 @@
 ---
 title: cap-render
-description: First-party Render Agent Harness pack wrapping the hosted Render MCP — manage services, deploys, databases, env vars, and logs from inside an agent.
+description: First-party Render Loops pack wrapping the hosted Render MCP. Manage services, deploys, databases, env vars, and logs from inside an agent.
 ---
 
-First-party pack that wires the [hosted Render MCP](https://mcp.render.com/mcp) into a harness agent. The agent can list services, trigger deploys, manage env vars, create databases and Key Value instances, read logs — everything the Render MCP exposes.
+First-party pack that wires the [hosted Render MCP](https://mcp.render.com/mcp) into a Render Loops agent. The agent can list services, trigger deploys, manage env vars, create databases and Key Value instances, and read logs. Everything the Render MCP exposes.
 
-The MCP catalog itself is owned by Render. This pack handles the harness-side wiring: registration via the `mcpServers` slot, bundled skills, an env-schema entry for `RENDER_API_KEY`, and a curated list of destructive tools you should gate behind HITL approval.
+The MCP catalog itself is owned by Render. This pack handles the Render Loops-side wiring: registration via the `mcpServers` slot, bundled skills, an env-schema entry for `RENDER_API_KEY`, and a curated list of destructive tools you should gate behind HITL approval.
 
 ## Install
 
@@ -53,7 +53,7 @@ shared:
       - cap_render__render__delete_environment_variable
 ```
 
-The harness pauses the run for human review before each of these fires. Names are the fully-namespaced *exposed* form after the loader wraps the pack's MCP server (`render` → `cap-render__render`) and `core` sanitizes hyphens to underscores. Don't substitute the bare `render__*` form — those won't match the runtime tool names.
+Render Loops pauses the run for human review before each of these fires. Names are the fully-namespaced *exposed* form after the loader wraps the pack's MCP server (`render` → `cap-render__render`) and `core` sanitizes hyphens to underscores. Don't substitute the bare `render__*` form. Those won't match the runtime tool names.
 
 ## Tools
 

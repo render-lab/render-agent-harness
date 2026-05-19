@@ -1,9 +1,9 @@
 ---
 title: Operator UI
-description: Use a deployed harness's operator UI to chat, inspect runs, view agents, manage config, and read guides.
+description: Use a deployed loop's operator UI to chat, inspect runs, view agents, manage config, and read guides.
 ---
 
-The operator UI is an optional React SPA mounted by the web service. Scaffolded projects mount it at the service root, and library users can choose another path. It is for operating a deployed harness, not for creating a new project.
+The operator UI is an optional React SPA mounted by the web service. Scaffolded projects mount it at the service root, and library users can choose another path. It is for operating a deployed loop, not for creating a new loop.
 
 ```mermaid
 flowchart LR
@@ -21,17 +21,17 @@ flowchart LR
   end
 
   api[["web API"]]
-  harness{{"deployed harness"}}
+  loop{{"deployed loop"}}
 
   operator --> ui
   ui --> tabs
   tabs --> api
-  api --> harness
+  api --> loop
 
   class operator role
   class ui,api surface
   class chat,runs,agents,config,usage,vitals,guide surfaceDetail
-  class harness central
+  class loop central
   classDef role fill:#050505,stroke:#8a8a8a,color:#d0d0d0,stroke-dasharray:4 3
   classDef surface fill:#101010,stroke:#a855f7,stroke-width:2px,color:#ffffff
   classDef surfaceDetail fill:#101010,stroke:#38bdf8,color:#ffffff
@@ -59,7 +59,7 @@ await serveWeb({
 });
 ```
 
-Passing `ui: true` mounts the UI at `/ui`. Scaffolded projects pass `ui: { path: "/" }` when the user enables the UI, so the deployed harness opens directly into the operator console. To customize the mount path, pass an object:
+Passing `ui: true` mounts the UI at `/ui`. Scaffolded projects pass `ui: { path: "/" }` when the user enables the UI, so the deployed loop opens directly into the operator console. To customize the mount path, pass an object:
 
 ```ts
 await serveWeb({
@@ -129,9 +129,9 @@ Use the Config tab for runtime-visible edits such as model changes, environment 
 
 ## Vitals tab
 
-The Vitals tab is an opt-in Render observability surface. It shows Render service instances, CPU, memory, HTTP p95 latency, and recent logs across every service in this harness deployment (web, worker, cron, and any siblings sharing the same Render environment).
+The Vitals tab is an opt-in Render observability surface. It shows Render service instances, CPU, memory, HTTP p95 latency, and recent logs across every service in this loop (web, worker, cron, and any siblings sharing the same Render environment).
 
-A service picker at the top of the tab switches between the harness's services. The web service the operator UI is itself running on is highlighted as the current service.
+A service picker at the top of the tab switches between the loop's services. The web service the operator UI is itself running on is highlighted as the current service.
 
 Enable it from the Config tab, or set this environment variable on the web service:
 

@@ -3,9 +3,9 @@ title: render-harness.yaml Spec
 description: Define agents, runtimes, models, capabilities, and deploy-time environment variables.
 ---
 
-Every harness project includes a `render-harness.yaml` file at the project root. The file is the deploy-time contract for the registry, scaffolder, Blueprint emitter, and runtime entrypoints.
+Every loop includes a `render-harness.yaml` file at the project root. The file is the deploy-time contract for the registry, scaffolder, Blueprint emitter, and runtime entrypoints.
 
-The current schema version is `1`. A single manifest can define one agent or a bundle of agents that share one Render deployment through `agents[]`.
+The current schema version is `1`. A single manifest can define one agent or a bundle of agents that share one loop through `agents[]`.
 
 ## Minimal chat agent
 
@@ -26,7 +26,7 @@ agents:
       kind: builtin
       ref: chat
       systemPrompt: |
-        You are a helpful assistant deployed on Render via the agent harness.
+        You are a helpful assistant deployed on Render via the Render Loops agent runtime.
         Each request is a single-turn conversation. Be concise.
     runtimes:
       - kind: web
@@ -40,7 +40,7 @@ agents:
 | `schemaVersion` | Yes | Must be `1`. |
 | `name` | Yes | Deployment slug. Use lowercase letters, numbers, and hyphens. |
 | `description` | Yes | Short description shown in scaffolding and operator surfaces. |
-| `harnessVersion` | Yes | Compatible harness version range, such as `^0.1`. |
+| `harnessVersion` | Yes | Compatible Render Loops version range, such as `^0.1`. |
 | `license` | No | SPDX-style license label. |
 | `author` | No | Author or owning team. |
 | `shared` | No | Defaults inherited by every agent. |

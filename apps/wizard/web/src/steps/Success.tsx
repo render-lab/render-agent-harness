@@ -51,7 +51,7 @@ export function Success({ state, result }: { state: WizardState; result: Scaffol
         <div className="panel mt-5 border-accent p-6 text-sm">
           <div className="label text-accent">{"// CLAIM LATER"}</div>
           <p className="mt-2">
-            This scaffold was anonymous. Save this one-time link — signing in with GitHub and
+            This scaffold was anonymous. Save this one-time link. Signing in with GitHub and
             visiting it will add you as a collaborator and link the repo to your account.
           </p>
           <a
@@ -125,8 +125,8 @@ function DeployKeyPanel({ deployKey }: { deployKey: NonNullable<ScaffoldResponse
         model) won't work until both values are set on the deployed service.
       </p>
       <p className="mt-2 text-[12px] text-muted">
-        Lose it and you'll need to regenerate manually — GitHub Settings → Deploy keys for this
-        repo, plus the same env var on the Render service. Fingerprint: {deployKey.fingerprint}.
+        Lose it and you'll need to regenerate manually (GitHub Settings → Deploy keys for this
+        repo, plus the same env var on the Render service). Fingerprint: {deployKey.fingerprint}.
       </p>
       <CopyField
         label="GITHUB_DEPLOY_REPO_SSH_URL"

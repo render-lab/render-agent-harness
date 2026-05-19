@@ -19,7 +19,7 @@ export function Review({
       description="One last look. Create will provision a private repository in the Render-managed GitHub org and commit the scaffolded files."
       onNext={onSubmit}
       onPrev={onPrev}
-      nextLabel="Create harness →"
+      nextLabel="Create loop →"
     >
       <dl className="space-y-2.5 text-sm">
         <Row label="name">{state.agentName}</Row>
@@ -74,14 +74,14 @@ export function Review({
             {"// SIGNED IN as @"}
             {me.login}
             {
-              " — the new repo will be linked to your account. You'll be added as a collaborator and it will show up under My harnesses."
+              ". The new repo will be linked to your account. You'll be added as a collaborator and it will show up under My loops."
             }
           </span>
         </div>
       ) : (
         <div className="border border-accent p-3 text-[12px] text-accent">
           {
-            "// ANONYMOUS — no login. The success screen will show a one-time claim link you can use later to associate this harness with a GitHub account. "
+            "// ANONYMOUS. No login. The success screen will show a one-time claim link you can use later to associate this loop with a GitHub account. "
           }
           <a className="underline" href={`/api/auth/login?next=${encodeURIComponent("/new")}`}>
             Sign in with GitHub

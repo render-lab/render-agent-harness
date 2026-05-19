@@ -1,9 +1,9 @@
 ---
-title: Ways to Use Render Harness
+title: Ways to Use Render Loops
 description: Choose between the CLI, public browse/new site, deployed operator UI, and source-level APIs.
 ---
 
-Render Harness has several user surfaces. They serve different stages of the agent lifecycle: creating a project, deploying it, operating it, and extending the framework.
+Render Loops has several user surfaces. They serve different stages of the agent lifecycle: creating a loop, deploying it, operating it, and extending the framework.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ flowchart LR
 | Surface | Use it to | Where it lives |
 | --- | --- | --- |
 | CLI scaffolder | Create a new local project from a blank prompt or starter template. | `packages/create-render-agent` |
-| Public `/browse` | Browse official templates and community harness submissions. | `apps/wizard` |
+| Public `/browse` | Browse official templates and community loop submissions. | `apps/wizard` |
 | Public `/new` | Create a manual managed GitHub repo and deployment flow from a web UI. | `apps/wizard` |
 | Operator UI | Chat with deployed agents, inspect runs, view agents, edit config, and read in-product guides. | `packages/ui` mounted by `packages/web` |
 | HTTP API | Create runs, stream results, send conversation turns, cancel work, and inspect usage. | `packages/web` |
@@ -58,7 +58,7 @@ Use the CLI when you want a project on your machine.
 pnpm dlx create-render-agent my-agent
 ```
 
-In this repo, local development commonly uses `--harness-root` so the scaffolded project links to the local workspace packages:
+In this repo, local development commonly uses `--harness-root` so the scaffolded loop links to the local workspace packages:
 
 ```sh
 pnpm --filter create-render-agent dev
@@ -70,12 +70,12 @@ The CLI loads the template catalog, asks which starter to use, writes the projec
 Use the CLI when:
 
 - You want to inspect and edit generated files immediately.
-- You want to test framework changes against a newly scaffolded project.
-- You want a local project before creating a GitHub repo.
+- You want to test framework changes against a newly scaffolded loop.
+- You want a local loop before creating a GitHub repo.
 
 ## Public browse and new routes
 
-Use the public wizard site when you want to discover harnesses or create a managed repo and deploy path.
+Use the public wizard site when you want to discover loops or create a managed repo and deploy path.
 
 The `/browse` route shows official templates from the template catalog alongside community registry submissions. The `/new` route starts a manual scaffolding flow. Starting from an official browse entry opens `/new` with that template prefilled.
 
@@ -84,7 +84,7 @@ The public site is the right surface when:
 - You want a no-code or low-code onboarding flow.
 - You want a managed GitHub repo created for the user.
 - You want a deploy link instead of a local-only project.
-- You want to compare official templates with community harnesses before starting.
+- You want to compare official templates with community loops before starting.
 
 The public site is implemented as a Hono server plus React SPA in `apps/wizard`.
 
@@ -138,7 +138,7 @@ The Chief of Staff template is a sealed multi-agent bundle. It ships multiple ag
 
 ## Deployed operator UI
 
-The operator UI belongs to a specific deployed harness. Scaffolded projects mount it at the service root when UI is enabled. Library users can mount it elsewhere, including `/ui`, by passing a custom `ui.path`.
+The operator UI belongs to a specific deployed loop. Scaffolded projects mount it at the service root when UI is enabled. Library users can mount it elsewhere, including `/ui`, by passing a custom `ui.path`.
 
 Use it after deployment to:
 
@@ -150,7 +150,7 @@ Use it after deployment to:
 - Edit supported model/config values through the Config tab.
 - Read the in-product Guide.
 
-The UI is not the public wizard site. It operates one harness that is already deployed.
+The UI is not the public wizard site. It operates one loop that is already deployed.
 
 ```mermaid
 flowchart LR
@@ -266,5 +266,5 @@ flowchart LR
 | Declare deployment shape | `render-harness.yaml` |
 | Build Render infrastructure | Registry and Blueprint emitter |
 | Start runs | Web API, Cron, Worker, or Workflows |
-| Operate deployed agents | The deployed harness's operator UI |
+| Operate deployed agents | The deployed loop's operator UI |
 | Extend the framework | Core, registry, runtime, and capability packages |

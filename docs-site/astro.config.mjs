@@ -42,8 +42,8 @@ export default defineConfig({
       },
     }),
     starlight({
-      title: "Render Harness Docs",
-      description: "Interactive architecture docs for the Render agent harness.",
+      title: "Render Loops Docs",
+      description: "Interactive architecture docs for Render Loops, the agent runtime.",
       favicon: "/favicon.svg",
       customCss: ["./src/styles/theme.css"],
       editLink: {
@@ -92,7 +92,7 @@ export default defineConfig({
           label: "Reference",
           items: [
             { label: "render-harness.yaml spec", slug: "yaml-spec" },
-            { label: "Harness versioning", slug: "harness-versioning" },
+            { label: "Loop versioning", slug: "harness-versioning" },
             { label: "Deployment model", slug: "deployment" },
             { label: "Web API", slug: "web-api" },
             { label: "Capabilities", slug: "capabilities" },

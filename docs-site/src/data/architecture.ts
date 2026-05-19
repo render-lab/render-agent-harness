@@ -76,7 +76,7 @@ export const architectureNodes: ArchitectureNode[] = [
     id: "registry",
     label: "Registry",
     kind: "registry",
-    summary: "Loads harness config, resolves capability packs, and emits Render infrastructure.",
+        summary: "Loads Render Loops config, resolves capability packs, and emits Render infrastructure.",
     owns: [
       "Config schemas",
       "Capability pack loading",

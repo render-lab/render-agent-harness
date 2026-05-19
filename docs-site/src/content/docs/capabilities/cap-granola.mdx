@@ -78,7 +78,7 @@ Personal API keys: **25 burst / 5 req/sec sustained** per [Granola docs](https:/
 
 - **No OAuth** — wait for Granola official docs.
 - **No webhooks** — wait for Granola.
-- **No fan-out** (one harness run per new note). `poll_recent` returns to caller for sequential processing.
+- **No fan-out** (one loop run per new note). `poll_recent` returns to caller for sequential processing.
 - **No search** — Granola's `/notes` doesn't expose semantic search.
 - **Read-only** — Granola's public API has no write endpoints today.
 

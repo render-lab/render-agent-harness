@@ -38,7 +38,7 @@ Inside the pack you author:
 | `skills/*.md` | optional | Skill bodies, if the pack contributes skills. |
 | `README.md` | recommended | Document config keys, namespaced tool names, env vars, and side effects. |
 
-Inside the user's harness repo (only relevant when listing an official pack or when documenting how users adopt yours):
+Inside the user's loop repo (only relevant when listing an official pack or when documenting how users adopt yours):
 
 | File | Purpose |
 | --- | --- |
@@ -48,7 +48,7 @@ Inside the user's harness repo (only relevant when listing an official pack or w
 
 ## Package layout
 
-A capability pack is a standalone npm package. Create it as a new repo, or as a workspace package alongside your other code. Every file below is created by you — the harness does not scaffold capability packs.
+A capability pack is a standalone npm package. Create it as a new repo, or as a workspace package alongside your other code. Every file below is created by you. Render Loops does not scaffold capability packs.
 
 ```text
 my-pack/
@@ -74,7 +74,7 @@ The validator (`render-harness-capability validate`) enforces a specific shape. 
 {
   "name": "@acme/render-harness-cap-example",
   "version": "0.1.0",
-  "description": "Example capability pack for the Render agent harness.",
+  "description": "Example capability pack for Render Loops.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -226,7 +226,7 @@ interface PackContext {
 }
 ```
 
-- `config` is the user-supplied `config:` block from `render-harness.yaml`. Validate it inside the pack — the harness schema only checks that it is an object.
+- `config` is the user-supplied `config:` block from `render-harness.yaml`. Validate it inside the pack. The Render Loops schema only checks that it is an object.
 - `env(name)` reads an environment variable. Use this instead of `process.env` directly so tests can inject a fake.
 - `entryName` is the `name:` field from the user's `render-harness.yaml`. Use it to scope per-deployment state (memory namespaces, table prefixes, log fields).
 
@@ -306,7 +306,7 @@ Handler arguments and return shape:
 
 ### Tool namespacing
 
-When the harness merges pack tools into an agent, every tool name is namespaced as `<pack>__<tool>`. The transformation is:
+When Render Loops merges pack tools into an agent, every tool name is namespaced as `<pack>__<tool>`. The transformation is:
 
 1. The npm scope is stripped from the pack name.
 2. The short tool name has every `.` replaced with `_`.
@@ -443,7 +443,7 @@ Most production connector packs expose an `accessMode` config knob (`read` vs `r
 
 Use `renderServices` when a pack needs its own Render service to function — typically a private service sidecar that the agent's tools dial into. The hook runs at build time only; the runtime library never calls it.
 
-Add the callback in `src/index.ts`. If the sidecar ships from your pack's repo, also commit the sidecar source (for example `sidecar/Dockerfile` and `sidecar/src/server.ts`) and reference the Dockerfile path relative to the user's harness repo root:
+Add the callback in `src/index.ts`. If the sidecar ships from your pack's repo, also commit the sidecar source (for example `sidecar/Dockerfile` and `sidecar/src/server.ts`) and reference the Dockerfile path relative to the user's loop repo root:
 
 ```ts title="src/index.ts"
 import type { RenderServiceSpec } from "@render-harness/registry";
@@ -472,7 +472,7 @@ renderServices(ctx: PackContext): RenderServiceSpec[] {
 
 ## migrations
 
-If your pack needs its own Postgres tables (for example a long-term memory store, a polling cursor table, or any pack-owned state), declare them via the `migrations` slot. The harness applies them at boot, in order, before any agent code runs.
+If your pack needs its own Postgres tables (for example a long-term memory store, a polling cursor table, or any pack-owned state), declare them via the `migrations` slot. Render Loops applies them at boot, in order, before any agent code runs.
 
 ```ts title="src/index.ts"
 import type { MigrationFile } from "@render-harness/registry";
@@ -503,9 +503,9 @@ How the runner behaves:
 Conventions worth following:
 
 - **Make every migration idempotent on its own** (`CREATE TABLE IF NOT EXISTS`, `CREATE EXTENSION IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`). The tracking table is belt-and-suspenders, not your only safeguard — and during development you may need to re-run a migration manually against a real DB without the tracking step.
-- **Prefix all table names with your pack's identifier** (`memory_pg_*`, `cap_granola_*`) so two packs can't collide on shared globals. The harness owns the `agent_*` prefix.
+- **Prefix all table names with your pack's identifier** (`memory_pg_*`, `cap_granola_*`) so two packs can't collide on shared globals. Render Loops owns the `agent_*` prefix.
 - **Treat already-released migration ids as immutable.** If you need to change behavior, add a new migration (`0002_*`) that ALTERs the existing table — never edit the old SQL in place. Editing already-applied SQL is a silent bug because the runner sees the id in `agent_pack_migrations` and skips the new content.
-- **Don't put data backfills in `migrations`.** They run on every harness boot for new deployments and block startup. If you need a backfill, ship it as a separate one-shot script or a tool the operator can call from the UI.
+- **Don't put data backfills in `migrations`.** They run on every loop boot for new deployments and block startup. If you need a backfill, ship it as a separate one-shot script or a tool the operator can call from the UI.
 
 The runner is the right place for **schema work the pack owns**. For schema work the user owns (custom application tables, business data), continue using your own migration tooling.
 
@@ -560,7 +560,7 @@ The validator checks:
 
 Add `--json` to get machine-readable output for CI.
 
-For workspace authors, the same binary can validate the official capability catalog (`capability-catalog/index.yaml` at the harness repo root) and cross-check first-party packs in one shot. Run from the harness repo root:
+For workspace authors, the same binary can validate the official capability catalog (`capability-catalog/index.yaml` at the Render Loops repo root) and cross-check first-party packs in one shot. Run from the Render Loops repo root:
 
 ```sh
 pnpm exec render-harness-capability catalog validate \
@@ -601,7 +601,7 @@ pnpm changeset
 pnpm release
 ```
 
-Capability packs are versioned independently of `@render-harness/core` and friends. Bump them only when the capability itself changes. See [Harness versioning](/harness-versioning/) for the full policy, and `AGENTS.md` in the repo root for the realignment cookbook if a pack drifts off the family line.
+Capability packs are versioned independently of `@render-harness/core` and friends. Bump them only when the capability itself changes. See [Loop versioning](/harness-versioning/) for the full policy, and `AGENTS.md` in the repo root for the realignment cookbook if a pack drifts off the family line.
 
 For external packs:
 
@@ -611,7 +611,7 @@ For external packs:
 
 ## Register in a catalog
 
-The npm keyword `render-harness-cap` makes the package discoverable, but the operator UI's capability gallery reads from a curated catalog. To list an official pack, append an entry to `capability-catalog/index.yaml` at the harness repo root:
+The npm keyword `render-harness-cap` makes the package discoverable, but the operator UI's capability gallery reads from a curated catalog. To list an official pack, append an entry to `capability-catalog/index.yaml` at the Render Loops repo root:
 
 ```yaml title="capability-catalog/index.yaml"
 - package: "@acme/render-harness-cap-example"
@@ -648,7 +648,7 @@ The catalog is the source of truth for the bundled snapshot used by the publishe
 
 ## How users consume your pack
 
-Once published, users add the package as a dependency in their harness repo:
+Once published, users add the package as a dependency in their loop repo:
 
 ```sh
 pnpm add @acme/render-harness-cap-example
@@ -672,7 +672,7 @@ Their `pnpm build:bp` step:
 
 At runtime, the worker (or web / cron / workflows) loads the same pack, calls `localTools`, `mcpServers`, `skills`, and `connectors`, and namespaces every contributed name as described above.
 
-Already-deployed harnesses install packs through the operator UI, which commits the manifest and `package.json` changes through the wizard service and the GitHub App. See [Capabilities](/capabilities/#installing-after-deployment) for the post-install steps.
+Already-deployed loops install packs through the operator UI, which commits the manifest and `package.json` changes through the wizard service and the GitHub App. See [Capabilities](/capabilities/#installing-after-deployment) for the post-install steps.
 
 ## Permissions and approval
 
@@ -689,7 +689,7 @@ agents:
         - cap-example__send_notice
 ```
 
-When you ship a pack that mutates external state (writes to an API, posts a Slack message, opens a PR), call it out in the README and recommend `requireApproval` in the example config. Packs that branch tool surface on user config — for example, only registering write tools when the user sets `accessMode: read_write` — should document the trigger explicitly. The `@render-harness/cap-github`, `@render-harness/cap-linear`, and `@render-harness/cap-slack` packs all use this pattern.
+When you ship a pack that mutates external state (writes to an API, posts a Slack message, opens a PR), call it out in the README and recommend `requireApproval` in the example config. Packs that branch tool surface on user config (for example, only registering write tools when the user sets `accessMode: read_write`) should document the trigger explicitly. The `@render-harness/cap-github`, `@render-harness/cap-linear`, and `@render-harness/cap-slack` packs all use this pattern.
 
 ## Checklist
 

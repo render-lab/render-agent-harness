@@ -32,8 +32,8 @@ const COLUMNS: { id: string; heading: string; links: LinkSpec[] }[] = [
     ],
   },
   {
-    id: "harness",
-    heading: "// harness",
+    id: "loop",
+    heading: "// loop",
     links: [
       { label: "Browse", href: "/browse" },
       { label: "Create new", href: "/new" },
@@ -80,7 +80,7 @@ export function Footer(): JSX.Element {
 
         <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6 text-[11px] text-muted">
           <span className="inline-flex items-center gap-2">
-            Render Agent Harness · open source · MIT
+            Render Loops · agent runtime · open source · MIT
           </span>
           <a
             href={REPO_URL}

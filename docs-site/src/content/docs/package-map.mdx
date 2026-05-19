@@ -1,6 +1,6 @@
 ---
 title: Package Map
-description: Find the package that owns each part of the harness.
+description: Find the package that owns each part of Render Loops.
 ---
 
 The monorepo is easier to navigate when you group packages by job.
@@ -27,7 +27,7 @@ The monorepo is easier to navigate when you group packages by job.
 | Package | npm | Owns |
 | --- | --- | --- |
 | `packages/web` | [`@render-harness/web`](https://www.npmjs.com/package/@render-harness/web) | The public HTTP API, run queueing, SSE streams, and optional UI mount. |
-| `packages/ui` | [`@render-harness/ui`](https://www.npmjs.com/package/@render-harness/ui) | The operator SPA served by each deployed harness. |
+| `packages/ui` | [`@render-harness/ui`](https://www.npmjs.com/package/@render-harness/ui) | The operator SPA served by each deployed loop. |
 
 ## Authoring and deploy
 
@@ -35,7 +35,7 @@ The monorepo is easier to navigate when you group packages by job.
 | --- | --- | --- |
 | `packages/registry` | [`@render-harness/registry`](https://www.npmjs.com/package/@render-harness/registry) | Config schema, capability loading, gallery loading, and `render.yaml` emission. |
 | `packages/create-render-agent` | [`create-render-agent`](https://www.npmjs.com/package/create-render-agent) | The CLI scaffolder and bundled gallery snapshot. |
-| `registry-index` | Community index | Submitted harness repos shown on `/browse`. |
+| `registry-index` | Community index | Submitted loop repos shown on `/browse`. |
 | `apps/wizard` | Not published | The browser scaffolder that creates managed repos and deploy links. Deployed as a Render web service from this repo. |
 
 ## Templates and examples

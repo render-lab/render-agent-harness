@@ -56,7 +56,7 @@ export function MyHarnessesPage() {
       <div className="panel p-8 text-center">
         <div className="label">{"// SIGN IN"}</div>
         <p className="mt-3 text-sm">
-          Sign in with GitHub to see harnesses you've scaffolded and add agents to them.
+          Sign in with GitHub to see loops you've scaffolded and add agents to them.
         </p>
         <a className="btn btn-primary mt-4 inline-block" href="/api/auth/login?next=/my">
           Sign in with GitHub
@@ -78,7 +78,7 @@ export function MyHarnessesPage() {
     <div className="space-y-6">
       <section className="panel p-6">
         <div className="hr-section">
-          <span>{"// MY HARNESSES"}</span>
+          <span>{"// MY LOOPS"}</span>
         </div>
         <div className="mt-3 flex items-center justify-between gap-4">
           <div>
@@ -93,11 +93,11 @@ export function MyHarnessesPage() {
                 />
               ) : null}
               <h1 className="text-2xl font-bold uppercase tracking-widest">
-                {phase.me.login}'s harnesses
+                {phase.me.login}'s loops
               </h1>
             </div>
             <p className="mt-2 text-sm text-muted">
-              Add an agent from the catalog into any harness below. The wizard commits the agents[]
+              Add an agent from the catalog into any loop below. The wizard commits the agents[]
               entry, src/&lt;id&gt;.ts, and re-emitted render.yaml to your repo, and Render
               auto-deploys on push.
             </p>
@@ -114,7 +114,7 @@ export function MyHarnessesPage() {
         <div className="panel p-8 text-center text-muted">
           <div className="label">{"// EMPTY"}</div>
           <p className="mt-2 text-sm">
-            No harnesses linked to your account yet. Create one from the{" "}
+            No loops linked to your account yet. Create one from the{" "}
             <a className="text-accent underline" href="/new">
               wizard
             </a>{" "}
@@ -170,7 +170,7 @@ function HarnessCard({ harness, onAdd }: { harness: MyHarness; onAdd: () => void
             target="_blank"
             rel="noopener noreferrer"
           >
-            Harness
+            Loop
           </a>
         ) : null}
         <a

@@ -29,8 +29,8 @@ export function BundleReview({
           <span>{"// SEALED BUNDLE"}</span>
         </div>
         <p className="mt-3 text-sm text-muted">
-          This template ships {bundle.manifest.agents.length} agents that share one harness
-          deployment. The wizard writes the files as-is — customize after.
+          This template ships {bundle.manifest.agents.length} agents in a single loop. The
+          wizard writes the files as-is. Customize after.
         </p>
       </div>
 
@@ -89,13 +89,13 @@ export function BundleReview({
             {"// SIGNED IN as @"}
             {me.login}
             {
-              " — the new repo will be linked to your account. You'll be added as a collaborator and it will show up under My harnesses."
+              ". The new repo will be linked to your account. You'll be added as a collaborator and it will show up under My loops."
             }
           </span>
         </div>
       ) : (
         <div className="border border-accent p-3 text-[12px] text-accent">
-          {"// ANONYMOUS — no login. The success screen will show a one-time claim link. "}
+          {"// ANONYMOUS. No login. The success screen will show a one-time claim link. "}
           <a className="underline" href={`/api/auth/login?next=${encodeURIComponent("/new")}`}>
             Sign in with GitHub
           </a>

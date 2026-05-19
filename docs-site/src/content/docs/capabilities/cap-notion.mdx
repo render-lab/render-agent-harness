@@ -1,9 +1,9 @@
 ---
 title: cap-notion
-description: Notion pages, databases, and workspace search via per-end-user OAuth on the harness's connections API.
+description: Notion pages, databases, and workspace search via per-end-user OAuth on Render Loops' connections API.
 ---
 
-Notion capability pack using the harness's [per-end-user OAuth connections API](/connections-api/). Each end user clicks "Connect Notion" in the operator UI, the harness stores their access token encrypted, and tools fetch it at call time.
+Notion capability pack using Render Loops' [per-end-user OAuth connections API](/connections-api/). Each end user clicks "Connect Notion" in the operator UI, the loop stores their access token encrypted, and tools fetch it at call time.
 
 Notion's public-integration OAuth flow issues long-lived access tokens with no refresh token. This pack uses the `refreshTokenOptional: true` field on `OAuthProviderConfig` (added in `@render-harness/core@0.6.1`) so refresh-on-use is a no-op; if Notion 401s on a tool call, the pack returns an actionable error pointing at the Connections tab.
 

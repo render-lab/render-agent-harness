@@ -5,7 +5,7 @@ description: Intercom inbound webhook + outbound reply/assign/close/snooze via p
 
 First **dual inbound+outbound** capability pack — combines the chat-surface pattern of `cap-slack` / `cap-github` (HMAC-verified webhook on `/connectors/intercom`) with the per-end-user OAuth pattern of `cap-google` / `cap-notion` (tools call `secrets.requireConnection("intercom")`).
 
-- **Inbound:** Intercom webhook deliveries land at `/connectors/intercom`, get HMAC-SHA1 verified using the OAuth app's client secret, and enqueue a harness run onto a conversation keyed by `intercom-${sha256(workspace_id:conversation_id)}`.
+- **Inbound:** Intercom webhook deliveries land at `/connectors/intercom`, get HMAC-SHA1 verified using the OAuth app's client secret, and enqueue a loop run onto a conversation keyed by `intercom-${sha256(workspace_id:conversation_id)}`.
 - **Outbound:** 7 tools (2 in `read` mode) reply, assign, tag, close, snooze, list, or read conversations.
 
 ## Install
@@ -21,7 +21,7 @@ capabilities:
   - pack: "@render-harness/cap-intercom"
     config:
       agent: support-bot              # which agent to enqueue inbound events to
-      userId: cap-intercom            # default; harness userId that owns the connection
+      userId: cap-intercom            # default; Render Loops userId that owns the connection
       accessMode: read_write          # or "read"
 ```
 

@@ -317,14 +317,14 @@ function TopNav({
           type="button"
           className="text-left"
           onClick={() => onNavigate("browse")}
-          title="Browse harnesses"
+          title="Browse loops"
         >
           <div className="text-sm font-bold uppercase leading-none tracking-widest">
             <div>Render</div>
-            <div>Harness</div>
+            <div>Loops</div>
           </div>
           <div className="mt-1 text-[10px] uppercase tracking-wider text-muted">
-            {subtitle ?? "public catalog"}
+            {subtitle ?? "agent runtime"}
           </div>
         </button>
         <nav className="flex flex-wrap items-center gap-2">
@@ -348,7 +348,7 @@ function TopNav({
               className={`btn ${route === "my" ? "btn-active" : ""}`}
               onClick={() => onNavigate("my")}
             >
-              My harnesses
+              My loops
             </button>
           ) : null}
           <a className="btn" href={DOCS_URL}>
@@ -439,7 +439,7 @@ function Shell({
   const title = stepTitle ?? STEP_TITLES[currentStep] ?? "Wizard";
   return (
     <div className="flex min-h-screen flex-col">
-      <TopNav route={route} onNavigate={onNavigate} me={me} subtitle="managed repo scaffold" />
+      <TopNav route={route} onNavigate={onNavigate} me={me} />
       <StepIndicator currentStep={currentStep} total={total} title={title} />
       {withAside ? (
         <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">

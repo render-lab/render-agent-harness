@@ -5,7 +5,7 @@ description: Add multi-agent starters as a subcase of the template catalog.
 
 Bundle templates are a specialized template catalog workflow. Use this page only when you are adding a multi-agent starter under `gallery/agents/`.
 
-A bundle template is a sealed multi-agent starter. One harness deployment hosts several agents that share Postgres, Key Value, one web service, one worker, and one Cron service per schedule.
+A bundle template is a sealed multi-agent starter. One loop hosts several agents that share Postgres, Key Value, one web service, one worker, and one Cron service per schedule.
 
 Use a bundle when the template's value comes from multiple agents working together. Use a single-agent template when one agent on one runtime is the whole product.
 
@@ -116,7 +116,7 @@ Add the bundle to `gallery/index.yaml`:
   author: "render-harness"
 ```
 
-The loader cross-checks `runtimeKinds` against the union of every agent's runtimes. The `surface` and `audience` arrays come from closed taxonomies validated by `GalleryAgentEntrySchema` — see [`gallery/README.md`](https://github.com/render/render-harness/blob/main/gallery/README.md) for the full lists.
+The loader cross-checks `runtimeKinds` against the union of every agent's runtimes. The `surface` and `audience` arrays come from closed taxonomies validated by `GalleryAgentEntrySchema`. See [`gallery/README.md`](https://github.com/render/render-harness/blob/main/gallery/README.md) for the full lists.
 
 ## Rebuild the bundled snapshot
 

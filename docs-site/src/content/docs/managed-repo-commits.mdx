@@ -1,30 +1,30 @@
 ---
 title: Managed repo commits
-description: How the deployed harness commits edit-in-UI changes (Install capability, Edit model) back to its managed GitHub repo via per-deployment SSH deploy keys.
+description: How a deployed loop commits edit-in-UI changes (Install capability, Edit model) back to its managed GitHub repo via per-deployment SSH deploy keys.
 ---
 
-The operator UI lets you mutate the deployed harness from the browser: **Install capability** appends a pack to `render-harness.yaml`, **Edit model** rewrites the `model:` block on an agent, and **Add agent** appends a new agent definition. Each of these is a real git commit on your repo — the page just hides the GitHub API call.
+The operator UI lets you mutate a deployed loop from the browser: **Install capability** appends a pack to `render-harness.yaml`, **Edit model** rewrites the `model:` block on an agent, and **Add agent** appends a new agent definition. Each of these is a real git commit on your repo. The page just hides the GitHub API call.
 
-This page covers how those commits actually happen, the two transport options the harness supports, and how to enable the modern path on either wizard-scaffolded or CLI-scaffolded harnesses.
+This page covers how those commits actually happen, the two transport options Render Loops supports, and how to enable the modern path on either wizard-scaffolded or CLI-scaffolded loops.
 
 ## Two transport paths
 
-The harness picks at request time based on what's set in your environment:
+The loop picks at request time based on what's set in your environment:
 
 | Path | Trigger | What happens |
 | --- | --- | --- |
-| **Deploy key (recommended)** | `GITHUB_DEPLOY_KEY` + `GITHUB_DEPLOY_REPO_SSH_URL` set on the harness service | The harness clones its own repo via SSH using a per-deployment private key, mutates the files in a temp worktree, and pushes the commit directly. No wizard involvement. |
-| **Wizard proxy (legacy)** | `WIZARD_SHARED_SECRET` set on the harness service | The harness POSTs the request to the wizard's `/api/capabilities/install` (or sibling), authenticated by the shared secret. The wizard mints a GitHub App installation token from its central credentials and does the commit on the harness's behalf. |
+| **Deploy key (recommended)** | `GITHUB_DEPLOY_KEY` + `GITHUB_DEPLOY_REPO_SSH_URL` set on the loop's service | The loop clones its own repo via SSH using a per-deployment private key, mutates the files in a temp worktree, and pushes the commit directly. No wizard involvement. |
+| **Wizard proxy (legacy)** | `WIZARD_SHARED_SECRET` set on the loop's service | The loop POSTs the request to the wizard's `/api/capabilities/install` (or sibling), authenticated by the shared secret. The wizard mints a GitHub App installation token from its central credentials and does the commit on the loop's behalf. |
 
-The deploy-key path is preferred for everything new. The wizard-proxy path stays functional for harnesses scaffolded before May 2026 — it will be removed in a future minor cut.
+The deploy-key path is preferred for everything new. The wizard-proxy path stays functional for loops scaffolded before May 2026. It will be removed in a future minor cut.
 
 ## Why deploy keys
 
-The legacy wizard-proxy model used a single `WIZARD_SHARED_SECRET` shared across every harness that the wizard served. A compromised harness's environment could authenticate to the wizard as any other harness — the blast radius was every managed repo.
+The legacy wizard-proxy model used a single `WIZARD_SHARED_SECRET` shared across every loop that the wizard served. A compromised loop's environment could authenticate to the wizard as any other loop. The blast radius was every managed repo.
 
 Deploy keys collapse that to one repo per key:
 
-- The keypair is generated once per harness at scaffold time and never reused.
+- The keypair is generated once per loop at scaffold time and never reused.
 - The public key only has push access to your repo. Even if the private key leaks, the attacker can push to your repo and nowhere else.
 - The wizard is out of the commit path entirely once scaffold is done. No shared secret to rotate across the fleet.
 
@@ -36,9 +36,9 @@ All three edit-in-UI flows commit directly via the deploy-key path when `GITHUB_
 - `PATCH /agents/:slug/model` — Edit model modal
 - `POST /agents/add` — Add agent modal
 
-Add agent additionally fetches the gallery entry it needs from the wizard's `GET /api/gallery/agents/:slug` (cached for 60s) before cloning the repo, so the harness stays out of the gallery-loading business while still owning the commit. If the wizard 404s that endpoint (older wizard build), the route falls back to the legacy `WIZARD_SHARED_SECRET` proxy when that's also configured; otherwise it returns `wizard_gallery_endpoint_missing` so the operator can rotate.
+Add agent additionally fetches the gallery entry it needs from the wizard's `GET /api/gallery/agents/:slug` (cached for 60s) before cloning the repo, so the loop stays out of the gallery-loading business while still owning the commit. If the wizard 404s that endpoint (older wizard build), the route falls back to the legacy `WIZARD_SHARED_SECRET` proxy when that's also configured; otherwise it returns `wizard_gallery_endpoint_missing` so the operator can rotate.
 
-## Wizard-scaffolded harnesses
+## Wizard-scaffolded loops
 
 If you scaffolded through the public wizard (`/new`) after May 2026, you're already set up:
 
@@ -47,13 +47,13 @@ If you scaffolded through the public wizard (`/new`) after May 2026, you're alre
 3. It printed the private key on the scaffold-done page with copy buttons for `GITHUB_DEPLOY_KEY` and `GITHUB_DEPLOY_REPO_SSH_URL`.
 4. You pasted both values into the Render Blueprint deploy prompt.
 
-That's it. The harness commits directly on every Install capability / Edit model click.
+That's it. The loop commits directly on every Install capability / Edit model click.
 
-If you scaffolded before this flow shipped and want to migrate, jump to the CLI section below — the same `deploy-key` subcommand works for any GitHub-hosted harness.
+If you scaffolded before this flow shipped and want to migrate, jump to the CLI section below. The same `deploy-key` subcommand works for any GitHub-hosted loop.
 
-## Enabling edit-in-UI for CLI-scaffolded harnesses
+## Enabling edit-in-UI for CLI-scaffolded loops
 
-CLI-scaffolded harnesses (`npx create-render-agent ...`) don't go through the wizard, so the deploy key isn't provisioned automatically. Four manual steps:
+CLI-scaffolded loops (`npx create-render-agent ...`) don't go through the wizard, so the deploy key isn't provisioned automatically. Four manual steps:
 
 ### 1. Generate a keypair (and optionally auto-register on GitHub)
 
@@ -86,7 +86,7 @@ GitHub → your repo → **Settings** → **Deploy keys** → **Add deploy key**
 
 ### 3. Set the env vars on your Render service
 
-Render Dashboard → your harness service → **Environment** → **Add Environment Variable**.
+Render Dashboard → your loop's service → **Environment** → **Add Environment Variable**.
 
 | Key | Value |
 | --- | --- |
@@ -103,7 +103,7 @@ If you see `edit_in_ui_not_configured`, double-check both env vars are set and t
 
 - Public key not added to the repo (or not registered with write access).
 - `GITHUB_DEPLOY_REPO_SSH_URL` typo (case-sensitive).
-- Repo on GitHub Enterprise with a different SSH host — override by writing the explicit `repoSshUrl` into `.render-harness/agent.json`.
+- Repo on GitHub Enterprise with a different SSH host. Override by writing the explicit `repoSshUrl` into `.render-harness/agent.json`.
 
 ## Rotating the deploy key
 
@@ -119,6 +119,6 @@ A one-click rotate button in the operator UI Config tab is planned but not yet s
 
 ## Runtime requirements
 
-The harness shells out to the system `git` binary plus the OpenSSH client (`ssh`) for the clone + push. Both are present in [Render's native Node runtime](https://render.com/docs/native-runtimes#tools-and-utilities); custom Dockerfile users should make sure `git` and `openssh-client` are installed.
+The loop shells out to the system `git` binary plus the OpenSSH client (`ssh`) for the clone + push. Both are present in [Render's native Node runtime](https://render.com/docs/native-runtimes#tools-and-utilities); custom Dockerfile users should make sure `git` and `openssh-client` are installed.
 
-If git is missing at runtime, the harness fails the request with `deploy_key_commit_failed: git binary not on PATH — required for the GITHUB_DEPLOY_KEY commit flow`.
+If git is missing at runtime, the loop fails the request with `deploy_key_commit_failed: git binary not on PATH, required for the GITHUB_DEPLOY_KEY commit flow`.

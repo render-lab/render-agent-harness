@@ -1,9 +1,9 @@
 ---
-title: Harness Versioning
-description: Understand lockstep harness package versions, compatibility checks, and release workflow.
+title: Loop Versioning
+description: Understand lockstep Render Loops package versions, compatibility checks, and release workflow.
 ---
 
-Harness versioning keeps deployed agents, runtimes, and capability packs on a compatible first-party package family.
+Loop versioning keeps a deployed loop's agents, runtimes, and capability packs on a compatible Render Loops package family.
 
 ## Version model
 
@@ -19,19 +19,19 @@ When in doubt, choose the higher bump.
 
 ## Compatibility metadata
 
-Every deployment has a declared harness range in `render-harness.yaml`:
+Every loop has a declared Render Loops range in `render-harness.yaml`:
 
 ```yaml
 harnessVersion: "^0.1"
 ```
 
-Gallery entries and capability catalog entries can also declare the harness range they require:
+Gallery entries and capability catalog entries can also declare the range they require:
 
 ```yaml
 requiresHarness: "^0.1"
 ```
 
-The web service exposes the running package versions through `GET /deployment`. The operator UI displays the compact harness version in the sidebar and the detailed package list in the Config tab.
+The web service exposes the running package versions through `GET /deployment`. The operator UI displays the compact Render Loops version in the sidebar and the detailed package list in the Config tab.
 
 ## Diagnostics states
 
@@ -41,7 +41,7 @@ Diagnostics surface version problems alongside operational checks:
 - `warning`: package versions are mixed, missing, or the declared range is missing/invalid.
 - `incompatible`: the running version does not satisfy the declared `harnessVersion`.
 
-Treat `Harness mixed` as a release or install problem. A healthy deployment should normally report one coherent first-party version.
+Treat `Render Loops mixed` as a release or install problem. A healthy loop should normally report one coherent first-party version.
 
 ## Author workflow
 

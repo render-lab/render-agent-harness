@@ -120,7 +120,7 @@ function CustomModelForm({
           {unfamiliarHost ? (
             <p className="mt-1 text-[11px] text-muted">
               Host <span className="font-mono">{baseUrlHost}</span> isn't on the known-providers
-              list. Make sure you trust it — your prompts and tool outputs will be sent there.
+              list. Make sure you trust it. Your prompts and tool outputs will be sent there.
             </p>
           ) : null}
         </label>

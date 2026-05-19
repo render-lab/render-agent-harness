@@ -64,7 +64,7 @@ Tools:
 | `memory.search` | Top-K vector similarity (cosine distance). |
 | `memory.delete` | Remove chunks by id, source_id, or namespace. |
 
-Schema (`agent_memory_vectors` table + `pgvector` extension + `ivfflat` cosine index) is registered via the pack's `migrations` slot — the harness's [pack-migration runner](/authoring-capability-packs/#migrations) applies it at boot. Render Managed PostgreSQL ships `pgvector`; verify with `psql -c '\dx vector'` if self-hosting.
+Schema (`agent_memory_vectors` table + `pgvector` extension + `ivfflat` cosine index) is registered via the pack's `migrations` slot. Render Loops' [pack-migration runner](/authoring-capability-packs/#migrations) applies it at boot. Render Managed PostgreSQL ships `pgvector`; verify with `psql -c '\dx vector'` if self-hosting.
 
 ### Switching embedding providers (or dims)
 

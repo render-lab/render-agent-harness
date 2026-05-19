@@ -7,7 +7,7 @@ The template catalog is the repo data that powers starter selection in the CLI, 
 
 The directory is currently named `gallery/`, but it is not a standalone gallery service. It is a catalog of starter manifests and source files.
 
-Templates are not the full set of things Render Harness can build. They are curated starting points that demonstrate common shapes. A good template should be valuable as-is for the matching use case, but it should also be easy to fork, edit, and extend into a different agent product.
+Templates are not the full set of things Render Loops can build. They are curated starting points that demonstrate common shapes. A good template should be valuable as-is for the matching use case, but it should also be easy to fork, edit, and extend into a different agent product.
 
 Template catalog work is different from [registry publishing](/registry-publishing/). Catalog templates are starter source data used by the scaffolder. Registry publishing is for a finished deployable repo pinned to an immutable Git commit.
 
@@ -63,7 +63,7 @@ The registry cross-checks the declared runtime kinds against the manifest.
 
 ### Bundle templates
 
-A bundle template is the multi-agent version of a catalog starter. Use one when the starter's value comes from multiple agents working together in one Render Harness deployment.
+A bundle template is the multi-agent version of a catalog starter. Use one when the starter's value comes from multiple agents working together in one loop.
 
 Bundle templates add source files under `gallery/agents/<slug>/src/` and a manifest with multiple `agents[]` entries. They still follow the same catalog workflow: add files under `gallery/agents/`, register the starter in `gallery/index.yaml`, rebuild the bundled snapshot, and run registry and scaffolder tests.
 

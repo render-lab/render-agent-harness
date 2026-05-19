@@ -1,9 +1,9 @@
 ---
 title: Platform Constraints
-description: Understand the Render and runtime limits that shape harness deployments.
+description: Understand the Render and runtime limits that shape loop deployments.
 ---
 
-These constraints explain why the harness chooses certain runtime and deployment shapes.
+These constraints explain why Render Loops chooses certain runtime and deployment shapes.
 
 ## Workflows
 
@@ -14,7 +14,7 @@ Important constraints:
 - Workflow services are not currently supported in `render.yaml` Blueprints.
 - Create Workflow services in the Render Dashboard.
 - A Workflow task can run much longer than a web request, but task arguments and return values must stay JSON-serializable and small enough for the Workflow API.
-- The harness soft checkpoint policy leaves margin under the default task timeout so state can flush before the platform boundary.
+- Render Loops' soft checkpoint policy leaves margin under the default task timeout so state can flush before the platform boundary.
 
 Use Workflows when work needs durable steps, retries, visibility in the Workflows UI, or human approval before actions continue.
 
@@ -45,7 +45,7 @@ Important constraints:
 
 ## Streaming
 
-The harness streams through Postgres `LISTEN/NOTIFY`.
+Render Loops streams through Postgres `LISTEN/NOTIFY`.
 
 Important constraints:
 
@@ -55,7 +55,7 @@ Important constraints:
 
 ## State and signals
 
-The harness separates durable state from low-latency control signals:
+Render Loops separates durable state from low-latency control signals:
 
 - Postgres stores runs, messages, tool calls, full tool results, conversations, queues, and usage.
 - Key Value stores cancellation flags and locks.

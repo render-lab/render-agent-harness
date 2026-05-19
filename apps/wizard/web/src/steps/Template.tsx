@@ -55,7 +55,7 @@ export function Template({
             <div className="mt-1 text-xs text-muted">{t.description}</div>
             {t.kind === "bundle" && (
               <div className="mt-2 text-[11px] text-muted">
-                Sealed multi-agent template — {t.manifest.agents.length} agents in one deployment.
+                Sealed multi-agent template: {t.manifest.agents.length} agents in one deployment.
               </div>
             )}
           </button>

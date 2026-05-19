@@ -19,7 +19,7 @@ export function UiToggle({
     return (
       <StepShell
         title="Operator UI"
-        description="The operator UI mounts on top of the web runtime. Web isn't selected — this step is a no-op."
+        description="The operator UI mounts on top of the web runtime. Web isn't selected, so this step is a no-op."
         onNext={onNext}
         onPrev={onPrev}
       >

@@ -3,7 +3,7 @@ title: Connections API
 description: Per-end-user OAuth connections for capability packs (Google Workspace, Microsoft 365, Notion, etc.).
 ---
 
-The connection API lets capability packs use **per-end-user OAuth** instead of a single deployment-wide token. Each end user clicks "Connect \<provider\>" in the operator UI, the harness stores their refresh token encrypted, and pack tools fetch a fresh access token at call time.
+The connection API lets capability packs use **per-end-user OAuth** instead of a single deployment-wide token. Each end user clicks "Connect \<provider\>" in the operator UI, the loop stores their refresh token encrypted, and pack tools fetch a fresh access token at call time.
 
 Use it when the pack needs to read *the user's* mailbox, calendar, or workspace — not one shared service account.
 
@@ -21,7 +21,7 @@ A new table, `agent_user_connections`, holds one row per `(user_id, provider)`:
 
 | Column | Notes |
 | --- | --- |
-| `user_id` | The harness's `UserId` from the run row. |
+| `user_id` | Render Loops' `UserId` from the run row. |
 | `provider` | Provider id (`google`, `microsoft`, ...). |
 | `scopes` | Granted scopes. |
 | `account_label` | Display name fetched from the provider's userinfo endpoint (e.g. the user's Gmail address). |
@@ -54,7 +54,7 @@ All routes are added by `@render-harness/web` whenever a capability pack registe
 | `GET /connections/:provider/callback` | **none** (signed `state`) | Provider redirects here; exchanges code for tokens, encrypts, upserts, 302s to `/ui#/connections?connected=<provider>`. |
 | `DELETE /connections/:provider` | bearer / cookie | Best-effort provider-side revoke + row delete. |
 
-The callback route does **not** run bearer auth — Google's redirect is anonymous. The harness recovers the `userId` from an HMAC-signed `state` token (10-minute TTL).
+The callback route does **not** run bearer auth. Google's redirect is anonymous. Render Loops recovers the `userId` from an HMAC-signed `state` token (10-minute TTL).
 
 ## Tool-side API
 
@@ -78,7 +78,7 @@ const gmailSearch: LocalToolHandler = {
 };
 ```
 
-When the user hasn't connected, `requireConnection` throws `NeedsConnectionError`. The harness's `executeToolCall` turns it into a normal `is_error: true` tool result so the model can ask the user to visit `/ui/connections` — no special run pause.
+When the user hasn't connected, `requireConnection` throws `NeedsConnectionError`. Render Loops' `executeToolCall` turns it into a normal `is_error: true` tool result so the model can ask the user to visit `/ui/connections`. No special run pause.
 
 ## Pack-side API
 

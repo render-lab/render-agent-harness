@@ -1,19 +1,21 @@
 ---
-title: Render Harness Docs
+title: Render Loops Docs
 description: Build, deploy, and operate agents on Render primitives.
 ---
 
-Render Harness is a TypeScript framework for building agents that run on Render primitives: Web Services, Workers, Cron Jobs, Workflows, Postgres, and Key Value.
+Render Loops is a TypeScript agent runtime for building agents that run on Render primitives: Web Services, Workers, Cron Jobs, Workflows, Postgres, and Key Value.
 
-The harness model is designed and optimized for Render service shapes. It maps agent work to the Render service that fits it: request entrypoints run through web services, queue-backed work runs on workers, scheduled work runs on Cron Jobs, durable long-running work runs on Workflows, and shared state lives in Render Postgres and Key Value.
+The Render Loops model is designed and optimized for Render service shapes. It maps agent work to the Render service that fits it: request entrypoints run through web services, queue-backed work runs on workers, scheduled work runs on Cron Jobs, durable long-running work runs on Workflows, and shared state lives in Render Postgres and Key Value.
 
-Render Harness gives agent projects a shared execution loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI without asking authors to reassemble those Render services by hand.
+Render Loops gives agent projects a shared execution loop, durable state, runtime-specific entrypoints, tool wiring, scaffolding, and an operator UI without asking authors to reassemble those Render services by hand.
 
-Render Harness is extensible by design. The included agents, templates, examples, and capability packs are starting points: useful as shipped when they match your use case, and meant to be copied, edited, combined, or replaced when they do not. Your product logic lives in agents and capabilities; the harness supplies the production substrate around them.
+A single deployment is called a **loop**: one repo, one Blueprint, one shared Postgres + Key Value, hosting one or more agents. Browse loops, scaffold new ones, and deploy them to Render.
+
+Render Loops is extensible by design. The included agents, templates, examples, and capability packs are starting points: useful as shipped when they match your use case, and meant to be copied, edited, combined, or replaced when they do not. Your product logic lives in agents and capabilities; Render Loops supplies the production substrate around them.
 
 ## What you can build
 
-Render Harness supports several agent shapes:
+Render Loops supports several agent shapes:
 
 - Chat assistants that respond over HTTP and continue conversations across turns.
 - Support bots that enqueue work, call tools, and stream progress back to an operator UI.
@@ -24,11 +26,11 @@ Render Harness supports several agent shapes:
 
 The same core loop runs all of these shapes. The runtime changes how work starts, how long it can run, and how users observe it.
 
-These shapes are examples, not limits. You can define new agents, publish new capability packs, add MCP servers, build custom HTTP surfaces, or package multi-agent bundles that share the same underlying harness.
+These shapes are examples, not limits. You can define new agents, publish new capability packs, add MCP servers, build custom HTTP surfaces, or package multi-agent bundles that share the same underlying loop.
 
-## What the harness gives you
+## What a loop gives you
 
-The harness handles the platform work around your agent:
+A loop handles the platform work around your agent:
 
 - Durable run state in Postgres.
 - Tool calls and full tool result storage.
@@ -40,20 +42,20 @@ The harness handles the platform work around your agent:
 - A `render-harness.yaml` manifest that describes agents, runtimes, capabilities, environment variables, and deployment shape.
 - A registry and Blueprint emitter that turn the manifest into Render services.
 - CLI and browser scaffolding flows for starting from a gallery template.
-- A public browse surface for official templates and community harness submissions.
-- An operator UI for each deployed harness, usually mounted at the service root in scaffolded projects.
+- A public browse surface for official templates and community loop submissions.
+- An operator UI for each deployed loop, usually mounted at the service root in scaffolded projects.
 
 ## The mental model
 
 Think of the project as three structural parts:
 
-- **Harness:** The shared runtime substrate. It owns the model loop, runtime adapters, state, streaming, cancellation, MCP wiring, built-in tools, and Render deployment shapes.
-- **Agents:** The behavior layer that runs on the harness. An agent starts as a `defineAgent()` TypeScript definition, or as a `render-harness.yaml` manifest that resolves to one. It declares the prompt, model, permissions, MCP servers, skills, tools, and runtime triggers.
+- **Loop:** The shared runtime substrate. It owns the model loop, runtime adapters, state, streaming, cancellation, MCP wiring, built-in tools, and Render deployment shapes.
+- **Agents:** The behavior layer that runs inside the loop. An agent starts as a `defineAgent()` TypeScript definition, or as a `render-harness.yaml` manifest that resolves to one. It declares the prompt, model, permissions, MCP servers, skills, tools, and runtime triggers.
 - **Capabilities:** Reusable extension packs that add tools, environment variables, setup requirements, and prompt guidance. Capabilities live outside the core loop so agents can opt into memory, browser automation, search, scraping, filesystem access, and similar integrations.
 
 ```mermaid
 flowchart TB
-  harness{{"Harness"}}
+  loop{{"Loop"}}
 
   subgraph agents["Agents"]
     chat["chat"]
@@ -67,10 +69,10 @@ flowchart TB
     browser["browser"]
   end
 
-  harness --> agents
+  loop --> agents
   capabilities --> agents
 
-  class harness central
+  class loop central
   class chat,support,recap agent
   class memory,search,browser capability
   classDef central fill:#1f0b35,stroke:#c084fc,stroke-width:3px,color:#ffffff
@@ -116,21 +118,21 @@ The Chief of Staff bundle is the most complete example because it uses web, work
 
 ## How you use it
 
-Render Harness is not only a runtime library. It has different surfaces for different jobs:
+Render Loops is not only a runtime library. It has different surfaces for different jobs:
 
 - Use the CLI scaffolder to create a local project.
-- Use `/browse` on the public wizard site to compare official templates and community harness submissions.
+- Use `/browse` on the public wizard site to compare official templates and community loop submissions.
 - Use `/new` on the public wizard site to create a manual managed repo and deploy flow.
+- Use each deployed loop's operator UI to chat, inspect runs, view agents, edit config, and read guides.
 - Use the template catalog to define what official starters are available.
-- Use each deployed harness's operator UI to chat, inspect runs, view agents, edit config, and read guides.
 - Use the HTTP API to integrate custom frontends, bots, webhooks, and internal tools.
 - Use the registry APIs when you are extending the framework itself.
 
-See [Ways to use Render Harness](/ways-to-use/) for the full map.
+See [Ways to use Render Loops](/ways-to-use/) for the full map.
 
 ## Platform surfaces
 
-Render Harness has four user-facing surfaces:
+Render Loops has four user-facing surfaces:
 
 ```mermaid
 flowchart TB
@@ -162,9 +164,9 @@ flowchart TB
 | Surface | What it does |
 | --- | --- |
 | CLI scaffolder | Creates a local project from a blank prompt or starter template. |
-| Public `/browse` | Lists official templates and community harness submissions. |
+| Public `/browse` | Lists official templates and community loop submissions. |
 | Public `/new` | Creates a manual guided repo/deploy flow. Browse entries can seed it with a template. |
-| Deployed operator UI | Operates one running harness deployment. Scaffolded projects mount it at the service root. |
+| Deployed operator UI | Operates one running loop. Scaffolded projects mount it at the service root. |
 | HTTP API | Integrates agents with external apps, bots, webhooks, and internal tools. |
 
 It also has framework surfaces for contributors:
@@ -192,11 +194,11 @@ If you want to run or change code, start here:
 - [Local development](/local-development/): Install dependencies, start Postgres and Key Value, and run examples.
 - [Examples and Blueprints](/examples-and-blueprints/): Map examples to runtime shapes.
 - [Web API](/web-api/): Integrate custom frontends, bots, webhooks, and internal tools.
-- [Operator UI](/operator-ui/): Operate a deployed harness.
+- [Operator UI](/operator-ui/): Operate a deployed loop.
 - [Capabilities](/capabilities/): Add tools and integration packs.
 - [Template catalog](/template-catalog/): Add scaffoldable starters to the CLI and wizard.
 - [Registry publishing](/registry-publishing/): Publish a finished deployable repo with a generated Blueprint and pinned SHA.
 - [Authoring capability packs](/authoring-capability-packs/): Ship reusable tools, MCP servers, and setup requirements.
 - [Built-in tools](/built-in-tools/): Understand the tools core can add automatically.
 - [State and streaming](/state-and-streaming/): Understand persistence, cancellation, and SSE updates.
-- [Operations](/operations/): Debug deployed harnesses and common failure modes.
+- [Operations](/operations/): Debug deployed loops and common failure modes.

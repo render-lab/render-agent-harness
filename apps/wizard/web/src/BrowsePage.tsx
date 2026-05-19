@@ -199,15 +199,13 @@ export function BrowsePage() {
   return (
     <div className="space-y-6">
       <section className="panel p-6">
-        <div className="hr-section">
-          <span>{"// BROWSE HARNESSES"}</span>
-        </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
-            <h1 className="text-2xl font-bold uppercase tracking-widest">Browse harnesses</h1>
+            <h1 className="text-2xl font-bold uppercase tracking-widest">Browse loops</h1>
             <p className="mt-3 max-w-3xl text-sm text-muted">
-              Compare official templates and community submissions. Start from a maintained template
-              or deploy a pinned community repo.
+              Each <span className="text-ink">loop</span> bundles one or more agents into a single
+              Render deployment with shared Postgres and Key Value. Compare official templates and
+              community submissions, then deploy a maintained template or pin a community repo.
             </p>
           </div>
           <a className="btn btn-primary inline-flex items-center gap-2" href="/new">
@@ -692,12 +690,12 @@ function AddToExistingPicker({
               </>
             )}
 
-            <span className="label mb-1 mt-3 block">target harness</span>
+            <span className="label mb-1 mt-3 block">target loop</span>
             <Select
               value={harnessKey}
               options={harnessOptions}
               onChange={setHarnessKey}
-              ariaLabel="Target harness"
+              ariaLabel="Target loop"
             />
           </>
         )}
@@ -934,7 +932,7 @@ function MissingDetail({ source }: { source: BrowseItem["source"] }) {
     <div className="panel p-8 text-center">
       <div className="label">{"// NOT FOUND"}</div>
       <p className="mt-2 text-sm text-muted">
-        No {source} harness matches this detail URL. It may have been renamed or removed.
+        No {source} loop matches this detail URL. It may have been renamed or removed.
       </p>
       <a className="btn mt-4 inline-flex items-center gap-1.5" href="/browse">
         <LuArrowRight aria-hidden className="rotate-180" />

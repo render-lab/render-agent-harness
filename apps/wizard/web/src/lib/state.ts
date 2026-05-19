@@ -26,7 +26,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   {
     id: "claude-sonnet-4-6",
     label: "Claude Sonnet 4.6",
-    hint: "default — best balance",
+    hint: "default (best balance)",
     spec: { provider: "anthropic", model: "claude-sonnet-4-6" },
   },
   {
@@ -44,19 +44,19 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   {
     id: "gpt-5-1",
     label: "GPT-5.1",
-    hint: "OpenAI flagship — needs OPENAI_API_KEY",
+    hint: "OpenAI flagship (needs OPENAI_API_KEY)",
     spec: { provider: "openai-compat", model: "gpt-5.1", apiKeyEnv: "OPENAI_API_KEY" },
   },
   {
     id: "gpt-5-1-mini",
     label: "GPT-5.1 Mini",
-    hint: "OpenAI small/fast — needs OPENAI_API_KEY",
+    hint: "OpenAI small/fast (needs OPENAI_API_KEY)",
     spec: { provider: "openai-compat", model: "gpt-5.1-mini", apiKeyEnv: "OPENAI_API_KEY" },
   },
   {
     id: "gemini-2-5-pro",
     label: "Gemini 2.5 Pro",
-    hint: "Google flagship — needs GEMINI_API_KEY",
+    hint: "Google flagship (needs GEMINI_API_KEY)",
     spec: {
       provider: "openai-compat",
       model: "gemini-2.5-pro",
@@ -67,7 +67,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   {
     id: "gemini-2-5-flash",
     label: "Gemini 2.5 Flash",
-    hint: "Google fast — needs GEMINI_API_KEY",
+    hint: "Google fast (needs GEMINI_API_KEY)",
     spec: {
       provider: "openai-compat",
       model: "gemini-2.5-flash",
@@ -78,7 +78,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   {
     id: "grok-4",
     label: "Grok 4",
-    hint: "xAI — needs XAI_API_KEY",
+    hint: "xAI (needs XAI_API_KEY)",
     spec: {
       provider: "openai-compat",
       model: "grok-4",
@@ -134,8 +134,8 @@ export function matchPreset(spec: ModelSpec): ModelPreset {
 export const DEFAULT_STATE: WizardState = {
   templateSlug: null,
   agentName: "my-agent",
-  description: "An agent built with the Render harness.",
-  systemPrompt: "You are a helpful assistant deployed on Render via the agent harness.",
+  description: "An agent built on Render Loops.",
+  systemPrompt: "You are a helpful assistant deployed on Render via the Render Loops agent runtime.",
   modelPresetId: DEFAULT_MODEL_PRESET_ID,
   model: findPreset(DEFAULT_MODEL_PRESET_ID).spec ?? {
     provider: "anthropic",

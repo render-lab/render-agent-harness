@@ -5,7 +5,7 @@ description: Use the production HTTP surface for runs, conversations, streaming,
 
 `@render-harness/web` is the production HTTP surface. It fronts `runtime-worker`, stores state in Postgres, streams updates through SSE, and can mount the operator UI.
 
-Use the web API when you want to integrate Render Harness with a custom frontend, webhook, Slack app, internal tool, or automation.
+Use the web API when you want to integrate Render Loops with a custom frontend, webhook, Slack app, internal tool, or automation.
 
 ## Service shape
 
@@ -61,7 +61,7 @@ Only one run in a conversation can be pending, running, or paused at a time. `PO
 | `GET /diagnostics` | Return health checks for primitives and agents. |
 | `GET /blueprint` | Return deployment Blueprint details. |
 | `GET /vitals` | Return Render instances, CPU, memory, and HTTP latency for the current or selected service. Pass `?serviceId=` to target a sibling service in the same Render environment. Requires `RENDER_HARNESS_VITALS_ENABLED=1`. |
-| `GET /vitals/services` | List sibling Render services in this harness deployment (same Render environment), used to populate the Vitals tab's service picker. |
+| `GET /vitals/services` | List sibling Render services in this loop (same Render environment), used to populate the Vitals tab's service picker. |
 | `GET /vitals/logs` | Return recent Render logs with level, type, and text filters. Accepts `?serviceId=`. Requires `RENDER_OWNER_ID`. |
 | `GET /healthz` | Liveness check. |
 
