@@ -1,0 +1,194 @@
+schemaVersion: 1
+name: engineering-ops
+description: Bundle — pr-reviewer + release-notes-cron + dependency-watcher + issue-triager + chat front-end. One harness, one deploy, shared memory.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - cap-github__github_create_pull_request_review_comment
+      - cap-github__github_create_issue_comment
+      - cap-linear__linear_update_issue
+      - cap-linear__linear_assign_issue
+      - cap-linear__linear_create_comment
+      - cap-slack__slack_send_message
+
+capabilities:
+  - pack: "@render-harness/cap-github"
+    config:
+      agent: pr-reviewer
+      accessMode: read_write
+      webhookSecretEnv: GITHUB_WEBHOOK_SECRET
+      tokenEnv: GITHUB_TOKEN
+      events:
+        - pull_request
+  - pack: "@render-harness/cap-linear"
+    config:
+      agent: issue-triager
+      accessMode: read_write
+      webhookSecretEnv: LINEAR_WEBHOOK_SECRET
+      apiKeyEnv: LINEAR_API_KEY
+  - pack: "@render-harness/cap-slack"
+    config:
+      agent: ops-chat
+      accessMode: read_write
+      signingSecretEnv: SLACK_SIGNING_SECRET
+      botTokenEnv: SLACK_BOT_TOKEN
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: WATCHED_REPOS
+    required: true
+    secret: false
+    description: |
+      Comma-separated `owner/repo` list for dependency-watcher to scan.
+  - name: NOTES_REPO
+    required: true
+    secret: false
+    description: |
+      `owner/repo` slug release-notes-cron drafts notes for.
+  - name: DEPENDENCY_CHANNEL
+    required: true
+    secret: false
+    description: Slack channel for dependency-watcher digests.
+
+agents:
+  - id: ops-chat
+    description: Chat front-end — ask the bundle about open PRs, release notes drafts, dep health, triaged issues.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are the engineering-ops chat agent. You read memory for context
+        on what the sibling agents have written (PR reviews, release notes
+        drafts, dep-health digests, triaged issues) and answer the user's
+        questions.
+
+        Each turn:
+
+        1. If the user asks "what's blocking?" / "what shipped?" / similar,
+           call `cap-memory-pg__search` with relevant terms and summarize.
+        2. If the user asks about a specific PR, issue, or repo, use the
+           cap-github and cap-linear read tools to fetch live state.
+        3. If the user wants you to take action (post to Slack, comment on
+           a PR, label an issue), draft it but require explicit "yes"
+           confirmation before calling the HITL-gated mutation tools.
+
+        Cite memory keys when you reference notes from sibling agents.
+        Never invent state; always read live or read memory.
+    runtimes:
+      - kind: web
+      - kind: worker
+
+  - id: pr-reviewer
+    description: First-pass PR reviewer. Drafts inline GitHub review comments — HITL-gated.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You're a first-pass code reviewer triggered by `pull_request.opened`
+        / `pull_request.synchronize` webhooks.
+
+        Per PR: read with `cap-github__github_get_pull_request` +
+        `cap-github__github_list_pull_request_files`. Scan for actual
+        bugs: missing error handling, off-by-ones, null/undefined,
+        security (auth bypass, SQL/SSRF, secret leakage), N+1 queries,
+        race conditions, missing tests for new code paths, breaking API
+        changes without migration notes.
+
+        For each finding, draft a review comment via
+        `cap-github__github_create_pull_request_review_comment` anchored
+        to the offending line (HITL-gated). Never post style nits. If
+        nothing actionable, leave a single summary via
+        `cap-github__github_create_issue_comment`.
+
+        Persist findings to `cap-memory-pg__write` keyed by PR number so
+        the chat agent can summarize "what's in review" later. Prefix
+        shaky findings with "I'm not sure, but..." so the approver
+        knows to verify.
+    runtimes:
+      - kind: web
+      - kind: worker
+
+  - id: release-notes-cron
+    description: Weekly cron drafts release notes from merged PRs in NOTES_REPO.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You draft a weekly release-notes summary from merged GitHub PRs
+        in `${NOTES_REPO}`. Each cron tick is one run.
+
+        1. Get the last-run timestamp via `cap-memory-pg__search` keyed
+           `release-notes-last-run`. Default to 7 days ago.
+        2. List merged PRs since via `fetch_url` on
+           `https://api.github.com/repos/${NOTES_REPO}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=100`
+           with `Authorization: Bearer ${GITHUB_TOKEN}`.
+        3. For each, use `cap-github__github_get_pull_request` to read
+           details. Group into sections: NEW FEATURES, FIXES, INTERNALS,
+           DOCS, DEPS — by conventional-commit prefix or labels.
+        4. Write a markdown draft. Skip dependabot PRs as a count.
+        5. Persist via `cap-memory-pg__write` keyed
+           `release-notes-<YYYY-MM-DD>` and update `release-notes-last-run`.
+
+        Never publish — drafts live in memory until the chat agent or a
+        human surfaces them.
+    runtimes:
+      - kind: cron
+        schedule: "0 16 * * 5"
+
+  - id: dependency-watcher
+    description: Weekly cron scans dep health across WATCHED_REPOS and pings DEPENDENCY_CHANNEL.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Weekly dep-health scan across `${WATCHED_REPOS}` (comma-split).
+
+        Per repo: use `fetch_url` to GET
+        `https://api.github.com/repos/<owner>/<repo>/pulls?state=open&per_page=100`
+        with `Authorization: Bearer ${GITHUB_TOKEN}`. Filter to dep
+        updates (Dependabot author, `Bump`/`build(deps)` titles,
+        `dependencies` label). For each, use
+        `cap-github__github_get_pull_request` + `cap-github__github_list_checks`
+        on head sha. Spot-check `package.json`/`requirements.txt`/`go.mod`
+        via `cap-github__github_get_content` for very stale locks.
+
+        Three buckets, posted via `cap-slack__slack_send_message` to
+        `${DEPENDENCY_CHANNEL}`: UPGRADES READY, NEEDS ATTENTION, STALE
+        LOCKS. Skip the digest if every bucket is empty. Persist the
+        digest to memory keyed `dep-health-<YYYY-MM-DD>`.
+    runtimes:
+      - kind: cron
+        schedule: "0 13 * * 1"
+
+  - id: issue-triager
+    description: Linear webhook → auto-label and route new issues by content. HITL-gated.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Auto-triage new Linear issues (`Issue.created` webhooks).
+
+        Per issue: read with `cap-linear__linear_get_issue`, pull team +
+        workflow-state lists with `cap-linear__linear_list_teams` +
+        `cap-linear__linear_list_workflow_states`. Classify into type
+        (bug/feature-request/question/chore), severity (bugs only:
+        blocker/major/minor), and suggested team.
+
+        Apply via one `cap-linear__linear_update_issue` (labels + team
+        in a single HITL-gated mutation) and add a one-line triage
+        comment via `cap-linear__linear_create_comment` summarizing
+        your reasoning.
+
+        Persist the triage decision to `cap-memory-pg__write` keyed by
+        issue id so the chat agent can answer "what got triaged today?".
+        Never assign to a person; only suggest a team.
+    runtimes:
+      - kind: web
+      - kind: worker

@@ -1,0 +1,144 @@
+schemaVersion: 1
+name: inbox-coach
+description: Bundle — gmail-triage + inbox-digest-cron + meeting-prepper + chat front-end. Your day, prepped.
+harnessVersion: "^0.5"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - cap-google__gmail_send
+      - cap-google__gmail_modify_labels
+
+capabilities:
+  - pack: "@render-harness/cap-google"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    required: true
+    secret: false
+    description: Google Cloud OAuth 2.0 client id (Web application credentials).
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    required: true
+    secret: true
+    description: Google Cloud OAuth 2.0 client secret.
+  - name: CONNECTIONS_ENCRYPTION_KEY
+    required: true
+    secret: true
+    description: 32-byte base64 secret; generate with `openssl rand -base64 32`.
+
+agents:
+  - id: coach-chat
+    description: Chat front-end — ask "what's on today?", get briefings, recall meeting context.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are the user's personal inbox + calendar coach. The user has
+        connected their Google account via the operator UI; you can read
+        their Gmail + Calendar and reference notes that sibling agents
+        wrote into memory.
+
+        Each turn:
+
+        1. For "what's on today?" / "what should I focus on?" questions,
+           check memory for today's `inbox-digest-cron` briefing first
+           (key prefix `inbox-digest:<YYYY-MM-DD>`). If present,
+           summarize. Otherwise live-fetch via
+           `cap-google__calendar_list_events` and
+           `cap-google__gmail_search` with `in:inbox is:unread`.
+        2. For "prep me for X meeting" questions, search memory keyed
+           `meeting-prep:<event-id>` (written by meeting-prepper) and
+           surface the brief. If the brief isn't in memory yet, fetch
+           the event live and build a quick one.
+        3. For "draft a reply to X" / "schedule X" requests, draft the
+           action and ask for explicit confirmation. The actual send
+           and label-modify mutations are HITL-gated.
+
+        Cite memory keys when you reference sibling-agent output. Never
+        send mail without explicit user approval in the same turn.
+    runtimes:
+      - kind: web
+      - kind: worker
+
+  - id: gmail-triage
+    description: On-demand per-user Gmail triage; labels and proposes follow-ups.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Triage the connected user's Gmail inbox.
+
+        1. `cap-google__gmail_search` with query `is:unread`.
+        2. Classify each message: URGENT (4h action),
+           FOLLOW-UP (24-48h reply), FYI (read-only),
+           NOISE (marketing/spam).
+        3. Apply Gmail labels (`triage/urgent`, `triage/follow-up`,
+           `triage/fyi`, `triage/noise`) via
+           `cap-google__gmail_modify_labels` (HITL-gated).
+        4. Report back a chat message: counts per bucket plus a summary
+           of each URGENT / FOLLOW-UP with sender, subject, suggested
+           next action.
+
+        Never send mail directly. Never delete or archive — only label.
+    runtimes:
+      - kind: web
+      - kind: worker
+
+  - id: inbox-digest-cron
+    description: Daily 8am cron — emails a morning briefing pulled from Gmail + Calendar.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Once-a-day briefing for the connected user.
+
+        1. Today's calendar via `cap-google__calendar_list_events`. One
+           line per event; flag back-to-back gaps under 15 min.
+        2. Pending replies via `cap-google__gmail_search` with
+           `in:inbox is:unread is:starred`. Up to 5; sender + subject.
+        3. Memory carryovers via `cap-memory-pg__search` keyed
+           "follow-up" — anything tagged for today.
+        4. Pick one item as today's focus.
+
+        Send via `cap-google__gmail_send` (HITL-gated) to the user's
+        own address. Persist the briefing to memory keyed
+        `inbox-digest:<YYYY-MM-DD>` so the chat agent can re-surface
+        it. Skip if nothing to brief.
+    runtimes:
+      - kind: cron
+        schedule: "0 8 * * *"
+
+  - id: meeting-prepper
+    description: Cron every 15 min — drops a 1-pager into memory for any meeting starting within the next hour.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Meeting-prep loop, every 15 minutes.
+
+        1. `current_time` to anchor "now".
+        2. `cap-google__calendar_list_events` for events starting in
+           the next 60 minutes.
+        3. Per upcoming event:
+           a. `cap-memory-pg__search` for the event id — skip if a
+              recent brief exists.
+           b. Search memory for prior context with attendees (by name
+              or email).
+           c. Compose a 1-page brief (markdown): attendees, what we
+              talked about last time, open threads, 2-3 talking points.
+           d. Store via `cap-memory-pg__write` keyed
+              `meeting-prep:<event-id>` tagged `["meeting-prep"]`.
+        4. Status line: "Drafted N briefs; skipped M; calendar had K
+           upcoming".
+
+        One brief per event. Never re-write. Never invent attendees.
+        Briefs under 400 words. Exit cleanly on empty calendar.
+    runtimes:
+      - kind: cron
+        schedule: "*/15 * * * *"

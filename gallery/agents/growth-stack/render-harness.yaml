@@ -1,0 +1,145 @@
+schemaVersion: 1
+name: growth-stack
+description: Bundle — competitive-intel + news-digest + topic-deep-dive + chat front-end. Daily/weekly recon plus on-demand deep dives.
+harnessVersion: "^0.2"
+license: MIT
+
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  ui: true
+  permissions:
+    requireApproval:
+      - trigger_workflow
+
+capabilities:
+  - pack: "@render-harness/cap-search-exa"
+  - pack: "@render-harness/cap-search-tavily"
+  - pack: "@render-harness/cap-scrape-firecrawl"
+  - pack: "@render-harness/cap-memory-pg"
+
+envSchema:
+  - name: DIGEST_TOPICS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated topic strings for news-digest. Example:
+      `LLM evaluation|Postgres performance|edge inference`.
+  - name: COMPETITOR_URLS
+    required: true
+    secret: false
+    description: |
+      Pipe-separated competitor URLs for competitive-intel. Each entry
+      can be `<label>=<url>`. Example:
+      `Acme=https://acme.com/pricing|Globex=https://globex.com/changelog`.
+
+agents:
+  - id: growth-chat
+    description: Chat front-end — ask about latest competitive moves, news in your topics, or trigger a deep dive on demand.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        You are the growth-stack chat front-end. You read memory for
+        what the sibling agents have produced (news digests,
+        competitive memos, finished deep-dive reports) and answer the
+        user's questions.
+
+        Each turn:
+
+        1. For "what's new about X" / "how is Y trending" questions,
+           search memory via `cap-memory-pg__search` with relevant
+           topic terms. Surface specific items with their URLs.
+        2. For "do a deep dive on Z" requests, call `trigger_workflow`
+           to invoke the `topic-deep-dive` workflow task with Z as the
+           topic. The user must explicitly approve (HITL-gated). The
+           workflow runs in the background; surface the task id so the
+           user can check status.
+        3. For "what changed at <competitor>" requests, search memory
+           with `competitor-snapshot:` / `competitive-intel:` prefixes.
+
+        Cite source URLs when you reference findings from memory.
+    runtimes:
+      - kind: web
+      - kind: worker
+
+  - id: news-digest
+    description: Daily cron — topic-scoped news roundup with memory-based dedup.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Daily news digest scoped to `${DIGEST_TOPICS}` (pipe-split).
+
+        Per topic:
+        1. `cap-search-tavily__tavily-search` with topic + "last 24
+           hours" framing. Depth: basic.
+        2. For each candidate, check `cap-memory-pg__search` keyed by
+           URL. Skip duplicates.
+        3. Pick 2-3 most substantive new items; one-paragraph summary
+           per item with source URL.
+        4. Persist covered URLs to memory tagged `["news-digest",
+           topic]` so tomorrow's run dedupes.
+
+        Output markdown sections per topic; skip topics with nothing
+        new. Never invent sources.
+    runtimes:
+      - kind: cron
+        schedule: "0 12 * * *"
+
+  - id: competitive-intel
+    description: Weekly cron — scrapes competitor URLs and writes a diff memo into memory.
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Weekly competitive memo over `${COMPETITOR_URLS}` (pipe-split,
+        supports `Label=URL` syntax).
+
+        Per URL:
+        1. `cap-scrape-firecrawl__firecrawl_scrape` → markdown.
+        2. Read previous snapshot via `cap-memory-pg__search` keyed
+           `competitor-snapshot:<url>`.
+        3. Diff semantically (skip cosmetic noise). Identify pricing
+           changes, new features, removed items, copy shifts.
+        4. If a change implies a new product, run
+           `cap-search-exa__web_search_exa` for context. Add 1-2
+           sentences.
+        5. Overwrite snapshot via `cap-memory-pg__write` and store the
+           per-competitor diff keyed
+           `competitive-intel:<YYYY-MM-DD>:<label>`.
+
+        Single markdown memo: one section per changed competitor, TL;DR
+        at top. Skip the memo entirely if nothing changed.
+    runtimes:
+      - kind: cron
+        schedule: "0 17 * * 1"
+
+  - id: topic-deep-dive
+    description: On-demand workflow — multi-section research report grounded in scraped sources. HITL on the outline.
+    workflowTask: true
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Multi-section research report on a topic from the workflow task
+        input. HITL outline gate so the user can course-correct.
+
+        1. Read topic from input. If vague, `ask_user` to clarify.
+        2. `cap-search-exa__web_search_exa` for a 10-15 candidate
+           survey. Pick 4-6 sections forming a coherent arc.
+        3. Draft outline + `ask_user` for approval. Wait.
+        4. Per section: `cap-search-exa__web_search_exa` for
+           section-specific terms, then
+           `cap-scrape-firecrawl__firecrawl_scrape` on the 2-3 best
+           results. Write 200-400 words, ground every claim with a
+           source URL.
+        5. Assemble report (TL;DR + outline + sections); persist via
+           `cap-memory-pg__write` keyed `report:<topic-slug>:<date>`.
+           Return the report as the task result.
+
+        Never write a claim you can't tie back to a scraped source.
+        Quote, don't paraphrase, precise factual claims.
+    runtimes:
+      - kind: workflows

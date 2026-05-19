@@ -421,3 +421,46 @@ agents:
     capabilities:
       - "@render-harness/cap-memory-pg"
     author: "render-harness"
+
+  - slug: engineering-ops
+    name: "Engineering ops"
+    description: "Bundle — pr-reviewer + release-notes-cron + dependency-watcher + issue-triager + chat front-end. One harness, one deploy, shared memory."
+    path: ./agents/engineering-ops
+    surface: ["web-chat", "github", "linear", "slack"]
+    audience: ["eng", "ops"]
+    runtimeKinds: ["web", "worker", "cron"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-github"
+      - "@render-harness/cap-linear"
+      - "@render-harness/cap-slack"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: growth-stack
+    name: "Growth stack"
+    description: "Bundle — competitive-intel + news-digest + topic-deep-dive + chat front-end. Daily/weekly recon plus on-demand deep dives."
+    path: ./agents/growth-stack
+    surface: ["web-chat"]
+    audience: ["growth", "content"]
+    runtimeKinds: ["web", "worker", "cron", "workflows"]
+    requiresHarness: "^0.2"
+    capabilities:
+      - "@render-harness/cap-search-exa"
+      - "@render-harness/cap-search-tavily"
+      - "@render-harness/cap-scrape-firecrawl"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
+
+  - slug: inbox-coach
+    name: "Inbox coach"
+    description: "Bundle — gmail-triage + inbox-digest-cron + meeting-prepper + chat front-end. Your day, prepped."
+    path: ./agents/inbox-coach
+    surface: ["web-chat", "email", "calendar"]
+    audience: ["personal", "ops"]
+    runtimeKinds: ["web", "worker", "cron"]
+    requiresHarness: "^0.5"
+    capabilities:
+      - "@render-harness/cap-google"
+      - "@render-harness/cap-memory-pg"
+    author: "render-harness"
