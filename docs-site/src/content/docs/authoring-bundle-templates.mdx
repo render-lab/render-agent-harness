@@ -108,14 +108,15 @@ Add the bundle to `gallery/index.yaml`:
   name: Chief of Staff
   description: Multi-agent assistant with chat, memory, and scheduled work.
   path: ./agents/chief-of-staff
-  categories: ["bundle", "assistant"]
+  surface: ["web-chat", "calendar"]
+  audience: ["personal", "hiring"]
   runtimeKinds: ["web", "worker", "cron", "workflows"]
   capabilities:
     - "@render-harness/cap-memory-pg"
   author: "render-harness"
 ```
 
-The loader cross-checks `runtimeKinds` against the union of every agent's runtimes.
+The loader cross-checks `runtimeKinds` against the union of every agent's runtimes. The `surface` and `audience` arrays come from closed taxonomies validated by `GalleryAgentEntrySchema` — see [`gallery/README.md`](https://github.com/render/render-harness/blob/main/gallery/README.md) for the full lists.
 
 ## Rebuild the bundled snapshot
 

@@ -118,7 +118,8 @@ Notes:
     name: "Display Name"
     description: "Short pitch shown on the Template step."
     path: ./agents/<bundle-slug>
-    categories: ["bundle", "..."]
+    surface: ["slack", "github"]                 # closed set; see gallery/README.md
+    audience: ["eng"]                            # closed set; see gallery/README.md
     runtimeKinds: ["web", "worker", "cron"]      # union across all agents
     capabilities:
       - "@render-harness/cap-memory-pg"
@@ -126,6 +127,8 @@ Notes:
 ```
 
 The loader cross-checks that `runtimeKinds` matches the union of every agent's runtimes (`flattenRuntimeKinds(manifest)`). The discriminator (`kind: "bundle"`) is *derived* from the manifest at load time — you do not declare it in `index.yaml`.
+
+`surface[]` and `audience[]` replaced the old free-form `categories: [string]` field in May 2026 — see [`gallery/README.md`](../gallery/README.md) for the full closed-set values. Adding a new value is a one-line PR to `packages/registry/src/gallery.ts`.
 
 ## 6. Re-bundle the gallery snapshot
 

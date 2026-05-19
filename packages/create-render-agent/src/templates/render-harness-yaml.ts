@@ -64,7 +64,6 @@ export function buildHarnessConfig(answers: Answers): Record<string, unknown> {
   }
 
   if (base.envSchema) cfg.envSchema = base.envSchema;
-  if (base.categories) cfg.categories = base.categories;
 
   cfg.agents = [agent];
   return cfg;
@@ -73,11 +72,13 @@ export function buildHarnessConfig(answers: Answers): Record<string, unknown> {
 /**
  * Pulls forward fields from a template manifest that should land
  * unchanged in the scaffolded manifest — top-level bundle metadata +
- * per-agent extras we'd otherwise lose.
+ * per-agent extras we'd otherwise lose. `categories` was removed from
+ * the manifest schema in the May 2026 taxonomy migration; surface +
+ * audience live on the gallery index, not on the harness manifest.
  */
 function extractCarryForward(manifest: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const key of ["shared", "envSchema", "categories"]) {
+  for (const key of ["shared", "envSchema"]) {
     if (manifest[key] !== undefined) out[key] = manifest[key];
   }
   return out;

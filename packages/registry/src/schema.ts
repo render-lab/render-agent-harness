@@ -397,7 +397,6 @@ export const HarnessConfigSchema = z
     harnessVersion: SemverRangeSchema,
     license: z.string().min(1).max(64).optional(),
     author: z.string().min(1).max(128).optional(),
-    categories: z.array(slugSchema).max(20).optional(),
     shared: SharedBlockSchema.optional(),
     capabilities: z.array(CapabilityRefSchema).optional(),
     envSchema: z.array(EnvVarSpecSchema).optional(),

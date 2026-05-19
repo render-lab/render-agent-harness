@@ -13,13 +13,22 @@ schemaVersion: 1
 #   4. `pnpm --filter @render-harness/registry test` must still pass —
 #      the loader cross-checks that runtimeKinds here matches the
 #      manifest's runtimes[].kind.
+#
+# Taxonomy facets (May 2026 standardization):
+#   - surface[]: web-chat, slack, email, calendar, github, linear,
+#     webhook, browser, render-mcp, filesystem
+#   - audience[]: eng, support, sales, ops, personal, content, growth,
+#     hiring
+# Both are optional; both are validated against a closed set by
+# `GalleryAgentEntrySchema` in `packages/registry/src/gallery.ts`.
 
 agents:
   - slug: chat
     name: "Chat assistant"
     description: "Minimal single-turn HTTP chat agent. The simplest starting point."
     path: ./agents/chat
-    categories: ["starter"]
+    surface: ["web-chat"]
+    audience: ["personal", "eng"]
     runtimeKinds: ["web"]
     requiresHarness: "^0.1"
     capabilities: []
@@ -29,7 +38,8 @@ agents:
     name: "Support bot"
     description: "Slack-driven web + worker support flow with threaded replies."
     path: ./agents/support-bot
-    categories: ["support", "queue", "slack"]
+    surface: ["slack"]
+    audience: ["support"]
     runtimeKinds: ["web", "worker"]
     requiresHarness: "^0.1"
     capabilities:
@@ -40,7 +50,8 @@ agents:
     name: "Work monitor"
     description: "GitHub + Linear work monitor that watches PRs, issues, checks, projects, and comments."
     path: ./agents/work-monitor
-    categories: ["work", "github", "linear"]
+    surface: ["github", "linear", "webhook"]
+    audience: ["eng"]
     runtimeKinds: ["web", "worker"]
     requiresHarness: "^0.1"
     capabilities:
@@ -52,7 +63,8 @@ agents:
     name: "Research cron"
     description: "Scheduled research agent that runs on a cron and uses Exa web search."
     path: ./agents/research-cron
-    categories: ["research", "scheduled"]
+    surface: []
+    audience: ["content", "growth"]
     runtimeKinds: ["cron"]
     requiresHarness: "^0.1"
     capabilities:
@@ -63,7 +75,8 @@ agents:
     name: "Chief of Staff"
     description: "Sealed bundle — chat, meeting prep, weekly recap, interview prep + feedback. Cron for cheap checks; Workflows for durable runs."
     path: ./agents/chief-of-staff
-    categories: ["bundle", "personal", "hiring"]
+    surface: ["web-chat", "calendar"]
+    audience: ["personal", "hiring"]
     runtimeKinds: ["web", "worker", "cron", "workflows"]
     requiresHarness: "^0.1"
     capabilities:

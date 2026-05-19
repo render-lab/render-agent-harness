@@ -3,7 +3,6 @@ name: work-monitor
 description: GitHub and Linear monitoring agent. Watches work events and summarizes what changed.
 harnessVersion: "^0.2"
 license: MIT
-categories: [work, github, linear]
 
 shared:
   model:

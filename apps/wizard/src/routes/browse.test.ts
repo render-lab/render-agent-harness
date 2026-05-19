@@ -13,7 +13,8 @@ const GALLERY: ResolvedGallery = {
       slug: "chat",
       name: "Chat assistant",
       description: "Minimal chat starter.",
-      categories: ["starter"],
+      surface: ["web-chat"],
+      audience: ["personal"],
       runtimeKinds: ["web"],
       requiresHarness: "^0.1",
       capabilities: ["@render-harness/cap-memory-pg"],
@@ -87,8 +88,11 @@ describe("GET /api/browse", () => {
       "render.com/deploy",
     );
     expect(body.facets.sources).toEqual(["community", "official"]);
-    expect(body.facets.categories).toContain("starter");
-    expect(body.facets.categories).toContain("community");
+    // Surface + audience come from official entries (closed taxonomy).
+    expect(body.facets.surfaces).toContain("web-chat");
+    expect(body.facets.audiences).toContain("personal");
+    // Categories now only hold community-entry tags (free-form).
+    expect(body.facets.categories).toEqual(["community", "demo"]);
     expect(body.community.entryCount).toBe(1);
   });
 });

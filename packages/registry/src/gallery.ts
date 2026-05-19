@@ -50,6 +50,39 @@ const slugSchema = z
 const runtimeKindSchema = z.enum(["web", "worker", "cron", "workflows"]);
 export type GalleryRuntimeKind = z.infer<typeof runtimeKindSchema>;
 
+/**
+ * Standardized taxonomy facets for gallery entries. These replaced the
+ * old free-form `categories: [string]` field in May 2026 so the wizard
+ * can build filter chips against a known closed set instead of guessing
+ * what authors might type. New values land via PR — keep them stable
+ * because they propagate into the bundled CLI snapshot.
+ */
+const surfaceSchema = z.enum([
+  "web-chat",
+  "slack",
+  "email",
+  "calendar",
+  "github",
+  "linear",
+  "webhook",
+  "browser",
+  "render-mcp",
+  "filesystem",
+]);
+export type GallerySurface = z.infer<typeof surfaceSchema>;
+
+const audienceSchema = z.enum([
+  "eng",
+  "support",
+  "sales",
+  "ops",
+  "personal",
+  "content",
+  "growth",
+  "hiring",
+]);
+export type GalleryAudience = z.infer<typeof audienceSchema>;
+
 export const GalleryAgentEntrySchema = z
   .object({
     slug: slugSchema,
@@ -61,7 +94,20 @@ export const GalleryAgentEntrySchema = z
       .min(1)
       .max(256)
       .regex(/^\.\/[\w./@-]+$/, "must be a relative POSIX path"),
-    categories: z.array(slugSchema).max(20).optional(),
+    /**
+     * Standardized surface taxonomy — what the agent integrates with
+     * externally. Authors pick from a closed set so the wizard can
+     * render filter chips without ad-hoc normalization. Optional with a
+     * default of `[]` for entries that are pure-internal (e.g. cron
+     * that only reads/writes memory).
+     */
+    surface: z.array(surfaceSchema).max(10).optional(),
+    /**
+     * Standardized audience taxonomy — who'd want this agent. Same
+     * closed-set discipline as `surface`. Optional with a default of
+     * `[]` for generic baselines.
+     */
+    audience: z.array(audienceSchema).max(8).optional(),
     /** Runtime kinds declared by the entry's render-harness.yaml. Cross-checked at load time. */
     runtimeKinds: z.array(runtimeKindSchema).min(1).max(4),
     /** Harness version range required by this gallery entry. */
@@ -110,7 +156,8 @@ const ResolvedAgentEntrySchema = z
     slug: slugSchema,
     name: z.string().min(1).max(80),
     description: z.string().min(1).max(280),
-    categories: z.array(slugSchema).max(20),
+    surface: z.array(surfaceSchema).max(10),
+    audience: z.array(audienceSchema).max(8),
     runtimeKinds: z.array(runtimeKindSchema).min(1).max(4),
     requiresHarness: SemverRangeSchema.nullable(),
     capabilities: z.array(z.string().min(1)).max(20),
@@ -161,7 +208,8 @@ export interface ResolvedAgentEntry {
   slug: string;
   name: string;
   description: string;
-  categories: string[];
+  surface: GallerySurface[];
+  audience: GalleryAudience[];
   runtimeKinds: GalleryRuntimeKind[];
   requiresHarness: string | null;
   capabilities: string[];
@@ -238,7 +286,8 @@ export async function loadGalleryFromSource(
       slug: entry.slug,
       name: entry.name,
       description: entry.description,
-      categories: entry.categories ?? [],
+      surface: entry.surface ?? [],
+      audience: entry.audience ?? [],
       runtimeKinds: entry.runtimeKinds,
       requiresHarness: entry.requiresHarness ?? null,
       capabilities: entry.capabilities ?? [],

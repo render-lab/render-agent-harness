@@ -157,7 +157,8 @@ describe("bundle round-trip", () => {
           slug: "x",
           name: "X",
           description: "x",
-          categories: [],
+          surface: [],
+          audience: [],
           runtimeKinds: ["web"],
           requiresHarness: "^0.1",
           capabilities: [],
@@ -171,5 +172,82 @@ describe("bundle round-trip", () => {
       capabilities: [],
     };
     expect(() => ResolvedGallerySchema.parse(ok)).not.toThrow();
+  });
+});
+
+describe("GalleryAgentEntrySchema taxonomy (surface + audience)", () => {
+  it("accepts known surface and audience values", () => {
+    const parsed = GalleryIndexSchema.parse({
+      schemaVersion: 1,
+      agents: [
+        {
+          slug: "x",
+          name: "X",
+          description: "x",
+          path: "./agents/x",
+          runtimeKinds: ["web"],
+          surface: ["slack", "github"],
+          audience: ["eng", "ops"],
+        },
+      ],
+    });
+    expect(parsed.agents[0]?.surface).toEqual(["slack", "github"]);
+    expect(parsed.agents[0]?.audience).toEqual(["eng", "ops"]);
+  });
+
+  it("rejects unknown surface values (closed set)", () => {
+    expect(() =>
+      GalleryIndexSchema.parse({
+        schemaVersion: 1,
+        agents: [
+          {
+            slug: "x",
+            name: "X",
+            description: "x",
+            path: "./agents/x",
+            runtimeKinds: ["web"],
+            surface: ["notion"], // not in the closed set
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects unknown audience values (closed set)", () => {
+    expect(() =>
+      GalleryIndexSchema.parse({
+        schemaVersion: 1,
+        agents: [
+          {
+            slug: "x",
+            name: "X",
+            description: "x",
+            path: "./agents/x",
+            runtimeKinds: ["web"],
+            audience: ["legal"], // not in the closed set
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects the deprecated free-form categories field", () => {
+    // Strict schema; categories was removed in the May 2026 taxonomy
+    // migration. Authors should use surface[] + audience[] instead.
+    expect(() =>
+      GalleryIndexSchema.parse({
+        schemaVersion: 1,
+        agents: [
+          {
+            slug: "x",
+            name: "X",
+            description: "x",
+            path: "./agents/x",
+            runtimeKinds: ["web"],
+            categories: ["whatever"],
+          },
+        ],
+      }),
+    ).toThrow();
   });
 });

@@ -10,7 +10,14 @@ export type BrowseItem =
       id: string;
       name: string;
       description: string;
-      categories: string[];
+      /**
+       * Standardized closed-set taxonomy authored in `gallery/index.yaml`.
+       * Replaced the old `categories: [string]` free-form list in the May
+       * 2026 taxonomy migration. Community entries (which come from a
+       * separate schema with no migration window) keep `categories[]`.
+       */
+      surface: string[];
+      audience: string[];
       runtimeKinds: string[];
       capabilities: string[];
       author: string | null;
@@ -23,6 +30,7 @@ export type BrowseItem =
       id: string;
       name: string;
       description: string;
+      /** Free-form tags from the community entry's own schema. */
       categories: string[];
       runtimeKinds: string[];
       capabilities: string[];
@@ -35,6 +43,11 @@ export type BrowseItem =
 export interface BrowseFacets {
   sources: string[];
   runtimeKinds: string[];
+  /** Authored taxonomy facet for official entries. */
+  surfaces: string[];
+  /** Authored taxonomy facet for official entries. */
+  audiences: string[];
+  /** Free-form facet derived from community entries only. */
   categories: string[];
   capabilities: string[];
   kinds: string[];
@@ -82,7 +95,8 @@ function normalizeOfficialEntry(entry: ResolvedAgentEntry): BrowseItem {
     id: `official:${entry.slug}`,
     name: entry.name,
     description: entry.description,
-    categories: entry.categories,
+    surface: entry.surface,
+    audience: entry.audience,
     runtimeKinds: entry.runtimeKinds,
     capabilities: entry.capabilities,
     author: entry.author,
@@ -126,6 +140,8 @@ async function loadCommunityEntries(
 function buildFacets(items: BrowseItem[]): BrowseFacets {
   const sources = new Set<string>();
   const runtimeKinds = new Set<string>();
+  const surfaces = new Set<string>();
+  const audiences = new Set<string>();
   const categories = new Set<string>();
   const capabilities = new Set<string>();
   const kinds = new Set<string>();
@@ -134,13 +150,20 @@ function buildFacets(items: BrowseItem[]): BrowseFacets {
     sources.add(item.source);
     kinds.add(item.source === "official" ? item.kind : "community");
     for (const runtime of item.runtimeKinds) runtimeKinds.add(runtime);
-    for (const category of item.categories) categories.add(category);
     for (const capability of item.capabilities) capabilities.add(capability);
+    if (item.source === "official") {
+      for (const s of item.surface) surfaces.add(s);
+      for (const a of item.audience) audiences.add(a);
+    } else {
+      for (const category of item.categories) categories.add(category);
+    }
   }
 
   return {
     sources: [...sources].sort(),
     runtimeKinds: [...runtimeKinds].sort(),
+    surfaces: [...surfaces].sort(),
+    audiences: [...audiences].sort(),
     categories: [...categories].sort(),
     capabilities: [...capabilities].sort(),
     kinds: [...kinds].sort(),

@@ -296,7 +296,6 @@ Installing a capability pack is equivalent to installing any npm dependency: its
 | `harnessVersion` | yes | npm-style range (e.g. `^0.1`). |
 | `license` | no | SPDX id. |
 | `author` | no | Free-form. |
-| `categories` | no | Tag slugs for the discovery site. |
 | `agent` | yes | Either `{ kind: builtin, ref: chat, systemPrompt }` or `{ kind: custom, entrypoint }`. |
 | `runtimes[]` | yes | At least one of `web` / `worker` / `cron` / `workflows`. Each kind appears at most once. |
 | `model` | yes | `{ provider: anthropic | openai-compat, model, baseURL?, apiKeyEnv?, thinking? }`. |

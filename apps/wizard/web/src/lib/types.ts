@@ -55,7 +55,8 @@ export interface GalleryAgent {
   slug: string;
   name: string;
   description: string;
-  categories: string[];
+  surface: string[];
+  audience: string[];
   runtimeKinds: RuntimeKind[] | ReadonlyArray<RuntimeKind | "workflows">;
   capabilities: string[];
   author: string | null;
@@ -90,7 +91,9 @@ export type BrowseItem =
       id: string;
       name: string;
       description: string;
-      categories: string[];
+      /** Standardized closed-set taxonomy authored in gallery/index.yaml. */
+      surface: string[];
+      audience: string[];
       runtimeKinds: string[];
       capabilities: string[];
       author: string | null;
@@ -103,6 +106,7 @@ export type BrowseItem =
       id: string;
       name: string;
       description: string;
+      /** Free-form tags inherited from the community entry's own schema. */
       categories: string[];
       runtimeKinds: string[];
       capabilities: string[];
@@ -115,6 +119,8 @@ export type BrowseItem =
 export interface BrowseFacets {
   sources: string[];
   runtimeKinds: string[];
+  surfaces: string[];
+  audiences: string[];
   categories: string[];
   capabilities: string[];
   kinds: string[];
