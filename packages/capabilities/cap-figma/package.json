@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-figma",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Figma capability pack for the Render agent harness. First pack with granular per-action OAuth scopes (post-Nov-2025 platform update).",
   "type": "module",
   "license": "MIT",

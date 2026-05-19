@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/cap-google",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Google Workspace (Gmail + Calendar) capability pack for the Render agent harness. Per-end-user OAuth via the harness's connections API.",
   "type": "module",
   "license": "MIT",
