@@ -122,6 +122,7 @@ export default defineConfig({
           items: [
             { label: "Registry publishing", slug: "registry-publishing" },
             { label: "Operator UI", slug: "operator-ui" },
+            { label: "Managed repo commits", slug: "managed-repo-commits" },
             { label: "Authoring capability packs", slug: "authoring-capability-packs" },
             { label: "Examples and Blueprints", slug: "examples-and-blueprints" },
             { label: "Operations", slug: "operations" },

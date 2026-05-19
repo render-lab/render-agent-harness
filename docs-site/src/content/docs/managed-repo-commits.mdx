@@ -1,0 +1,121 @@
+---
+title: Managed repo commits
+description: How the deployed harness commits edit-in-UI changes (Install capability, Edit model) back to its managed GitHub repo via per-deployment SSH deploy keys.
+---
+
+The operator UI lets you mutate the deployed harness from the browser: **Install capability** appends a pack to `render-harness.yaml`, **Edit model** rewrites the `model:` block on an agent, and **Add agent** appends a new agent definition. Each of these is a real git commit on your repo — the page just hides the GitHub API call.
+
+This page covers how those commits actually happen, the two transport options the harness supports, and how to enable the modern path on either wizard-scaffolded or CLI-scaffolded harnesses.
+
+## Two transport paths
+
+The harness picks at request time based on what's set in your environment:
+
+| Path | Trigger | What happens |
+| --- | --- | --- |
+| **Deploy key (recommended)** | `GITHUB_DEPLOY_KEY` + `GITHUB_DEPLOY_REPO_SSH_URL` set on the harness service | The harness clones its own repo via SSH using a per-deployment private key, mutates the files in a temp worktree, and pushes the commit directly. No wizard involvement. |
+| **Wizard proxy (legacy)** | `WIZARD_SHARED_SECRET` set on the harness service | The harness POSTs the request to the wizard's `/api/capabilities/install` (or sibling), authenticated by the shared secret. The wizard mints a GitHub App installation token from its central credentials and does the commit on the harness's behalf. |
+
+The deploy-key path is preferred for everything new. The wizard-proxy path stays functional for harnesses scaffolded before May 2026 — it will be removed in a future minor cut.
+
+## Why deploy keys
+
+The legacy wizard-proxy model used a single `WIZARD_SHARED_SECRET` shared across every harness that the wizard served. A compromised harness's environment could authenticate to the wizard as any other harness — the blast radius was every managed repo.
+
+Deploy keys collapse that to one repo per key:
+
+- The keypair is generated once per harness at scaffold time and never reused.
+- The public key only has push access to your repo. Even if the private key leaks, the attacker can push to your repo and nowhere else.
+- The wizard is out of the commit path entirely once scaffold is done. No shared secret to rotate across the fleet.
+
+## Wave 1 scope
+
+In Wave 1 of the migration, the deploy-key path covers:
+
+- `POST /capabilities/install` — Install capability modal
+- `PATCH /agents/:slug/model` — Edit model modal
+
+`POST /agents/add` (Add agent) still uses the wizard proxy. It depends on runtime-entries templates that live in `create-render-agent`; a follow-up minor cut will move that to the deploy-key path too.
+
+If your harness has only `GITHUB_DEPLOY_KEY` set and you click **Add agent**, you'll see `wizard_shared_secret_not_configured`. Either keep `WIZARD_SHARED_SECRET` alongside the deploy-key vars during the transition, or wait for the follow-up.
+
+## Wizard-scaffolded harnesses
+
+If you scaffolded through the public wizard (`/new`) after May 2026, you're already set up:
+
+1. The wizard generated an ed25519 keypair during scaffold.
+2. It registered the public key as a deploy key on your repo (Settings → Deploy keys, write access).
+3. It printed the private key on the scaffold-done page with copy buttons for `GITHUB_DEPLOY_KEY` and `GITHUB_DEPLOY_REPO_SSH_URL`.
+4. You pasted both values into the Render Blueprint deploy prompt.
+
+That's it. The harness commits directly on every Install capability / Edit model click.
+
+If you scaffolded before this flow shipped and want to migrate, jump to the CLI section below — the same `deploy-key` subcommand works for any GitHub-hosted harness.
+
+## Enabling edit-in-UI for CLI-scaffolded harnesses
+
+CLI-scaffolded harnesses (`npx create-render-agent ...`) don't go through the wizard, so the deploy key isn't provisioned automatically. Four manual steps:
+
+### 1. Generate a keypair
+
+```bash
+npx create-render-agent deploy-key --repo your-org/your-repo
+```
+
+Outputs paste-ready blocks for the GitHub deploy-key page and the Render env-var page. The private key is generated in memory and never written to disk — copy it before closing the terminal, or rerun the command for a fresh pair.
+
+You can also use `ssh-keygen` if you prefer:
+
+```bash
+ssh-keygen -t ed25519 -C "render-harness" -f deploy-key -N ""
+cat deploy-key      # private key for GITHUB_DEPLOY_KEY
+cat deploy-key.pub  # public key for the GitHub deploy-key form
+rm deploy-key deploy-key.pub   # after pasting
+```
+
+### 2. Add the public key to GitHub
+
+GitHub → your repo → **Settings** → **Deploy keys** → **Add deploy key**.
+
+- Title: anything memorable (e.g. `render-harness-bot`).
+- Key: paste the `ssh-ed25519 ...` line.
+- Check **Allow write access** — without this, pushes fail with `remote: error: ... push access denied`.
+
+### 3. Set the env vars on your Render service
+
+Render Dashboard → your harness service → **Environment** → **Add Environment Variable**.
+
+| Key | Value |
+| --- | --- |
+| `GITHUB_DEPLOY_KEY` | The entire `-----BEGIN OPENSSH PRIVATE KEY-----` block, including the header and footer lines and the trailing newline. |
+| `GITHUB_DEPLOY_REPO_SSH_URL` | `git@github.com:your-org/your-repo.git` (use whatever owner/name path matches your repo). |
+
+Render's text input handles the multi-line PEM fine; paste exactly what `deploy-key` printed.
+
+### 4. Wait for the service to restart
+
+Adding env vars triggers an automatic redeploy. Once the service is back up, open the operator UI → Capabilities tab → **Install capability** → pick any pack. The response JSON will include `"via": "deploy_key"` confirming the new path is live.
+
+If you see `edit_in_ui_not_configured`, double-check both env vars are set and the service restarted since you added them. If you see `deploy_key_commit_failed`, the most likely culprits are:
+
+- Public key not added to the repo (or not registered with write access).
+- `GITHUB_DEPLOY_REPO_SSH_URL` typo (case-sensitive).
+- Repo on GitHub Enterprise with a different SSH host — override by writing the explicit `repoSshUrl` into `.render-harness/agent.json`.
+
+## Rotating the deploy key
+
+To rotate manually:
+
+1. `npx create-render-agent deploy-key --repo your-org/your-repo` for a fresh pair.
+2. Add the new public key to GitHub deploy keys (don't delete the old one yet — the running service is still using it).
+3. Update `GITHUB_DEPLOY_KEY` in Render env to the new private key.
+4. Wait for redeploy.
+5. Delete the old public key from GitHub.
+
+A one-click rotate button in the operator UI Config tab is planned but not yet shipped.
+
+## Runtime requirements
+
+The harness shells out to the system `git` binary plus the OpenSSH client (`ssh`) for the clone + push. Both are present in [Render's native Node runtime](https://render.com/docs/native-runtimes#tools-and-utilities); custom Dockerfile users should make sure `git` and `openssh-client` are installed.
+
+If git is missing at runtime, the harness fails the request with `deploy_key_commit_failed: git binary not on PATH — required for the GITHUB_DEPLOY_KEY commit flow`.
