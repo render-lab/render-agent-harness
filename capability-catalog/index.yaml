@@ -328,6 +328,50 @@ capabilities:
       reviewStatus: maintainer-reviewed
     trustTier: official
 
+  - package: "@render-harness/cap-figma"
+    name: Figma
+    description: First pack with granular per-action OAuth scopes (post-Nov-2025 Figma platform update). 7 tools across files, projects/teams, and comments.
+    categories: [tools, figma, design, oauth]
+    provider: Figma
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-figma
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.6"
+    requiresHarness: "^0.6"
+    features: [tools]
+    envVars:
+      - name: FIGMA_OAUTH_CLIENT_ID
+        required: true
+        secret: false
+        description: Figma OAuth app client id (https://www.figma.com/developers/apps).
+      - name: FIGMA_OAUTH_CLIENT_SECRET
+        required: true
+        secret: true
+        description: Figma OAuth app client secret.
+      - name: CONNECTIONS_ENCRYPTION_KEY
+        required: true
+        secret: true
+        description: >-
+          32-byte base64 secret used by the harness to encrypt refresh tokens at rest.
+          Generate with `openssl rand -base64 32`.
+    permissions:
+      accessMode: mixed
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        Per-end-user OAuth via the harness connection API using granular per-action
+        scopes (file_content:read, file_metadata:read, file_comments:read|write,
+        current_user:read). Default accessMode is read_write_comments; set to "read"
+        to drop file_comments:write. Public OAuth apps require Figma app-review;
+        single-org deployments should use the private/internal app type to skip review.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-figma test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
   - package: "@render-harness/cap-google"
     name: Google Workspace
     description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.

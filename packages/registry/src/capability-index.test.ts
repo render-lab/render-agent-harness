@@ -70,6 +70,7 @@ describe("capability catalog fixture", () => {
       "@render-harness/cap-notion",
       "@render-harness/cap-intercom",
       "@render-harness/cap-granola",
+      "@render-harness/cap-figma",
       "@render-harness/cap-google",
     ]);
     expect(catalog.capabilities[1]?.connectors[0]?.key).toBe("github");
