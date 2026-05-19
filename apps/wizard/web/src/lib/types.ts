@@ -147,6 +147,18 @@ export interface ScaffoldResponse {
    * authed scaffold would have done inline.
    */
   claimUrl?: string;
+  /**
+   * Per-harness SSH deploy key the wizard provisioned for edit-in-UI
+   * commits. The Success step displays `privatePem` + `repoSshUrl` with
+   * copy buttons so the operator can paste them into the Render
+   * Blueprint prompt for `GITHUB_DEPLOY_KEY` + `GITHUB_DEPLOY_REPO_SSH_URL`.
+   */
+  deployKey?: {
+    privatePem: string;
+    publicSshKey: string;
+    fingerprint: string;
+    repoSshUrl: string;
+  };
 }
 
 export interface ScaffoldJobResponse {
@@ -162,7 +174,8 @@ export type ScaffoldProgressEvent =
         | "authenticating_github"
         | "creating_repo"
         | "repo_created"
-        | "writing_files";
+        | "writing_files"
+        | "creating_deploy_key";
       message: string;
       at: string;
       index?: number;

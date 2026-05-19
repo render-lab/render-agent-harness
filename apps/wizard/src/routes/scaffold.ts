@@ -3,6 +3,7 @@ import type { Answers } from "create-render-agent";
 import { addBlueprintFilesToMap, buildFileMap, removeLocalEnvFile } from "create-render-agent";
 import type { Context, Hono } from "hono";
 import { readSessionCookie } from "../auth.js";
+import { type DeployKeypair, generateDeployKeypair, registerDeployKey } from "../deploy-keys.js";
 import {
   buildDeployUrl,
   buildScaffoldRepoName,
@@ -31,6 +32,17 @@ export interface ScaffoldDeps {
   createOctokit: typeof createOctokit;
   /** Creates a repo + initial commit and returns its URL. */
   createScaffoldedRepo: typeof createScaffoldedRepo;
+  /**
+   * Generates an ed25519 deploy keypair. Stubbed in tests for
+   * determinism; in production the registry's pure helper runs.
+   */
+  generateDeployKeypair: typeof generateDeployKeypair;
+  /**
+   * Registers the deploy key's public half on the freshly-created
+   * repo. Stubbed in tests; in production wraps
+   * `octokit.repos.createDeployKey`.
+   */
+  registerDeployKey: typeof registerDeployKey;
 }
 
 export interface RegisterScaffoldRouteOpts {
@@ -73,6 +85,8 @@ export function registerScaffoldRoute(app: Hono, opts: RegisterScaffoldRouteOpts
   const deps: ScaffoldDeps = {
     createOctokit: opts.deps?.createOctokit ?? createOctokit,
     createScaffoldedRepo: opts.deps?.createScaffoldedRepo ?? createScaffoldedRepo,
+    generateDeployKeypair: opts.deps?.generateDeployKeypair ?? generateDeployKeypair,
+    registerDeployKey: opts.deps?.registerDeployKey ?? registerDeployKey,
   };
 
   app.post("/api/scaffold", async (c) => {
@@ -275,6 +289,31 @@ async function runScaffoldJob(args: {
         ]),
     });
 
+    emitProgress(job, "creating_deploy_key", "Generating commit credentials");
+    let deployKeyForResponse: ScaffoldResponse["deployKey"] | undefined;
+    let deployKeyError: string | undefined;
+    try {
+      const keypair: DeployKeypair = deps.generateDeployKeypair(`render-harness ${agentSlug}`);
+      await deps.registerDeployKey({
+        octokit,
+        org: opts.org,
+        repo: result.repoName,
+        publicSshKey: keypair.publicSshKey,
+        title: "render-harness-bot",
+      });
+      deployKeyForResponse = {
+        privatePem: keypair.privatePem,
+        publicSshKey: keypair.publicSshKey,
+        fingerprint: keypair.fingerprint,
+        repoSshUrl: `git@github.com:${opts.org}/${result.repoName}.git`,
+      };
+    } catch (err) {
+      // Don't fail the scaffold — the operator can still deploy with
+      // the older WIZARD_SHARED_SECRET path. We surface the error in a
+      // non-PEM-leaking way and continue.
+      deployKeyError = err instanceof Error ? err.message : String(err);
+    }
+
     emitProgress(job, "creating_repo", "Building the Deploy to Render link");
 
     // Link the new repo to the authenticated user (collaborator-add +
@@ -319,7 +358,16 @@ async function runScaffoldJob(args: {
       deployUrl: buildDeployUrl(result.repoUrl),
       repoSlug: result.repoName,
       ...(claimUrl ? { claimUrl } : {}),
+      ...(deployKeyForResponse ? { deployKey: deployKeyForResponse } : {}),
     });
+
+    if (deployKeyError) {
+      // Visibility for ops without surfacing PEM material. Operators
+      // can rotate manually via GitHub Settings → Deploy keys.
+      console.warn(
+        `[scaffold] deploy-key provisioning failed for ${opts.org}/${result.repoName}: ${deployKeyError}`,
+      );
+    }
   } catch (err) {
     const details =
       opts.github &&

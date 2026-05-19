@@ -41,6 +41,20 @@ export interface ScaffoldResponse {
    * harness to their account. Absent when the scaffold was authenticated.
    */
   claimUrl?: string;
+  /**
+   * Per-harness SSH deploy key the wizard generated and registered on
+   * the new managed repo. The operator pastes `privatePem` into the
+   * Render Blueprint prompt for `GITHUB_DEPLOY_KEY` and
+   * `repoSshUrl` into `GITHUB_DEPLOY_REPO_SSH_URL`. The harness uses
+   * these to commit edit-in-UI changes directly to the repo without
+   * proxying through the wizard. Absent for mock scaffolds.
+   */
+  deployKey?: {
+    privatePem: string;
+    publicSshKey: string;
+    fingerprint: string;
+    repoSshUrl: string;
+  };
 }
 
 export interface ScaffoldJobResponse {
@@ -54,6 +68,7 @@ export type ScaffoldPhase =
   | "creating_repo"
   | "repo_created"
   | "writing_files"
+  | "creating_deploy_key"
   | "done"
   | "error";
 

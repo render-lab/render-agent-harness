@@ -14,6 +14,8 @@ const EMPTY_GALLERY: ResolvedGallery = {
 function makeApp(overrides?: {
   github?: Parameters<typeof registerScaffoldRoute>[1]["github"];
   createScaffoldedRepo?: ReturnType<typeof vi.fn>;
+  registerDeployKey?: ReturnType<typeof vi.fn>;
+  generateDeployKeypair?: ReturnType<typeof vi.fn>;
 }) {
   const app = new Hono();
   const createScaffoldedRepo =
@@ -22,6 +24,16 @@ function makeApp(overrides?: {
       repoName: "my-agent-aaaa",
       repoUrl: "https://github.com/render-lab-agents/my-agent-aaaa",
       commitSha: "deadbeef",
+    }));
+  const registerDeployKey =
+    overrides?.registerDeployKey ?? vi.fn(async () => ({ id: 7, verified: true }));
+  const generateDeployKeypair =
+    overrides?.generateDeployKeypair ??
+    vi.fn(() => ({
+      publicSshKey: "ssh-ed25519 AAAA-stub render-harness",
+      privatePem:
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nstub-private-bytes\n-----END OPENSSH PRIVATE KEY-----\n",
+      fingerprint: "SHA256:stub-fingerprint",
     }));
   registerScaffoldRoute(app, {
     org: "render-lab-agents",
@@ -36,9 +48,11 @@ function makeApp(overrides?: {
     deps: {
       createOctokit: vi.fn(async () => ({}) as unknown as Octokit),
       createScaffoldedRepo,
+      registerDeployKey,
+      generateDeployKeypair,
     },
   });
-  return { app, createScaffoldedRepo };
+  return { app, createScaffoldedRepo, registerDeployKey, generateDeployKeypair };
 }
 
 const VALID_BODY = {
@@ -194,6 +208,13 @@ describe("POST /api/scaffold", () => {
           repoUrl: "https://x",
           commitSha: "0",
         })),
+        registerDeployKey: vi.fn(async () => ({ id: 1, verified: true })),
+        generateDeployKeypair: vi.fn(() => ({
+          publicSshKey: "ssh-ed25519 AAAA-stub render-harness",
+          privatePem:
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nstub\n-----END OPENSSH PRIVATE KEY-----\n",
+          fingerprint: "SHA256:stub",
+        })),
       },
     });
     const opts = {
@@ -205,5 +226,63 @@ describe("POST /api/scaffold", () => {
     expect(first.status).toBe(202);
     const second = await app.request("/api/scaffold", opts);
     expect(second.status).toBe(429);
+  });
+
+  it("generates a deploy key and surfaces the PEM only in the done event", async () => {
+    const { app, registerDeployKey } = makeApp();
+    const jobId = await startScaffold(app);
+    const events = await readScaffoldEvents(app, jobId);
+
+    const done = events.find((event) => event.type === "done") as
+      | {
+          result?: {
+            deployKey?: {
+              privatePem: string;
+              publicSshKey: string;
+              fingerprint: string;
+              repoSshUrl: string;
+            };
+          };
+        }
+      | undefined;
+    expect(done?.result?.deployKey?.privatePem).toContain("OPENSSH PRIVATE KEY");
+    expect(done?.result?.deployKey?.publicSshKey).toContain("ssh-ed25519");
+    expect(done?.result?.deployKey?.fingerprint).toMatch(/^SHA256:/);
+    expect(done?.result?.deployKey?.repoSshUrl).toBe(
+      "git@github.com:render-lab-agents/my-agent-aaaa.git",
+    );
+
+    // PEM material must NEVER appear in any intermediate progress event;
+    // SSE is one stream so a leak would show up here.
+    for (const event of events) {
+      if (event.type === "progress") {
+        const serialized = JSON.stringify(event);
+        expect(serialized).not.toContain("OPENSSH PRIVATE KEY");
+        expect(serialized).not.toContain("ssh-ed25519");
+      }
+    }
+
+    expect(registerDeployKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        org: "render-lab-agents",
+        repo: "my-agent-aaaa",
+        title: "render-harness-bot",
+      }),
+    );
+  });
+
+  it("still finishes successfully when deploy-key registration fails", async () => {
+    const registerDeployKey = vi.fn(async () => {
+      throw new Error("Resource not accessible by integration");
+    });
+    const { app } = makeApp({ registerDeployKey });
+    const jobId = await startScaffold(app);
+    const events = await readScaffoldEvents(app, jobId);
+    const done = events.find((event) => event.type === "done") as
+      | { result?: { repoUrl: string; deployKey?: unknown } }
+      | undefined;
+    expect(done?.result?.repoUrl).toBe("https://github.com/render-lab-agents/my-agent-aaaa");
+    expect(done?.result?.deployKey).toBeUndefined();
+    expect(events.find((event) => event.type === "error")).toBeUndefined();
   });
 });
