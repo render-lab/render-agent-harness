@@ -31,6 +31,14 @@
       "types": "./dist/emitter.d.ts",
       "import": "./dist/emitter.js"
     },
+    "./deploy-keys": {
+      "types": "./dist/deploy-keys.d.ts",
+      "import": "./dist/deploy-keys.js"
+    },
+    "./repo-mutations": {
+      "types": "./dist/repo-mutations/index.d.ts",
+      "import": "./dist/repo-mutations/index.js"
+    },
     "./gallery": {
       "types": "./dist/gallery.d.ts",
       "import": "./dist/gallery.js"

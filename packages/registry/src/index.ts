@@ -66,6 +66,7 @@ export {
   validateCapabilityPackageMetadata,
   validateConnectorKey,
 } from "./capability-validate.js";
+export { type DeployKeypair, generateDeployKeypair } from "./deploy-keys.js";
 export { enrichDeploymentInfo, toDeploymentInfo } from "./deployment-info.js";
 export {
   type GalleryAgentEntryInput,

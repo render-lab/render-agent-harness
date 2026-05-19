@@ -9,6 +9,8 @@ export default defineConfig({
     "capability-validate": "src/capability-validate.ts",
     "harness-version": "src/harness-version.ts",
     emitter: "src/emitter.ts",
+    "deploy-keys": "src/deploy-keys.ts",
+    "repo-mutations/index": "src/repo-mutations/index.ts",
     gallery: "src/gallery.ts",
     "builtin-chat": "src/builtin-chat.ts",
     "deploy/index": "src/deploy/index.ts",
