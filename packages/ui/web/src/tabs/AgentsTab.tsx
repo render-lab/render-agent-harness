@@ -15,6 +15,7 @@ import { useDeployment } from "../deployment-context.js";
 import { useDeployWatch } from "../lib/useDeployWatch.js";
 import { AddAgentModal } from "./AddAgentModal.js";
 import { EditModelModal } from "./EditModelModal.js";
+import { EditSystemPromptModal } from "./EditSystemPromptModal.js";
 import { InstallCapabilityModal } from "./InstallCapabilityModal.js";
 
 const ADD_AGENT_TOAST_ID = "agents-add";
@@ -105,6 +106,24 @@ export function AgentsTab() {
                   curr.map((a) => (a.name === agent.name ? { ...a, model: spec } : a)),
                 )
               }
+              onSystemPromptUpdated={(prompt) => {
+                setAgents((curr) =>
+                  curr.map((a) =>
+                    a.name === agent.name
+                      ? {
+                          ...a,
+                          systemPrompt: prompt,
+                          systemPromptPreview:
+                            prompt.length > 400 ? `${prompt.slice(0, 400)}…` : prompt,
+                          systemPromptLength: prompt.length,
+                        }
+                      : a,
+                  ),
+                );
+                const message = `System prompt committed for ${agent.name}.`;
+                setNotice(message);
+                startRedeployWatch(message);
+              }}
             />
           ))}
         </div>
@@ -239,11 +258,24 @@ function CapabilityOverview({
 function AgentCard({
   agent,
   onModelUpdated,
+  onSystemPromptUpdated,
 }: {
   agent: AgentSummary;
   onModelUpdated: (spec: AgentModelSummary) => void;
+  onSystemPromptUpdated: (prompt: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editingModel, setEditingModel] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState(false);
+
+  // Builtin (kind: chat) agents store their prompt directly in
+  // render-harness.yaml so the operator UI can rewrite it. Custom
+  // agents define the prompt in TS source — the harness route returns
+  // 409 for those, so we hide the Edit button and show a "defined in
+  // <entrypoint>" hint instead. Unset `source` (TS-only deployments
+  // with no YAML) is conservatively treated as not-editable.
+  const promptEditable = agent.source?.kind === "builtin";
+  const promptEntrypoint =
+    agent.source?.kind === "custom" ? agent.source.entrypoint : null;
 
   return (
     <div className="panel space-y-4 p-4 text-xs">
@@ -258,7 +290,7 @@ function AgentCard({
           </span>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => setEditingModel(true)}
             className="border border-line px-1.5 py-0.5 text-[10px] text-accent hover:bg-accent hover:text-bg"
             aria-label={`Edit model for ${agent.name}`}
           >
@@ -267,11 +299,38 @@ function AgentCard({
         </div>
       </header>
 
-      {editing ? (
-        <EditModelModal agent={agent} onClose={() => setEditing(false)} onSaved={onModelUpdated} />
+      {editingModel ? (
+        <EditModelModal
+          agent={agent}
+          onClose={() => setEditingModel(false)}
+          onSaved={onModelUpdated}
+        />
       ) : null}
 
-      <Section title="system prompt">
+      {editingPrompt ? (
+        <EditSystemPromptModal
+          agent={agent}
+          initialValue={agent.systemPrompt}
+          onClose={() => setEditingPrompt(false)}
+          onSaved={onSystemPromptUpdated}
+        />
+      ) : null}
+
+      <Section
+        title="system prompt"
+        action={
+          promptEditable ? (
+            <button
+              type="button"
+              onClick={() => setEditingPrompt(true)}
+              className="border border-line px-1.5 py-0.5 text-[10px] text-accent hover:bg-accent hover:text-bg"
+              aria-label={`Edit system prompt for ${agent.name}`}
+            >
+              edit
+            </button>
+          ) : null
+        }
+      >
         <details className="border border-line p-2">
           <summary className="cursor-pointer text-[11px] text-muted">
             {agent.systemPromptLength.toLocaleString()} chars · click to expand preview
@@ -280,6 +339,13 @@ function AgentCard({
             {agent.systemPromptPreview}
           </pre>
         </details>
+        {promptEntrypoint ? (
+          <p className="mt-2 text-[11px] text-muted">
+            {"// defined in "}
+            <span className="font-mono">{promptEntrypoint}</span>
+            {" — edit in code and redeploy"}
+          </p>
+        ) : null}
       </Section>
 
       <Section title="mcp servers">
@@ -326,10 +392,21 @@ function AgentCard({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
     <div>
-      <div className="label mb-1">{title}</div>
+      <div className="mb-1 flex items-center justify-between">
+        <div className="label">{title}</div>
+        {action}
+      </div>
       {children}
     </div>
   );

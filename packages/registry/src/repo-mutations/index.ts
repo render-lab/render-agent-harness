@@ -51,8 +51,11 @@ export {
 } from "./capability-install.js";
 
 export {
+  AgentNotEditableError,
   AgentNotFoundError,
   InvalidManifestError,
   type MutateAgentModelOpts,
   mutateAgentModel,
+  type MutateAgentSystemPromptOpts,
+  mutateAgentSystemPrompt,
 } from "./yaml-edit.js";

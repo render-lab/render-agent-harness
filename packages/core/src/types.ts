@@ -340,7 +340,28 @@ export interface AgentDefinition {
    * `@render-harness/cap-memory-pg`) the deployed agent uses.
    */
   capabilityPacks?: string[];
+  /**
+   * Where this agent originated. Populated by `defineFromConfig`:
+   *
+   *  - `{ kind: "builtin" }` — the YAML used `agent: { kind: builtin, ref: chat,
+   *    systemPrompt: ... }`. The system prompt lives directly in
+   *    `render-harness.yaml` and is safe for the operator UI to edit-in-place
+   *    via `PATCH /agents/:slug/system-prompt`.
+   *  - `{ kind: "custom", entrypoint }` — the YAML referenced a TS module.
+   *    The system prompt is whatever that module exports; editing it from
+   *    the UI would require rewriting source code, so the operator UI
+   *    shows a read-only preview plus a pointer to `entrypoint`.
+   *
+   * Unset when the AgentDefinition was constructed by hand (no YAML), e.g.
+   * `serveWeb({ agent: defineAgent({ ... }) })`. The UI treats undefined
+   * the same as `kind: "custom"` (not editable in-place).
+   */
+  source?: AgentSource;
 }
+
+export type AgentSource =
+  | { kind: "builtin" }
+  | { kind: "custom"; entrypoint: string };
 
 export interface ModelSpec {
   provider: "anthropic" | "openai-compat";

@@ -170,7 +170,12 @@ async function resolveAgentEntry(
       `agent "${entry.id}" entrypoint "${entry.agent.entrypoint}": export is not an AgentDefinition`,
     );
   }
-  return overlayYamlFields(candidate, effective, entry.id);
+  const overlaid = overlayYamlFields(candidate, effective, entry.id);
+  // Tag with source so the operator UI knows this agent's prompt lives in
+  // TS source (not YAML) and the edit-in-UI flow can show a "defined in
+  // <entrypoint>" hint instead of a textarea.
+  overlaid.source = { kind: "custom", entrypoint: entry.agent.entrypoint };
+  return overlaid;
 }
 
 function isAgentDefinitionShape(v: unknown): v is AgentDefinition {

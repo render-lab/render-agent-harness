@@ -43,6 +43,7 @@ export function summariseAgent(agent: AgentDefinition): AgentSummary {
     agentId: agent.name,
     model,
     systemPromptPreview: preview,
+    systemPrompt: fullPrompt,
     systemPromptLength: fullPrompt.length,
     mcpServers: (agent.mcpServers ?? []).map((s) => ({
       name: s.name,
@@ -63,5 +64,6 @@ export function summariseAgent(agent: AgentDefinition): AgentSummary {
   };
   if (agent.budget) summary.budget = agent.budget;
   if (agent.sampling) summary.sampling = agent.sampling;
+  if (agent.source) summary.source = { ...agent.source };
   return summary;
 }

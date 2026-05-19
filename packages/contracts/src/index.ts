@@ -221,6 +221,13 @@ export interface AgentSummary {
   agentId: string;
   model: AgentModelSummary;
   systemPromptPreview: string;
+  /**
+   * Full prompt body. Surfaced so the operator UI can populate its
+   * Edit-system-prompt modal without a second round-trip. Same data
+   * the model sees at runtime; identical to `systemPromptPreview` when
+   * the prompt is short enough not to need truncation.
+   */
+  systemPrompt: string;
   systemPromptLength: number;
   mcpServers: { name: string; transport: "stdio" | "http" }[];
   permissions: {
@@ -238,7 +245,26 @@ export interface AgentSummary {
   builtinsSkipped?: SkippedBuiltinSummary[];
   /** Capability pack names declared on the agent. */
   capabilityPacks?: string[];
+  /**
+   * Where the agent originated. Drives the operator UI's edit-in-UI
+   * affordances:
+   *
+   *  - `{ kind: "builtin" }` — system prompt lives in
+   *    `render-harness.yaml`. The Agents tab renders an "Edit" button
+   *    that commits via `PATCH /agents/:slug/system-prompt`.
+   *  - `{ kind: "custom", entrypoint }` — system prompt lives in TS
+   *    source. The Agents tab shows a read-only preview and a pointer
+   *    to the file.
+   *
+   * Unset for AgentDefinitions constructed without YAML (the UI treats
+   * undefined the same as `kind: "custom"`).
+   */
+  source?: AgentSourceSummary;
 }
+
+export type AgentSourceSummary =
+  | { kind: "builtin" }
+  | { kind: "custom"; entrypoint: string };
 
 export interface SkippedBuiltinSummary {
   name: string;

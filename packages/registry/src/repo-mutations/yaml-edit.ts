@@ -3,24 +3,33 @@
  * `yaml` package's `Document` AST so comments, key order, and
  * unrelated fields are preserved across the round-trip.
  *
- * Today: setting an agent's `model:` block. The PATCH endpoint at
- * `/api/agents/:slug/model` calls {@link mutateAgentModel}, commits the
- * result, and Render auto-deploys on push.
+ * Today:
+ *   - Setting an agent's `model:` block via {@link mutateAgentModel}.
+ *     Backs `PATCH /agents/:slug/model`.
+ *   - Replacing an agent's `agent.systemPrompt` (builtin chat agents
+ *     only) via {@link mutateAgentSystemPrompt}. Backs
+ *     `PATCH /agents/:slug/system-prompt`.
  *
- * Always writes a *per-agent* override under `agents[i].model`, even
- * when `shared.model` already covers the picked spec. This is
- * deterministic — one code path regardless of how the YAML happens to
- * be structured — and matches `effectiveAgentDefaults()` precedence in
+ * Always writes per-agent overrides under `agents[i]`, even when a
+ * `shared.*` value already covers the picked spec. This is deterministic
+ * — one code path regardless of how the YAML happens to be structured —
+ * and matches `effectiveAgentDefaults()` precedence in
  * `@render-harness/registry/load-config.ts`.
  */
 
-import { isMap, isSeq, parseDocument, type YAMLMap, type YAMLSeq } from "yaml";
+import { isMap, isSeq, parseDocument, Scalar, type YAMLMap, type YAMLSeq } from "yaml";
 import type { ModelSpecInput } from "../schema.js";
 
 export interface MutateAgentModelOpts {
   yamlText: string;
   agentId: string;
   spec: ModelSpecInput;
+}
+
+export interface MutateAgentSystemPromptOpts {
+  yamlText: string;
+  agentId: string;
+  systemPrompt: string;
 }
 
 export class AgentNotFoundError extends Error {
@@ -34,6 +43,25 @@ export class InvalidManifestError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InvalidManifestError";
+  }
+}
+
+/**
+ * Raised by {@link mutateAgentSystemPrompt} when the matched agent's
+ * `agent.kind` is not `builtin`. Custom (TS-entrypoint) agents define
+ * their system prompt in source code, not YAML, so they're not editable
+ * via this path — the route translates this into a 409.
+ */
+export class AgentNotEditableError extends Error {
+  constructor(
+    public readonly agentId: string,
+    public readonly entrypoint: string | null,
+  ) {
+    const where = entrypoint ? ` (defined in ${entrypoint})` : "";
+    super(
+      `agent "${agentId}" uses a custom entrypoint${where}; its system prompt lives in TypeScript source, not render-harness.yaml`,
+    );
+    this.name = "AgentNotEditableError";
   }
 }
 
@@ -77,6 +105,65 @@ function findAgentIndex(seq: YAMLSeq, agentId: string): number {
     if (id === agentId) return i;
   }
   return -1;
+}
+
+/**
+ * Return a new YAML string with `agents[*].agent.systemPrompt` replaced
+ * for the matching `agentId`. Throws:
+ *
+ *  - {@link InvalidManifestError} if the document is malformed or
+ *    missing an `agents:` sequence.
+ *  - {@link AgentNotFoundError} if the agent id can't be matched.
+ *  - {@link AgentNotEditableError} if the matched agent's `agent.kind`
+ *    is not `"builtin"`. Custom (TS-entrypoint) agents store their
+ *    system prompt in source, not YAML; the operator UI surfaces a
+ *    read-only preview and a pointer to the file instead of an edit
+ *    form for those.
+ *
+ * Multi-line prompts are emitted as `|` block scalars so the on-disk
+ * YAML stays human-readable; single-line prompts use the default
+ * inline scalar.
+ */
+export function mutateAgentSystemPrompt(opts: MutateAgentSystemPromptOpts): string {
+  const doc = parseDocument(opts.yamlText);
+  if (doc.errors.length > 0) {
+    throw new InvalidManifestError(
+      `render-harness.yaml has parse errors: ${doc.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+
+  const agents = doc.get("agents", true);
+  if (!isSeq(agents)) {
+    throw new InvalidManifestError("manifest must have an `agents:` sequence");
+  }
+
+  const index = findAgentIndex(agents, opts.agentId);
+  if (index === -1) throw new AgentNotFoundError(opts.agentId);
+
+  const agentEntry = (agents as YAMLSeq).items[index];
+  if (!isMap<unknown, unknown>(agentEntry)) {
+    throw new InvalidManifestError(`agents[${index}] is not a map`);
+  }
+  const agentBlock = (agentEntry as YAMLMap).get("agent", true);
+  if (!agentBlock || !isMap<unknown, unknown>(agentBlock)) {
+    throw new InvalidManifestError(`agents[${index}].agent is missing or not a map`);
+  }
+  const kind = readScalar((agentBlock as YAMLMap).get("kind"));
+  if (kind !== "builtin") {
+    const entrypoint = readScalar((agentBlock as YAMLMap).get("entrypoint"));
+    throw new AgentNotEditableError(opts.agentId, entrypoint);
+  }
+
+  const promptScalar = new Scalar(opts.systemPrompt);
+  // Block-scalar form keeps multi-line prompts readable on disk. The
+  // single-line case stays flow-style ("systemPrompt: hello") to match
+  // the scaffolder's default output.
+  if (opts.systemPrompt.includes("\n")) {
+    promptScalar.type = Scalar.BLOCK_LITERAL;
+  }
+  doc.setIn(["agents", index, "agent", "systemPrompt"], promptScalar);
+
+  return doc.toString();
 }
 
 function readScalar(value: unknown): string | null {

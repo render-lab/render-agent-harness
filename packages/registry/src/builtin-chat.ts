@@ -48,6 +48,7 @@ export function defineChatAgent(opts: DefineChatAgentOpts): AgentDefinition {
     version: opts.version ?? "0.1.0",
     model: opts.model,
     systemPrompt: opts.systemPrompt,
+    source: { kind: "builtin" },
   };
   if (opts.mcpServers) def.mcpServers = opts.mcpServers;
   if (opts.permissions) def.permissions = opts.permissions;

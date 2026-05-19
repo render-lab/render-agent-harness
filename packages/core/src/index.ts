@@ -157,6 +157,7 @@ export type {
   AgentConversation,
   AgentDefinition,
   AgentRun,
+  AgentSource,
   Budget,
   CheckpointPolicy,
   ContentBlock,

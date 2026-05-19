@@ -19,6 +19,7 @@ import { parseEnv } from "./env.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { registerAgentAddRoute } from "./routes/agent-add.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
+import { registerAgentSystemPromptRoute } from "./routes/agent-system-prompt.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerBrowseRoute } from "./routes/browse.js";
 import { registerCapabilityInstallRoute } from "./routes/capability-install.js";
@@ -90,6 +91,13 @@ async function main(): Promise<void> {
   // Phase 2: in-UI model edits. The deployed worker's proxy route
   // calls this with WIZARD_SHARED_SECRET in the Authorization header.
   registerAgentModelRoute(app, {
+    sharedSecret: env.wizardSharedSecret,
+    github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
+  });
+  // Sibling of agent-model: in-UI system-prompt edits for builtin chat
+  // agents. Custom (TS-entrypoint) agents return a 409 with a pointer to
+  // their entrypoint instead.
+  registerAgentSystemPromptRoute(app, {
     sharedSecret: env.wizardSharedSecret,
     github: env.github ? { appId: env.github.appId, privateKey: env.github.privateKey } : null,
   });

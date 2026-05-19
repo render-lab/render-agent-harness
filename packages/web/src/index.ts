@@ -19,6 +19,7 @@ import { defaultApiKeyAuth } from "./auth.js";
 import { type ConnectorMountConfig, mountConnectorsIfAvailable } from "./connector-mount.js";
 import { registerAgentAddRoute } from "./routes/agent-add.js";
 import { registerAgentModelRoute } from "./routes/agent-model.js";
+import { registerAgentSystemPromptRoute } from "./routes/agent-system-prompt.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerBlueprintRoutes } from "./routes/blueprint.js";
 import { registerCapabilityRoutes } from "./routes/capabilities.js";
@@ -289,6 +290,14 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
     ...(opts.deployment ? { deployment: opts.deployment } : {}),
   });
   registerAgentModelRoute(app, {
+    auth,
+    agents,
+    pathPrefix,
+    ...(opts.deployment ? { deployment: opts.deployment } : {}),
+    wizardServiceUrl,
+    wizardSharedSecret,
+  });
+  registerAgentSystemPromptRoute(app, {
     auth,
     agents,
     pathPrefix,

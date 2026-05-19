@@ -532,6 +532,39 @@ export function updateAgentModel(
   });
 }
 
+export interface UpdateAgentSystemPromptResp {
+  ok?: boolean;
+  unchanged?: boolean;
+  commitSha?: string | null;
+  error?: string;
+  details?: string;
+  /** Set on 409 needs_install responses. */
+  installUrl?: string;
+  /** Set on 409 agent_not_editable responses (custom kind agents). */
+  entrypoint?: string;
+}
+
+/**
+ * Edit an agent's system prompt. Only works for builtin (`kind: chat`)
+ * agents — custom (TS-entrypoint) agents return a 409 with an
+ * `entrypoint` pointing at the source file. The harness's deploy-key
+ * path commits the YAML change directly; older harnesses fall through
+ * to the wizard proxy.
+ */
+export function updateAgentSystemPrompt(
+  slug: string,
+  systemPrompt: string,
+): Promise<UpdateAgentSystemPromptResp> {
+  return request<UpdateAgentSystemPromptResp>(
+    `/agents/${encodeURIComponent(slug)}/system-prompt`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ systemPrompt }),
+    },
+  );
+}
+
 export function getUsage(opts?: {
   from?: string;
   to?: string;

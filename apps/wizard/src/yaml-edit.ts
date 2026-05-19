@@ -5,8 +5,11 @@
  */
 
 export {
+  AgentNotEditableError,
   AgentNotFoundError,
   InvalidManifestError,
   type MutateAgentModelOpts,
   mutateAgentModel,
+  type MutateAgentSystemPromptOpts,
+  mutateAgentSystemPrompt,
 } from "@render-harness/registry/repo-mutations";

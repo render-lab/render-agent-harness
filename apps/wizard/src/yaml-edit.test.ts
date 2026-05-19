@@ -1,7 +1,13 @@
 import { HarnessConfigSchema } from "@render-harness/registry/schema";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
-import { AgentNotFoundError, InvalidManifestError, mutateAgentModel } from "./yaml-edit.js";
+import {
+  AgentNotEditableError,
+  AgentNotFoundError,
+  InvalidManifestError,
+  mutateAgentModel,
+  mutateAgentSystemPrompt,
+} from "./yaml-edit.js";
 
 const BASE_YAML = `schemaVersion: 1
 name: my-agent
@@ -137,6 +143,138 @@ harnessVersion: ^0.1
     };
     const once = mutateAgentModel({ yamlText: BASE_YAML, agentId: "my-agent", spec });
     const twice = mutateAgentModel({ yamlText: once, agentId: "my-agent", spec });
+    expect(twice).toBe(once);
+  });
+});
+
+const MULTI_AGENT_YAML = `schemaVersion: 1
+name: my-agent
+description: A test agent.
+harnessVersion: ^0.1
+license: MIT
+shared:
+  model:
+    provider: anthropic
+    model: claude-sonnet-4-6
+agents:
+  - id: chat
+    # builtin chat agent
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: hello
+    runtimes:
+      - kind: web
+  - id: digest
+    agent:
+      kind: custom
+      entrypoint: ./src/digest.ts
+    runtimes:
+      - kind: cron
+        schedule: "0 9 * * *"
+`;
+
+describe("mutateAgentSystemPrompt", () => {
+  it("replaces the matched agent's systemPrompt (inline scalar for single-line)", () => {
+    const next = mutateAgentSystemPrompt({
+      yamlText: MULTI_AGENT_YAML,
+      agentId: "chat",
+      systemPrompt: "you are a helpful assistant",
+    });
+    const parsed = HarnessConfigSchema.parse(parseYaml(next));
+    const chatEntry = parsed.agents.find((a) => a.id === "chat");
+    expect(chatEntry?.agent.kind).toBe("builtin");
+    if (chatEntry?.agent.kind === "builtin") {
+      expect(chatEntry.agent.systemPrompt).toBe("you are a helpful assistant");
+    }
+    // shared.model untouched.
+    expect(parsed.shared?.model).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("emits a block-literal scalar for multi-line prompts", () => {
+    const multi = "line one\nline two\n  indented continuation\nline four";
+    const next = mutateAgentSystemPrompt({
+      yamlText: MULTI_AGENT_YAML,
+      agentId: "chat",
+      systemPrompt: multi,
+    });
+    // The on-disk form should use a `|` block scalar; the parsed
+    // value round-trips losslessly.
+    expect(next).toMatch(/systemPrompt:\s*\|/);
+    const parsed = HarnessConfigSchema.parse(parseYaml(next));
+    const chatEntry = parsed.agents.find((a) => a.id === "chat");
+    expect(chatEntry?.agent.kind).toBe("builtin");
+    if (chatEntry?.agent.kind === "builtin") {
+      expect(chatEntry.agent.systemPrompt).toBe(multi);
+    }
+  });
+
+  it("preserves comments and other agents", () => {
+    const next = mutateAgentSystemPrompt({
+      yamlText: MULTI_AGENT_YAML,
+      agentId: "chat",
+      systemPrompt: "fresh prompt",
+    });
+    expect(next).toContain("# builtin chat agent");
+    // The second (custom) agent stays intact.
+    expect(next).toContain("entrypoint: ./src/digest.ts");
+  });
+
+  it("refuses to edit kind: custom agents", () => {
+    let err: unknown;
+    try {
+      mutateAgentSystemPrompt({
+        yamlText: MULTI_AGENT_YAML,
+        agentId: "digest",
+        systemPrompt: "anything",
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(AgentNotEditableError);
+    expect((err as AgentNotEditableError).entrypoint).toBe("./src/digest.ts");
+    expect((err as AgentNotEditableError).agentId).toBe("digest");
+  });
+
+  it("throws AgentNotFoundError when the agent id doesn't exist", () => {
+    expect(() =>
+      mutateAgentSystemPrompt({
+        yamlText: MULTI_AGENT_YAML,
+        agentId: "ghost",
+        systemPrompt: "x",
+      }),
+    ).toThrow(AgentNotFoundError);
+  });
+
+  it("throws InvalidManifestError when agents[] is missing", () => {
+    const noAgents = `schemaVersion: 1
+name: x
+description: y
+harnessVersion: ^0.1
+`;
+    expect(() =>
+      mutateAgentSystemPrompt({
+        yamlText: noAgents,
+        agentId: "x",
+        systemPrompt: "x",
+      }),
+    ).toThrow(InvalidManifestError);
+  });
+
+  it("round-trip is idempotent for the same prompt", () => {
+    const once = mutateAgentSystemPrompt({
+      yamlText: MULTI_AGENT_YAML,
+      agentId: "chat",
+      systemPrompt: "settled prompt",
+    });
+    const twice = mutateAgentSystemPrompt({
+      yamlText: once,
+      agentId: "chat",
+      systemPrompt: "settled prompt",
+    });
     expect(twice).toBe(once);
   });
 });
