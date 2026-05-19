@@ -24,6 +24,7 @@ import {
   LuUsers,
   LuX,
 } from "react-icons/lu";
+import { Markdown } from "./components/Markdown.js";
 import { Select, type SelectOption } from "./components/Select.js";
 import {
   type AddableAgent,
@@ -788,9 +789,9 @@ function BrowseDetail({ item }: { item: BrowseItem }) {
             <span>{"// OVERVIEW"}</span>
           </div>
           {item.source === "official" && item.readme ? (
-            <pre className="mt-4 max-h-112 overflow-auto whitespace-pre-wrap border border-line bg-canvas p-3 text-xs">
-              {item.readme}
-            </pre>
+            <div className="mt-4 max-h-[40rem] overflow-auto border border-line bg-canvas p-4">
+              <Markdown>{item.readme}</Markdown>
+            </div>
           ) : (
             <p className="mt-4 text-sm text-muted">
               {item.source === "official"

@@ -245,6 +245,98 @@
     @apply bg-code-bg text-ink border-code-bg;
   }
 
+  /* --------------------------------------------------------------------
+   * Markdown rendering for browse detail / community READMEs. Scoped
+   * to `.markdown` so it can't leak. Brutalist: tight line-height,
+   * uppercase-tracking headings, hard borders on tables / blockquotes,
+   * monospace everywhere (the theme font is JetBrains Mono).
+   * -------------------------------------------------------------------- */
+  .markdown {
+    @apply text-sm leading-relaxed;
+  }
+  .markdown > * + * {
+    @apply mt-4;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3,
+  .markdown h4,
+  .markdown h5,
+  .markdown h6 {
+    @apply font-bold uppercase tracking-wider;
+  }
+  .markdown h1 {
+    @apply text-xl;
+  }
+  .markdown h2 {
+    @apply text-lg;
+  }
+  .markdown h3 {
+    @apply text-base;
+  }
+  .markdown h4,
+  .markdown h5,
+  .markdown h6 {
+    @apply text-sm;
+  }
+  .markdown a {
+    @apply text-accent underline underline-offset-2;
+  }
+  .markdown a:hover {
+    @apply no-underline;
+  }
+  .markdown p,
+  .markdown li {
+    @apply text-ink;
+  }
+  .markdown strong {
+    @apply font-bold;
+  }
+  .markdown em {
+    @apply italic;
+  }
+  .markdown ul,
+  .markdown ol {
+    @apply ml-5 space-y-1.5;
+  }
+  .markdown ul {
+    @apply list-disc;
+  }
+  .markdown ol {
+    @apply list-decimal;
+  }
+  .markdown li::marker {
+    color: var(--color-muted);
+  }
+  .markdown code {
+    @apply border border-line bg-code-bg px-1 text-[12px];
+  }
+  .markdown pre {
+    @apply overflow-auto border border-line bg-canvas p-3 text-xs;
+  }
+  .markdown pre code {
+    @apply border-0 bg-transparent p-0 text-xs;
+  }
+  .markdown blockquote {
+    @apply border-l-2 border-line pl-3 text-muted;
+  }
+  .markdown hr {
+    @apply my-6 border-line;
+  }
+  .markdown table {
+    @apply w-full border border-line;
+  }
+  .markdown th,
+  .markdown td {
+    @apply border border-line px-2 py-1 text-left text-xs;
+  }
+  .markdown th {
+    @apply bg-surface uppercase tracking-wider;
+  }
+  .markdown img {
+    @apply max-w-full border border-line;
+  }
+
   .cli-dots::after {
     content: "";
     display: inline-block;
