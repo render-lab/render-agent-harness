@@ -1,0 +1,72 @@
+---
+title: cap-notion
+description: Notion pages, databases, and workspace search via per-end-user OAuth on the harness's connections API.
+---
+
+Notion capability pack using the harness's [per-end-user OAuth connections API](/connections-api/). Each end user clicks "Connect Notion" in the operator UI, the harness stores their access token encrypted, and tools fetch it at call time.
+
+Notion's public-integration OAuth flow issues long-lived access tokens with no refresh token. This pack uses the `refreshTokenOptional: true` field on `OAuthProviderConfig` (added in `@render-harness/core@0.6.1`) so refresh-on-use is a no-op; if Notion 401s on a tool call, the pack returns an actionable error pointing at the Connections tab.
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-notion
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-notion"
+    config:
+      accessMode: read_write   # or "read"
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `NOTION_OAUTH_CLIENT_ID` | yes | no | Public integration OAuth client id. |
+| `NOTION_OAUTH_CLIENT_SECRET` | yes | yes | OAuth client secret. |
+| `CONNECTIONS_ENCRYPTION_KEY` | yes | yes | 32-byte base64 secret — `openssl rand -base64 32`. |
+
+In your Notion integration (https://www.notion.so/profile/integrations):
+
+1. Set the integration type to **Public**.
+2. Add the redirect URI `${RENDER_EXTERNAL_URL}/connections/notion/callback`.
+3. Copy the OAuth client id + secret into the env vars above.
+
+End users granting access also need to share each page/database with the integration via Notion's "Add connections" menu on the page (`•••` top-right → "Add connections" → pick your integration). cap-notion surfaces an actionable `restricted_resource` error when this hasn't happened.
+
+## Tools
+
+8 tools in `read_write` mode, 3 in `read` mode (search, read_page, query_database):
+
+| Tool | Mode | What it does |
+| --- | --- | --- |
+| `notion.search` | always | Workspace search by title. Returns id, type (page \| database), parent. |
+| `notion.read_page` | always | Page metadata + top-level blocks flattened to markdown-like text. Block depth capped at 1. |
+| `notion.create_page` | read_write | Create page under a parent page OR database row. |
+| `notion.append_blocks` | read_write | Add blocks to an existing page. |
+| `notion.update_page_properties` | read_write | Patch properties / archive. |
+| `notion.query_database` | always | Filter + paginate database rows. Filter shape is a Notion-API passthrough. |
+| `notion.create_database_row` | read_write | Insert row. |
+| `notion.update_database_row` | read_write | Patch row properties. |
+
+## v1 limitations
+
+- **Block tree depth capped at 1** in `read_page` — child pages are noted with `[has children]` markers; call `read_page` again on the child id to descend. Recursive walking is deferred to avoid N+1 API calls.
+- **Filter DSL is passthrough JSON.** Notion's database filter language is rich; cap-notion takes it as-is rather than inventing an abstraction. See [Notion docs](https://developers.notion.com/reference/post-database-query#filter-object).
+- **No file uploads** to Notion in v1.
+- **No comments API** in v1.
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `notion-pages` | The user references a Notion page or asks you to write into Notion. |
+| `notion-databases` | The user wants to read/write structured rows backed by a Notion database. |
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-notion)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-notion)
+- [Connections API](/connections-api/)

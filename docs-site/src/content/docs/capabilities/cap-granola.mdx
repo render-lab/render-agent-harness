@@ -1,0 +1,93 @@
+---
+title: cap-granola
+description: Granola.ai meeting-notes pack. API-key auth + in-pack polling primitive for ingesting new meetings via a recurring cron run.
+---
+
+First **API-key + polling** pack — Granola has no OAuth in v1 (the WorkOS-based flow is reverse-engineered only and not stable) and no webhooks (Granola hasn't shipped them as of 2026 Q2). cap-granola uses bearer API keys plus a polling primitive that dedups against a pack-managed table.
+
+Three read-only tools against the user's Granola account:
+
+| Tool | What it does |
+| --- | --- |
+| `granola.list_notes` | Paginated list by date range. Returns id, title, when, attendees, short summary. |
+| `granola.read_note` | Full transcript + summary + action items + attendees for one note. |
+| `granola.poll_recent` | Lists notes in the last window, dedups against `granola_seen_notes`, returns only the new notes. For cron-driven ingestion. |
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-granola
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-granola"
+    config:
+      keyType: personal           # or "enterprise"; default "personal"
+      apiKeyEnv: GRANOLA_API_KEY  # default
+
+agents:
+  - id: meeting-notes-cron
+    runtimes:
+      - kind: cron
+        schedule: "*/15 * * * *"  # poll every 15 minutes
+    # ... agent calls granola.poll_recent + acts on new notes
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `GRANOLA_API_KEY` | yes | yes | Personal API key (Beta, requires Granola Business/Enterprise plan) or Enterprise API key. Generate at https://app.granola.ai/settings/api-keys. |
+| `GRANOLA_KEY_TYPE` | no | no | `personal` (default) or `enterprise`. Pack config `keyType` overrides. |
+
+Missing-key behaviour mirrors cap-search-exa: pack logs a `console.warn` and registers no tools when `GRANOLA_API_KEY` is unset, rather than crashing every agent in the bundle.
+
+## Polling primitive
+
+`granola.poll_recent` is the wave-1 validation of the new pack-migration runner:
+
+1. The pack's `migrations` slot ships `granola_seen_notes(note_id PK, first_seen_at)` — created automatically at boot by `applyMigrations(pool, { packMigrations })`.
+2. On each call, `poll_recent` lists notes from the last `since_minutes` (default 60, max 7 days), `INSERT ... ON CONFLICT DO NOTHING` per id, returns only freshly-inserted rows.
+3. Subsequent polls within the window see them as "already processed".
+
+Pair with [cap-notion](/capabilities/cap-notion/) for the canonical wave-1 cross-pack pattern — Granola finds the meetings, Notion records the summaries:
+
+```yaml
+agents:
+  - id: meeting-notes-cron
+    agent:
+      kind: builtin
+      ref: chat
+      systemPrompt: |
+        Every 15 minutes, call granola.poll_recent({ since_minutes: 20 }).
+        For each new note, call granola.read_note and write a one-paragraph
+        summary to Notion in the "Meetings 2026" database.
+    runtimes:
+      - kind: cron
+        schedule: "*/15 * * * *"
+```
+
+To re-process a note, the operator deletes its row: `DELETE FROM granola_seen_notes WHERE note_id = '...'`.
+
+## Rate limits
+
+Personal API keys: **25 burst / 5 req/sec sustained** per [Granola docs](https://docs.granola.ai/help-center/sharing/integrations/personal-api). The pack respects `Retry-After` on 429 with one short retry, then surfaces a typed rate-limit error so the agent backs off.
+
+## v1 limitations
+
+- **No OAuth** — wait for Granola official docs.
+- **No webhooks** — wait for Granola.
+- **No fan-out** (one harness run per new note). `poll_recent` returns to caller for sequential processing.
+- **No search** — Granola's `/notes` doesn't expose semantic search.
+- **Read-only** — Granola's public API has no write endpoints today.
+
+## Skill
+
+`granola-notes` — picking between the three tools, polling dedup semantics, common cross-pack patterns, rate-limit handling.
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-granola)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-granola)
+- [Granola public API docs](https://docs.granola.ai/introduction)

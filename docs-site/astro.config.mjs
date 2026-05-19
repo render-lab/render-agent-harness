@@ -102,6 +102,22 @@ export default defineConfig({
           ],
         },
         {
+          label: "Capability packs",
+          collapsed: true,
+          items: [
+            { label: "cap-figma", slug: "capabilities/cap-figma" },
+            {
+              label: "cap-google (Gmail + Calendar + Drive/Docs/Sheets)",
+              slug: "capabilities/cap-google",
+            },
+            { label: "cap-granola", slug: "capabilities/cap-granola" },
+            { label: "cap-intercom", slug: "capabilities/cap-intercom" },
+            { label: "cap-memory-pg (trigram + pgvector)", slug: "capabilities/cap-memory-pg" },
+            { label: "cap-notion", slug: "capabilities/cap-notion" },
+            { label: "cap-render", slug: "capabilities/cap-render" },
+          ],
+        },
+        {
           label: "Guides",
           items: [
             { label: "Registry publishing", slug: "registry-publishing" },

@@ -1,0 +1,85 @@
+---
+title: cap-figma
+description: Read Figma files, projects, comments; post comments. First pack with granular per-action OAuth scopes (post-Nov-2025 platform update).
+---
+
+First pack with **granular per-action OAuth scopes** (post-Nov-2025 Figma platform update). 7 tools across files, projects/teams, and comments. The pack reads via `accessMode: "read"` or "read + post comments" via `accessMode: "read_write_comments"` (default).
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-figma
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-figma"
+    config:
+      accessMode: read_write_comments   # or "read"
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `FIGMA_OAUTH_CLIENT_ID` | yes | no | From https://www.figma.com/developers/apps. |
+| `FIGMA_OAUTH_CLIENT_SECRET` | yes | yes | OAuth client secret. |
+| `CONNECTIONS_ENCRYPTION_KEY` | yes | yes | 32-byte base64 secret — `openssl rand -base64 32`. |
+
+In the Figma developer apps page:
+
+1. **Redirect URL**: `${RENDER_EXTERNAL_URL}/connections/figma/callback`.
+2. **App type**: for single-org deployments, choose **private/internal** to skip Figma's app-review process. Public OAuth apps require Figma review before non-development users can connect.
+3. **Scopes**: cap-figma assembles them automatically based on `accessMode`; ensure the corresponding granular scopes are enabled on the app.
+
+## Tools
+
+Always-on read (6):
+
+| Tool | What it does |
+| --- | --- |
+| `figma.read_file` | Document tree. Defaults to `depth: 2` to avoid token blowups; pass `ids: [...]` for targeted reads. |
+| `figma.read_file_nodes` | Full subtree for specific node ids (max 200 per call). |
+| `figma.read_file_metadata` | Name, last_modified, role, thumbnail. Cheap — first call to confirm key. |
+| `figma.list_team_projects` | Projects in a team. |
+| `figma.list_project_files` | Files in a project. |
+| `figma.read_comments` | List comments. Pass `as_md: true` for a markdown thread view. |
+
+`accessMode: read_write_comments` (default) adds:
+
+| Tool | What it does |
+| --- | --- |
+| `figma.post_comment` | New comment OR reply (`comment_id`), optionally pinned via `client_meta` (coordinates or node offset). |
+
+## Granular OAuth scopes
+
+| `accessMode` | Scopes requested |
+| --- | --- |
+| `read` | `file_content:read`, `file_metadata:read`, `file_comments:read`, `current_user:read` |
+| `read_write_comments` (default) | `read` + `file_comments:write` |
+
+cap-figma ships only the granular scope strings. The deprecated coarse `files:read` / `file_read` scopes stop working after Figma's Nov 2025 platform update.
+
+If the connected user's grant doesn't match the pack's accessMode (e.g. user connected with `read`, pack later upgraded to `read_write_comments`), the pack surfaces a 403 → "Disconnect Figma in the operator UI and reconnect" error from each affected tool — pass through to the user.
+
+## v1 limitations
+
+- **Components / styles library introspection** — not exposed.
+- **Webhooks** — Figma supports them; cap-figma v1 doesn't subscribe.
+- **File edits** — Figma's REST API doesn't expose file-content writes (those go through the Plugin API in the Figma client). cap-figma can post comments but not change designs.
+- **Variables API** — not exposed.
+- **Resolve / unresolve comments** — Figma doesn't expose this via REST.
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `figma-files` | Reading file structure, navigating team → project → file, picking depth vs ids. |
+| `figma-comments` | Reading or posting comments — pin modes, reply threading. |
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-figma)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-figma)
+- [Figma REST API + OAuth docs](https://developers.figma.com/docs/rest-api/)
+- [Connections API](/connections-api/)

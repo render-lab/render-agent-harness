@@ -24,19 +24,21 @@ To publish your own pack, see [Authoring capability packs](/authoring-capability
 
 ## Current packs
 
+Packs with a ✦ have a dedicated docs page; click through for the full configuration reference, tool catalog, env schema, and gotchas. Older packs link to the npm README for now.
+
 | Package | Purpose |
 | --- | --- |
 | [`@render-harness/cap-browser-browserbase`](https://www.npmjs.com/package/@render-harness/cap-browser-browserbase) | Browser automation through Browserbase. |
-| [`@render-harness/cap-figma`](https://www.npmjs.com/package/@render-harness/cap-figma) | Read Figma files, projects, and comments; post comments. Granular per-action OAuth scopes. |
+| ✦ [`@render-harness/cap-figma`](/capabilities/cap-figma/) | Read Figma files, projects, comments; post comments. Granular per-action OAuth scopes. |
 | [`@render-harness/cap-filesystem`](https://www.npmjs.com/package/@render-harness/cap-filesystem) | Path-scoped filesystem access. |
 | [`@render-harness/cap-github`](https://www.npmjs.com/package/@render-harness/cap-github) | GitHub repository and issue workflows. |
-| [`@render-harness/cap-google`](https://www.npmjs.com/package/@render-harness/cap-google) | Gmail + Calendar (+ optional Drive / Docs / Sheets) via per-end-user OAuth (see [Connections API](/connections-api/)). |
-| [`@render-harness/cap-granola`](https://www.npmjs.com/package/@render-harness/cap-granola) | Granola.ai meeting notes — list/read + poll_recent dedup for cron-driven ingestion. |
-| [`@render-harness/cap-intercom`](https://www.npmjs.com/package/@render-harness/cap-intercom) | Intercom inbound webhook + outbound reply/assign/close/snooze via per-end-user OAuth. |
+| ✦ [`@render-harness/cap-google`](/capabilities/cap-google/) | Gmail + Calendar (+ optional Drive / Docs / Sheets) via per-end-user OAuth. |
+| ✦ [`@render-harness/cap-granola`](/capabilities/cap-granola/) | Granola.ai meeting notes — list/read + `poll_recent` dedup for cron-driven ingestion. |
+| ✦ [`@render-harness/cap-intercom`](/capabilities/cap-intercom/) | Intercom inbound webhook + outbound reply/assign/close/snooze via per-end-user OAuth. |
 | [`@render-harness/cap-linear`](https://www.npmjs.com/package/@render-harness/cap-linear) | Linear issue monitoring and updates. |
-| [`@render-harness/cap-memory-pg`](https://www.npmjs.com/package/@render-harness/cap-memory-pg) | Shared memory backed by Postgres. Trigram (default) or pgvector modes. |
-| [`@render-harness/cap-notion`](https://www.npmjs.com/package/@render-harness/cap-notion) | Notion pages, databases, and workspace search via per-end-user OAuth. |
-| [`@render-harness/cap-render`](https://www.npmjs.com/package/@render-harness/cap-render) | Manages Render services, deploys, databases, env vars, logs via the hosted Render MCP. Exports a curated mutating-tool list for HITL gating. |
+| ✦ [`@render-harness/cap-memory-pg`](/capabilities/cap-memory-pg/) | Shared memory backed by Postgres. Trigram (default) or pgvector modes. |
+| ✦ [`@render-harness/cap-notion`](/capabilities/cap-notion/) | Notion pages, databases, and workspace search via per-end-user OAuth. |
+| ✦ [`@render-harness/cap-render`](/capabilities/cap-render/) | Manages Render services, deploys, databases, env vars, logs via the hosted Render MCP. Exports a curated mutating-tool list for HITL gating. |
 | [`@render-harness/cap-scrape-firecrawl`](https://www.npmjs.com/package/@render-harness/cap-scrape-firecrawl) | Web extraction through Firecrawl. |
 | [`@render-harness/cap-search-exa`](https://www.npmjs.com/package/@render-harness/cap-search-exa) | Web search through Exa. |
 | [`@render-harness/cap-search-tavily`](https://www.npmjs.com/package/@render-harness/cap-search-tavily) | Web search through Tavily. |

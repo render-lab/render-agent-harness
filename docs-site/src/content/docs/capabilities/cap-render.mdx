@@ -1,0 +1,83 @@
+---
+title: cap-render
+description: First-party Render Agent Harness pack wrapping the hosted Render MCP — manage services, deploys, databases, env vars, and logs from inside an agent.
+---
+
+First-party pack that wires the [hosted Render MCP](https://mcp.render.com/mcp) into a harness agent. The agent can list services, trigger deploys, manage env vars, create databases and Key Value instances, read logs — everything the Render MCP exposes.
+
+The MCP catalog itself is owned by Render. This pack handles the harness-side wiring: registration via the `mcpServers` slot, bundled skills, an env-schema entry for `RENDER_API_KEY`, and a curated list of destructive tools you should gate behind HITL approval.
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-render
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-render"
+    config:
+      # Optional — override the env var name for the bearer token.
+      apiKeyEnv: RENDER_API_KEY
+      # Optional — override for staging or self-hosted Render MCP endpoints.
+      baseUrl: https://mcp.render.com/mcp
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `RENDER_API_KEY` | yes | yes | Workspace API key. Generate at https://dashboard.render.com/u/settings#api-keys. |
+
+When `RENDER_API_KEY` is unset, the pack logs a `console.warn` at boot and registers no MCP server — agents in the same bundle that don't use cap-render keep working.
+
+## Human-in-the-loop on destructive operations
+
+Render's MCP exposes destructive tools (delete service, create/update Postgres, etc.). The pack exports `RENDER_MCP_MUTATING_TOOLS` as the pre-namespaced exposed-name array (12 entries). Paste them into your agent's `permissions.requireApproval`:
+
+```yaml
+shared:
+  permissions:
+    requireApproval:
+      - cap_render__render__create_web_service
+      - cap_render__render__update_web_service
+      - cap_render__render__delete_service
+      - cap_render__render__create_postgres
+      - cap_render__render__update_postgres
+      - cap_render__render__delete_postgres
+      - cap_render__render__create_keyvalue
+      - cap_render__render__update_keyvalue
+      - cap_render__render__delete_keyvalue
+      - cap_render__render__update_environment_variables
+      - cap_render__render__create_environment_variable
+      - cap_render__render__delete_environment_variable
+```
+
+The harness pauses the run for human review before each of these fires. Names are the fully-namespaced *exposed* form after the loader wraps the pack's MCP server (`render` → `cap-render__render`) and `core` sanitizes hyphens to underscores. Don't substitute the bare `render__*` form — those won't match the runtime tool names.
+
+## Tools
+
+Tools come from the live Render MCP catalog. Common ones the agent should know about:
+
+- `cap_render__render__list_services`, `list_deploys`, `get_deploy_logs` — read-only inspection.
+- `cap_render__render__create_web_service`, `create_postgres`, `create_keyvalue` — provisioning (HITL).
+- `cap_render__render__update_*`, `delete_*`, `*_environment_variable*` — mutations (HITL).
+
+The full list comes from `tools/list` on the Render MCP and can grow over time. cap-render glob-matches the destructive names into the constant via the pack-internal test; check the source if you suspect a new mutator wasn't covered.
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `render-overview` | Orientation — what 'service', 'deploy', 'project', 'environment' mean and how they relate. |
+| `render-deploy-flow` | Deploying a new service, redeploying, or debugging a failed deploy. |
+| `render-logs-and-debug` | Diagnosing 502/503s, unexpected restarts, OOMs, dependency errors. |
+
+Loaded on demand via the built-in `load_skill` tool.
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-render)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-render)
+- [Render MCP docs](https://render.com/docs/mcp-server)
+- [Connections and skills reference](/capabilities/)

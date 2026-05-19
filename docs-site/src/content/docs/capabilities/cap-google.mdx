@@ -1,0 +1,108 @@
+---
+title: cap-google
+description: Google Workspace pack. Gmail + Calendar by default; opt-in Drive / Docs / Sheets surfaces via per-end-user OAuth.
+---
+
+Google Workspace capability pack. Five opt-in surfaces:
+
+- **Gmail** (default) — search, read, send, modify labels.
+- **Calendar** (default) — list, get, freebusy, create, update, delete events.
+- **Drive** — list, search, read (Doc/Sheet/Slide export to text), upload.
+- **Docs** — read (body flattened to markdown-like text), create, append text.
+- **Sheets** — read range, append row, update range, create sheet, read metadata.
+
+Uses the harness's [per-end-user OAuth connections API](/connections-api/) — each end user clicks "Connect Google" in the operator UI, the harness stores their refresh token encrypted, and tools fetch a fresh access token at call time.
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-google
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-google"
+    config:
+      accessMode: read_write              # or "read"
+      surfaces: [gmail, calendar]         # default; opt in to drive, docs, sheets
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `GOOGLE_OAUTH_CLIENT_ID` | yes | no | Google Cloud OAuth 2.0 client id (Web application). |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | yes | yes | OAuth client secret. |
+| `CONNECTIONS_ENCRYPTION_KEY` | yes | yes | 32-byte base64 secret — `openssl rand -base64 32`. |
+
+In [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
+
+1. Create an OAuth 2.0 Web application client.
+2. Add the redirect URI `${RENDER_EXTERNAL_URL}/connections/google/callback`.
+3. In the OAuth consent screen, enable the APIs you'll use: Gmail API, Calendar API, Drive API, Docs API, Sheets API (one toggle per surface).
+
+## Tools by surface
+
+| Surface | Read tools (always-on) | Write tools (`read_write` mode) |
+| --- | --- | --- |
+| Gmail | `gmail.search`, `gmail.get_message` | `gmail.send`, `gmail.modify_labels` |
+| Calendar | `calendar.list_events`, `calendar.get_event`, `calendar.freebusy` | `calendar.create_event`, `calendar.update_event`, `calendar.delete_event` |
+| Drive | `drive.list_files`, `drive.search`, `drive.read_file` | `drive.upload_file` |
+| Docs | `docs.read_doc` | `docs.create_doc`, `docs.append_text` |
+| Sheets | `sheets.read_range`, `sheets.read_sheet_metadata` | `sheets.append_row`, `sheets.update_range`, `sheets.create_sheet` |
+
+Total: up to 22 tools when all five surfaces are enabled in `read_write` mode. Default `surfaces: [gmail, calendar]` ships 10 (matching pre-0.6.1 behaviour exactly).
+
+## Scopes
+
+Per surface (`read_write` mode shown; `read` mode uses the `.readonly` variant):
+
+| Surface | `read` mode | `read_write` mode |
+| --- | --- | --- |
+| `gmail` | `gmail.readonly` | `gmail.modify` + `gmail.send` |
+| `calendar` | `calendar.readonly` | `calendar` |
+| `drive` | `drive.readonly` (broader — for browse-and-summarize) | `drive.file` (least-privilege — only files the agent created or the user explicitly shared) |
+| `docs` | `documents.readonly` | `documents` |
+| `sheets` | `spreadsheets.readonly` | `spreadsheets` |
+
+Plus `userinfo.email` always, which powers the "Connected as foo@example.com" UI label.
+
+Google's "write implies read" rule means `read_write` mode doesn't include the `.readonly` variant for the same surface.
+
+## Migrating from pre-0.6.1
+
+Default behaviour is unchanged. To opt into Drive / Docs / Sheets:
+
+1. Add `surfaces: [gmail, calendar, drive, docs, sheets]` (or any subset) to the cap-google config.
+2. Redeploy.
+3. **Each end user reconnects Google** — the new scopes aren't in their existing grant. Operator UI → Connections tab → Disconnect Google → Reconnect.
+
+If you forget step 3, the pack's tool errors detect the scope drift and surface an actionable message ("Your Google connection doesn't include drive access — open the Connections tab and reconnect").
+
+## drive.read_file mime handling
+
+Google-native files don't have raw bytes — they're rendered server-side. `drive.read_file` exports automatically:
+
+| Mime | Default export |
+| --- | --- |
+| `application/vnd.google-apps.document` | `text/plain` |
+| `application/vnd.google-apps.spreadsheet` | `text/csv` |
+| `application/vnd.google-apps.presentation` | `text/plain` |
+| `text/*`, `application/json`, etc. | direct download via `alt=media` |
+| binary (PDF, image, etc.) | metadata stub with `webViewLink` hint — agent should use `web_extract` instead |
+
+Pass `export_mime` to override the export format for Google-native files.
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `google-drive` | The user references a Drive file or asks you to summarize/upload one. |
+| `google-docs` | The user references a Google Doc or asks you to draft/append text. |
+| `google-sheets` | The user references a Google Sheet or asks for tabular data work. |
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-google)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-google)
+- [Connections API](/connections-api/)

@@ -1,0 +1,78 @@
+---
+title: cap-intercom
+description: Intercom inbound webhook + outbound reply/assign/close/snooze via per-end-user OAuth. First dual inbound+outbound capability pack.
+---
+
+First **dual inbound+outbound** capability pack — combines the chat-surface pattern of `cap-slack` / `cap-github` (HMAC-verified webhook on `/connectors/intercom`) with the per-end-user OAuth pattern of `cap-google` / `cap-notion` (tools call `secrets.requireConnection("intercom")`).
+
+- **Inbound:** Intercom webhook deliveries land at `/connectors/intercom`, get HMAC-SHA1 verified using the OAuth app's client secret, and enqueue a harness run onto a conversation keyed by `intercom-${sha256(workspace_id:conversation_id)}`.
+- **Outbound:** 7 tools (2 in `read` mode) reply, assign, tag, close, snooze, list, or read conversations.
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-intercom
+```
+
+## Configure
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-intercom"
+    config:
+      agent: support-bot              # which agent to enqueue inbound events to
+      userId: cap-intercom            # default; harness userId that owns the connection
+      accessMode: read_write          # or "read"
+```
+
+| Env var | Required | Secret | Notes |
+| --- | --- | --- | --- |
+| `INTERCOM_OAUTH_CLIENT_ID` | yes | no | From the Intercom Developer Hub. |
+| `INTERCOM_OAUTH_CLIENT_SECRET` | yes | yes | OAuth client secret. **Doubles as the HMAC key for webhook signature verification.** |
+| `CONNECTIONS_ENCRYPTION_KEY` | yes | yes | 32-byte base64 secret — `openssl rand -base64 32`. |
+
+In the [Intercom Developer Hub](https://developers.intercom.com/) → your app:
+
+1. **OAuth redirect URL**: `${RENDER_EXTERNAL_URL}/connections/intercom/callback`.
+2. **Webhook URL**: `${RENDER_EXTERNAL_URL}/connectors/intercom`. Subscribe to: `conversation.user.created`, `conversation.user.replied`, `conversation.admin.assigned`, `conversation.admin.closed` (default set; five extra `.admin.*` topics pass through if subscribed).
+3. **Scopes**: configured server-side on the app, not at OAuth time. For full write-tool functionality enable "Read conversations" + "Write conversations" + "Read admins" + "Read tags".
+
+## Tools
+
+Always-on read:
+
+| Tool | What it does |
+| --- | --- |
+| `intercom.read_conversation` | Full state, assignee, tags, chronological transcript. |
+| `intercom.list_recent_conversations` | Paginated list with snippets; optional `open` and `assignee_id` filters. |
+
+`accessMode: read_write` adds:
+
+| Tool | What it does |
+| --- | --- |
+| `intercom.reply` | `type: "comment"` (customer-visible) or `"note"` (admin-only private). |
+| `intercom.assign` | To admin and/or team. |
+| `intercom.add_tag` | By tag id. |
+| `intercom.close` | With optional closing message. |
+| `intercom.snooze` | Until a Unix timestamp. |
+
+**Every write tool requires `admin_id`** — Intercom attributes admin actions to a specific admin. Get the id from your Intercom workspace once and keep it in the agent's system prompt or memory.
+
+## v1 limitations
+
+- **Workspace-scoped.** One Intercom workspace per cap-intercom installation. Multi-workspace fan-out is v2.
+- **No bot-vs-admin distinction** — all replies post as the configured admin.
+- **No custom data attributes** on conversations / contacts.
+- **No article / help-center API.**
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `intercom-support` | When a webhook delivery kicks off a run, OR the user asks you to do something with Intercom. Covers triage workflow, comment-vs-note, conversation states, the admin_id contract. |
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-intercom)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-intercom)
+- [Connections API](/connections-api/)

@@ -1,0 +1,108 @@
+---
+title: cap-memory-pg
+description: Postgres-backed long-term memory. Trigram (default) for fact recall; pgvector mode for embedding-based RAG over documents.
+---
+
+Postgres-backed long-term memory. Two indexing modes, selected via the `index` config option:
+
+- **`index: "trigram"` (default)** — fuzzy text similarity via `pg_trgm`. Two tools (`memory.write`, `memory.search`). No external dependencies beyond Postgres. Best for "remember this fact" workflows.
+- **`index: "pgvector"`** — embedding-based RAG via the `pgvector` extension. Three tools (`memory.ingest`, `memory.search`, `memory.delete`). Requires one of `OPENAI_API_KEY` / `VOYAGE_API_KEY` / `COHERE_API_KEY`. Best for "answer questions about this document I gave you" workflows.
+
+Modes are exclusive — pick one per pack instance. To mix trigram notes with vector RAG in the same agent, install the pack twice with different namespaces.
+
+## Install
+
+```sh
+pnpm add @render-harness/cap-memory-pg
+```
+
+## Trigram mode (default)
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+    config:
+      namespace: my-agent   # optional; defaults to the entry name
+```
+
+Tools:
+
+| Tool | What it does |
+| --- | --- |
+| `memory.write` | Durable upsert keyed on `(namespace, key)`. |
+| `memory.search` | Trigram fuzzy search across stored values. |
+
+Schema (`agent_memory` table + `pg_trgm` extension + GIN indexes) is bootstrapped lazily on first call. No env vars required beyond the existing `DATABASE_URL`.
+
+## pgvector mode
+
+```yaml title="render-harness.yaml"
+capabilities:
+  - pack: "@render-harness/cap-memory-pg"
+    config:
+      index: pgvector
+      namespace: support              # optional
+      embeddingDim: 1536              # locks vector(N) at migration time
+      embeddingProvider: openai       # optional; auto-picked from env if unset
+      embeddingModel: text-embedding-3-small   # optional; provider default
+      chunkSize: 1000                 # chars (~250 tokens), default
+      chunkOverlap: 100               # chars (~25 tokens), default
+```
+
+| Env var | Required when | Notes |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | `index: pgvector` (default chain) | `text-embedding-3-small`, 1536 dims. |
+| `VOYAGE_API_KEY` | alternative | `voyage-3-lite`, 1024 dims. |
+| `COHERE_API_KEY` | alternative | `embed-v3`, 1024 dims. |
+| `HARNESS_EMBEDDING_PROVIDER` | optional | Override when multiple keys are set (`openai`, `voyage`, `cohere`). |
+
+Tools:
+
+| Tool | What it does |
+| --- | --- |
+| `memory.ingest` | Chunks the text, embeds each chunk, stores. Re-ingesting with the same `source_id` replaces previous chunks for that document. |
+| `memory.search` | Top-K vector similarity (cosine distance). |
+| `memory.delete` | Remove chunks by id, source_id, or namespace. |
+
+Schema (`agent_memory_vectors` table + `pgvector` extension + `ivfflat` cosine index) is registered via the pack's `migrations` slot — the harness's [pack-migration runner](/authoring-capability-packs/#migrations) applies it at boot. Render Managed PostgreSQL ships `pgvector`; verify with `psql -c '\dx vector'` if self-hosting.
+
+### Switching embedding providers (or dims)
+
+The `embedding` column's dim is locked at migration time. To swap to a provider with a different dim:
+
+1. Drop the existing table:
+   ```sql
+   DROP TABLE agent_memory_vectors;
+   DELETE FROM agent_pack_migrations
+     WHERE pack_name = 'cap-memory-pg' AND migration_id LIKE '0001_pgvector_d%';
+   ```
+2. Update `embeddingDim` (and `embeddingProvider` / `embeddingModel`) in `render-harness.yaml`.
+3. Redeploy. The runner applies a new migration matching the new dim.
+4. Re-ingest your corpus.
+
+If you forget to drop the table, `memory.ingest` and `memory.search` surface an actionable error pointing at this flow.
+
+### Index tuning
+
+The default `ivfflat` index uses `lists = 100` — fine up to ~10k chunks. For larger corpora reindex with `lists ≈ ceil(sqrt(rows))`:
+
+```sql
+DROP INDEX agent_memory_vectors_embedding_idx;
+CREATE INDEX agent_memory_vectors_embedding_idx
+  ON agent_memory_vectors USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 1000);
+```
+
+## Skills
+
+| Skill | When the agent should load it |
+| --- | --- |
+| `memory` | Whenever the agent should remember a fact across runs OR look something up the user might have told it before. Trigram mode. |
+| `rag-ingestion` | Pgvector mode — when ingesting documents for later semantic Q&A. |
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@render-harness/cap-memory-pg)
+- [Source + README](https://github.com/render-lab/render-agent-harness/tree/main/packages/capabilities/cap-memory-pg)
+- [pgvector extension](https://github.com/pgvector/pgvector)
+- [Authoring capability packs (migrations slot)](/authoring-capability-packs/#migrations)
