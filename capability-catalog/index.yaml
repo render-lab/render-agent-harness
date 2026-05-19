@@ -288,6 +288,46 @@ capabilities:
       reviewStatus: maintainer-reviewed
     trustTier: official
 
+  - package: "@render-harness/cap-granola"
+    name: Granola (meeting notes)
+    description: First API-key + polling pack — list/read Granola meeting notes and detect new ones via a recurring cron run. Second consumer of the pack-migration runner (granola_seen_notes dedup table).
+    categories: [tools, granola, meetings, polling]
+    provider: Granola
+    repo: https://github.com/render/render-harness
+    docs: https://github.com/render/render-harness/tree/main/packages/capabilities/cap-granola
+    license: MIT
+    maintainer: render-harness
+    versionRange: "^0.6"
+    requiresHarness: "^0.6"
+    features: [tools]
+    envVars:
+      - name: GRANOLA_API_KEY
+        required: true
+        secret: true
+        description: >-
+          Granola API key (Personal or Enterprise). Generate at
+          https://app.granola.ai/settings/api-keys. Personal keys are Beta
+          and require a Business or Enterprise Granola plan.
+      - name: GRANOLA_KEY_TYPE
+        required: false
+        secret: false
+        description: personal | enterprise (default personal). Affects which notes are accessible.
+    permissions:
+      accessMode: read
+      network: true
+      filesystem: none
+      sidecarServices: false
+      notes: >-
+        Read-only against the user's Granola account. Pack contributes one Postgres
+        migration (granola_seen_notes) applied automatically at boot via the pack-
+        migration runner. v1 has no OAuth (API key only) and no webhooks (Granola
+        hasn't shipped them); polling is the only option for new-note detection.
+    quality:
+      testCommand: pnpm --filter @render-harness/cap-granola test
+      smokeTestStatus: passing
+      reviewStatus: maintainer-reviewed
+    trustTier: official
+
   - package: "@render-harness/cap-google"
     name: Google Workspace
     description: Gmail + Calendar tools backed by the harness's per-end-user OAuth connection API.
