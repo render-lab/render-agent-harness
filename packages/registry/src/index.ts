@@ -15,6 +15,10 @@
  * Both surfaces share the schemas and the capability-pack contract.
  */
 
+// Re-exported so pack authors can `import type { MigrationFile } from
+// "@render-harness/registry"` without depending on @render-harness/core
+// directly. Convenience only — the canonical home is core.
+export type { MigrationFile, PackMigration } from "@render-harness/core";
 export { type DefineChatAgentOpts, defineChatAgent } from "./builtin-chat.js";
 export {
   assertCapabilityPack,

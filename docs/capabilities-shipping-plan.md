@@ -30,6 +30,14 @@ Each pack section below follows the same template:
 
 Packs **not** in this top 7 but still on the broader roadmap: `cap-whatsapp` (still Planned in `roadmap-capabilities.md` §2 — biggest design is locked but ship after this wave), `cap-resend` (Direction), `cap-airtable` (Direction), `cap-stripe` (Direction), `cap-microsoft` (Direction — waits for an Office 365 customer ask).
 
+## Wave-level decisions (locked before kickoff)
+
+These were three open calls when this doc was first drafted. The execution plan in [`docs/capabilities-wave-1`](../.cursor/plans/) locked them in before Phase 1 started; the per-pack sections below assume the answers.
+
+- **Q1 (pack-level migration runner) = A:** New `migrations?: (ctx) => MigrationFile[]` slot added to the `CapabilityPack` contract in Phase 1.5. Triggers the only coordinated `0.6.0` minor cut of the wave. Phase 2 and Phase 6 are the runner's first two consumers.
+- **Q2 (existing-pack minor-vs-patch) = A:** `cap-memory-pg` gaining pgvector mode (Pack 2) and `cap-google` gaining Drive/Docs/Sheets surfaces (Pack 4) ship as **patch** bumps. Both new modes are gated behind opt-in config flags; default behavior is unchanged. CHANGELOG entries must lead with a loud `## Unreleased — new opt-in <mode>` heading.
+- **Q3 (polling primitive) = A:** Pack 6 (`cap-granola`) builds the cron→list→diff→enqueue loop in-pack at `src/poll.ts`. Phase 8 retro evaluates extracting into `@render-harness/registry` based on what Phase 7 (cap-figma) + any batch-2 polling packs surface. Threshold for extraction: two real in-tree consumers + a clear third on the horizon.
+
 ---
 
 ## Pack 1 — `cap-render`

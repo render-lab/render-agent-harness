@@ -146,6 +146,7 @@ export {
   updateRunCursor,
   updateSchedule,
 } from "./state/repo.js";
+export type { MigrationFile, PackMigration } from "./state/schema.js";
 export { applyMigrations } from "./state/schema.js";
 export {
   approximateTokens,

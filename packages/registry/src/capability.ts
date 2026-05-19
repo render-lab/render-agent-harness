@@ -40,6 +40,7 @@ import type {
   LocalToolHandler,
   Logger,
   McpServerConfig,
+  MigrationFile,
   OAuthProviderConfig,
   Pool,
   RunId,
@@ -245,6 +246,25 @@ export interface CapabilityPack {
    * this just lets the UI prompt proactively.
    */
   connectionsRequired?: ConnectionRequirement[];
+  /**
+   * SQL migrations the pack needs run against the harness Postgres
+   * database before its tools can work. Collected at boot by
+   * `defineFromConfig`, deduped by `(packName, id)`, and applied by
+   * `applyMigrations(pool, { packMigrations })` under the same
+   * advisory lock as core migrations.
+   *
+   * Migrations should be idempotent on their own (use
+   * `CREATE TABLE IF NOT EXISTS`, `CREATE EXTENSION IF NOT EXISTS`,
+   * etc.) — the runner's `agent_pack_migrations` tracking table is
+   * belt-and-suspenders, not the only line of defense. Each
+   * migration runs in its own transaction; a failing migration is
+   * rolled back and aborts boot with an actionable error naming the
+   * pack + migration id.
+   *
+   * Conventional id format: `0001_descriptive_name` so order within
+   * a single pack is obvious.
+   */
+  migrations?: (ctx: PackContext) => MigrationFile[] | Promise<MigrationFile[]>;
 }
 
 /**
@@ -283,6 +303,7 @@ const PackShapeSchema = z
         }),
       )
       .optional(),
+    migrations: z.unknown().optional(),
   })
   .passthrough();
 

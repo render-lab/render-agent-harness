@@ -97,7 +97,7 @@ export async function runAgentStep(opts: RunAgentStepOpts): Promise<RunStepResul
 
   const pool = getPool({ applicationName: `workflows:${opts.agent.name}` });
   if (!opts.skipMigrations) {
-    await applyMigrations(pool);
+    await applyMigrations(pool, { packMigrations: opts.agent.packMigrations ?? [] });
   }
 
   await ensureRun(pool, {

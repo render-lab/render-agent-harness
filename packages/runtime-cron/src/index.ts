@@ -81,7 +81,7 @@ export async function runCron(opts: RunCronOpts): Promise<RunCronResult> {
   let cancelDispose: (() => void) | null = null;
   try {
     if (!opts.skipMigrations) {
-      await applyMigrations(pool);
+      await applyMigrations(pool, { packMigrations: opts.agent.packMigrations ?? [] });
     }
 
     const runId = opts.runId ?? globalThis.crypto.randomUUID();

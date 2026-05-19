@@ -102,7 +102,7 @@ loadEnv({ quiet: true });
 async function main(): Promise<void> {
   const logger = buildLogger({ service: agent.name });
   const pool = getPool({ applicationName: agent.name });
-  await applyMigrations(pool);
+  await applyMigrations(pool, { packMigrations: agent.packMigrations ?? [] });
 
   await runCronAndExit({
     agent,
@@ -136,7 +136,7 @@ loadEnv({ quiet: true });
 async function main(): Promise<void> {
   const logger = buildLogger({ service: agent.name });
   const pool = getPool({ applicationName: agent.name });
-  await applyMigrations(pool);
+  await applyMigrations(pool, { packMigrations: agent.packMigrations ?? [] });
 
   const queue = process.env.WORKER_QUEUE ?? ${JSON.stringify(defaultQueue)};
 

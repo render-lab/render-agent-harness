@@ -144,7 +144,14 @@ export async function startWorker(opts: WorkerOpts): Promise<WorkerHandle> {
 
   const pool = getPool({ applicationName: "runtime-worker" });
   if (!opts.skipMigrations) {
-    await applyMigrations(pool);
+    // Single-agent boot: pull pack migrations off the agent def directly.
+    // Resolver-based multi-agent boot: caller is responsible for either
+    // passing a pre-loaded agent for migration collection or running
+    // applyMigrations themselves before startWorker and setting
+    // skipMigrations: true.
+    const packMigrations =
+      typeof opts.agent === "function" ? [] : (opts.agent.packMigrations ?? []);
+    await applyMigrations(pool, { packMigrations });
   }
 
   const kv = getKvSafe(logger);

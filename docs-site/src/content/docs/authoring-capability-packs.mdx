@@ -470,6 +470,45 @@ renderServices(ctx: PackContext): RenderServiceSpec[] {
 
 `RenderServiceSpec` is intentionally a narrow subset of the Render Blueprint schema: `type` is `pserv` or `worker`, `runtime` is `node` or `docker`, and `envVars` accepts literal values, `sync: false` placeholders, `fromService`, `fromDatabase`, and `fromGroup`. After updating the manifest, the user runs `pnpm build:bp` to regenerate `render.yaml`; the pack's services land in the same file.
 
+## migrations
+
+If your pack needs its own Postgres tables (for example a long-term memory store, a polling cursor table, or any pack-owned state), declare them via the `migrations` slot. The harness applies them at boot, in order, before any agent code runs.
+
+```ts title="src/index.ts"
+import type { MigrationFile } from "@render-harness/registry";
+
+const SEEN_NOTES_SQL = `
+  CREATE TABLE IF NOT EXISTS my_pack_seen_notes (
+    note_id text PRIMARY KEY,
+    first_seen_at timestamptz NOT NULL DEFAULT now()
+  );
+`;
+
+migrations(_ctx: PackContext): MigrationFile[] {
+  return [
+    { id: "0001_seen_notes", sql: SEEN_NOTES_SQL },
+    // Add more entries here as the pack evolves. The id ordering
+    // controls apply order within this pack.
+  ];
+}
+```
+
+How the runner behaves:
+
+- The runtime adapter calls `applyMigrations(pool, { packMigrations: agent.packMigrations ?? [] })` at boot. Core migrations run first; pack migrations follow, under the same advisory lock so concurrent boots of web + worker + cron don't collide.
+- Each migration runs in its own transaction. On success the runner writes `(packName, id)` to the `agent_pack_migrations` tracking table. On the next boot, already-applied entries are skipped — there's no cost to leaving every migration in the array.
+- A failing migration aborts boot with an actionable error naming the pack and migration id. The transaction is rolled back, so the database isn't left half-migrated. Fix the SQL in your pack and redeploy.
+- The same `(packName, id)` contributed by multiple agents in a bundle is deduped — the runner applies it once.
+
+Conventions worth following:
+
+- **Make every migration idempotent on its own** (`CREATE TABLE IF NOT EXISTS`, `CREATE EXTENSION IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`). The tracking table is belt-and-suspenders, not your only safeguard — and during development you may need to re-run a migration manually against a real DB without the tracking step.
+- **Prefix all table names with your pack's identifier** (`memory_pg_*`, `cap_granola_*`) so two packs can't collide on shared globals. The harness owns the `agent_*` prefix.
+- **Treat already-released migration ids as immutable.** If you need to change behavior, add a new migration (`0002_*`) that ALTERs the existing table — never edit the old SQL in place. Editing already-applied SQL is a silent bug because the runner sees the id in `agent_pack_migrations` and skips the new content.
+- **Don't put data backfills in `migrations`.** They run on every harness boot for new deployments and block startup. If you need a backfill, ship it as a separate one-shot script or a tool the operator can call from the UI.
+
+The runner is the right place for **schema work the pack owns**. For schema work the user owns (custom application tables, business data), continue using your own migration tooling.
+
 ## Stateful packs and lazy bootstrap
 
 Tool handlers can pull the shared Postgres pool and logger directly from core. Import them at the top of `src/index.ts`:

@@ -29,6 +29,7 @@ import type {
 } from "@render-harness/contracts";
 import type { Logger } from "pino";
 import type { SecretsContext } from "./connections.js";
+import type { PackMigration } from "./state/schema.js";
 
 // --------------------------------------------------------------------
 // Re-exports from @render-harness/contracts
@@ -321,6 +322,16 @@ export interface AgentDefinition {
   budget?: Partial<Budget>;
   /** Optional sampling params (temperature, top_p, etc.). */
   sampling?: SamplingParams;
+  /**
+   * Pack-contributed SQL migrations collected by `defineFromConfig`
+   * from every capability pack's `migrations` slot. The runtime
+   * adapter applies these at boot via
+   * `applyMigrations(pool, { packMigrations: agent.packMigrations })`,
+   * after core migrations and under the same advisory lock. Dedup is
+   * by `(packName, id)` — passing the same migration twice (because
+   * two agents in a bundle use the same pack) is a no-op.
+   */
+  packMigrations?: PackMigration[];
   /**
    * Names of capability packs the agent has been composed with — declarative
    * metadata only; the harness doesn't read this for behavior. The operator

@@ -25,6 +25,7 @@ import {
   type McpServerConfig,
   type ModelSpec,
   type OAuthProviderConfig,
+  type PackMigration,
   type Permissions,
   registerOAuthProvider,
   type SamplingParams,
@@ -276,6 +277,7 @@ async function mergePackContributions(
   const localTools: LocalToolHandler[] = [...(base.localTools ?? [])];
   const mcpServers: McpServerConfig[] = [...(base.mcpServers ?? [])];
   const skills: SkillMetadata[] = [];
+  const packMigrations: PackMigration[] = [...(base.packMigrations ?? [])];
 
   // Per-agent mcpServers from YAML — already merged into base by
   // `buildChatBuiltin` for builtin agents; merge here for custom agents.
@@ -292,13 +294,19 @@ async function mergePackContributions(
   // namespace (e.g. cap-memory-pg's Postgres namespace = bundle name).
   for (const loaded of packs) {
     const ctx = makePackContext(loaded, cfg.name, env);
-    await contributeFromPack(loaded.pack, ctx, { localTools, mcpServers, skills });
+    await contributeFromPack(loaded.pack, ctx, {
+      localTools,
+      mcpServers,
+      skills,
+      packMigrations,
+    });
   }
 
   const out: AgentDefinition = {
     ...base,
     ...(localTools.length ? { localTools } : {}),
     ...(mcpServers.length ? { mcpServers } : {}),
+    ...(packMigrations.length ? { packMigrations } : {}),
     ...(packs.length ? { capabilityPacks: mergeCapabilityPacks(base.capabilityPacks, packs) } : {}),
   };
 
@@ -319,6 +327,7 @@ interface ContribAccumulator {
   localTools: LocalToolHandler[];
   mcpServers: McpServerConfig[];
   skills: SkillMetadata[];
+  packMigrations: PackMigration[];
 }
 
 async function contributeFromPack(
@@ -352,6 +361,16 @@ async function contributeFromPack(
   if (pack.skills) {
     const sks = await pack.skills(ctx);
     for (const sk of sks) acc.skills.push(sk);
+  }
+  if (pack.migrations) {
+    const migrations = await pack.migrations(ctx);
+    for (const m of migrations) {
+      acc.packMigrations.push({
+        packName: pack.name,
+        id: m.id,
+        sql: m.sql,
+      });
+    }
   }
 }
 

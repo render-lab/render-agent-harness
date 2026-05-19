@@ -190,7 +190,16 @@ export async function serveWeb(opts: ServeWebOpts): Promise<WebHandle> {
   if (!connectionString) throw new Error("serveWeb: DATABASE_URL is required");
 
   const pool = getPool({ applicationName: "web" });
-  if (!opts.skipMigrations) await applyMigrations(pool);
+  if (!opts.skipMigrations) {
+    // Collect pack migrations from every known agent (single or map).
+    // The runner dedupes by (packName, id) so passing the same pack's
+    // migrations multiple times via different agents is safe.
+    const agentList: AgentDefinition[] = [];
+    if (opts.agent) agentList.push(opts.agent);
+    if (opts.agents) agentList.push(...Object.values(opts.agents));
+    const packMigrations = agentList.flatMap((a) => a.packMigrations ?? []);
+    await applyMigrations(pool, { packMigrations });
+  }
 
   const boss = new PgBoss(connectionString);
   boss.on("error", (err: Error) => logger.error({ err: err.message }, "pg-boss error"));

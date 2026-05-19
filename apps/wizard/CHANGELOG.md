@@ -1,5 +1,14 @@
 # @render-harness/wizard
 
+## 0.5.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @render-harness/core@0.6.0
+  - @render-harness/registry@0.6.0
+  - create-render-agent@0.6.0
+
 ## 0.5.3
 
 ### Patch Changes

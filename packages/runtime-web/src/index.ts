@@ -104,7 +104,7 @@ export async function serveAgent(opts: ServeAgentOpts): Promise<ServerType> {
   const kv = getKvSafe(logger);
 
   if (!opts.skipMigrations) {
-    await applyMigrations(pool);
+    await applyMigrations(pool, { packMigrations: opts.agent.packMigrations ?? [] });
   }
 
   const budget: Budget = {

@@ -1,6 +1,6 @@
 {
   "name": "@render-harness/core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Render-native agent harness: shared core (loop, adapter, MCP, state, skills, prompt, tools).",
   "type": "module",
   "license": "MIT",
