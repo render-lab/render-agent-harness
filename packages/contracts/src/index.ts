@@ -262,9 +262,7 @@ export interface AgentSummary {
   source?: AgentSourceSummary;
 }
 
-export type AgentSourceSummary =
-  | { kind: "builtin" }
-  | { kind: "custom"; entrypoint: string };
+export type AgentSourceSummary = { kind: "builtin" } | { kind: "custom"; entrypoint: string };
 
 export interface SkippedBuiltinSummary {
   name: string;

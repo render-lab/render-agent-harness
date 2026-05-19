@@ -125,8 +125,8 @@ function DeployKeyPanel({ deployKey }: { deployKey: NonNullable<ScaffoldResponse
         model) won't work until both values are set on the deployed service.
       </p>
       <p className="mt-2 text-[12px] text-muted">
-        Lose it and you'll need to regenerate manually (GitHub Settings → Deploy keys for this
-        repo, plus the same env var on the Render service). Fingerprint: {deployKey.fingerprint}.
+        Lose it and you'll need to regenerate manually (GitHub Settings → Deploy keys for this repo,
+        plus the same env var on the Render service). Fingerprint: {deployKey.fingerprint}.
       </p>
       <CopyField
         label="GITHUB_DEPLOY_REPO_SSH_URL"

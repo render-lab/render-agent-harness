@@ -555,14 +555,11 @@ export function updateAgentSystemPrompt(
   slug: string,
   systemPrompt: string,
 ): Promise<UpdateAgentSystemPromptResp> {
-  return request<UpdateAgentSystemPromptResp>(
-    `/agents/${encodeURIComponent(slug)}/system-prompt`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ systemPrompt }),
-    },
-  );
+  return request<UpdateAgentSystemPromptResp>(`/agents/${encodeURIComponent(slug)}/system-prompt`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ systemPrompt }),
+  });
 }
 
 export function getUsage(opts?: {

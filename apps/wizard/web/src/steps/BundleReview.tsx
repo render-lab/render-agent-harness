@@ -29,8 +29,8 @@ export function BundleReview({
           <span>{"// SEALED BUNDLE"}</span>
         </div>
         <p className="mt-3 text-sm text-muted">
-          This template ships {bundle.manifest.agents.length} agents in a single loop. The
-          wizard writes the files as-is. Customize after.
+          This template ships {bundle.manifest.agents.length} agents in a single loop. The wizard
+          writes the files as-is. Customize after.
         </p>
       </div>
 

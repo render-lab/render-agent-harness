@@ -135,7 +135,8 @@ export const DEFAULT_STATE: WizardState = {
   templateSlug: null,
   agentName: "my-agent",
   description: "An agent built on Render Loops.",
-  systemPrompt: "You are a helpful assistant deployed on Render via the Render Loops agent runtime.",
+  systemPrompt:
+    "You are a helpful assistant deployed on Render via the Render Loops agent runtime.",
   modelPresetId: DEFAULT_MODEL_PRESET_ID,
   model: findPreset(DEFAULT_MODEL_PRESET_ID).spec ?? {
     provider: "anthropic",

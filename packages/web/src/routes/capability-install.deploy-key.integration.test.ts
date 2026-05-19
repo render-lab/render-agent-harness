@@ -106,7 +106,6 @@ if (SKIP_REASON) {
       registerCapabilityInstallRoute(app, {
         auth: async () => "u1",
         agents: {
-          // biome-ignore lint/suspicious/noExplicitAny: stub for route gating
           chat: { name: "chat" } as any,
         },
         pathPrefix: "",
@@ -162,7 +161,6 @@ if (SKIP_REASON) {
       registerCapabilityInstallRoute(app, {
         auth: async () => "u1",
         agents: {
-          // biome-ignore lint/suspicious/noExplicitAny: stub for route gating
           chat: { name: "chat" } as any,
         },
         pathPrefix: "",

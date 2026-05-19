@@ -9,7 +9,7 @@ export {
   AgentNotFoundError,
   InvalidManifestError,
   type MutateAgentModelOpts,
-  mutateAgentModel,
   type MutateAgentSystemPromptOpts,
+  mutateAgentModel,
   mutateAgentSystemPrompt,
 } from "@render-harness/registry/repo-mutations";

@@ -110,7 +110,6 @@ if (SKIP_REASON) {
       const agents = agentsOverride ?? defaultAgents;
       registerAgentSystemPromptRoute(app, {
         auth: async () => "u1",
-        // biome-ignore lint/suspicious/noExplicitAny: stub for route gating
         agents: agents as any,
         pathPrefix: "",
         deployment,
@@ -182,7 +181,6 @@ if (SKIP_REASON) {
       const app = new Hono();
       registerAgentSystemPromptRoute(app, {
         auth: async () => "u1",
-        // biome-ignore lint/suspicious/noExplicitAny: stub for route gating
         agents: { chat: { name: "chat", source: { kind: "builtin" } } } as any,
         pathPrefix: "",
         deployment: {

@@ -359,9 +359,7 @@ export interface AgentDefinition {
   source?: AgentSource;
 }
 
-export type AgentSource =
-  | { kind: "builtin" }
-  | { kind: "custom"; entrypoint: string };
+export type AgentSource = { kind: "builtin" } | { kind: "custom"; entrypoint: string };
 
 export interface ModelSpec {
   provider: "anthropic" | "openai-compat";

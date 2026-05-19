@@ -55,7 +55,7 @@ export {
   AgentNotFoundError,
   InvalidManifestError,
   type MutateAgentModelOpts,
-  mutateAgentModel,
   type MutateAgentSystemPromptOpts,
+  mutateAgentModel,
   mutateAgentSystemPrompt,
 } from "./yaml-edit.js";

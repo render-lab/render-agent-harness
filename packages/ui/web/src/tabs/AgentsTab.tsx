@@ -274,8 +274,7 @@ function AgentCard({
   // <entrypoint>" hint instead. Unset `source` (TS-only deployments
   // with no YAML) is conservatively treated as not-editable.
   const promptEditable = agent.source?.kind === "builtin";
-  const promptEntrypoint =
-    agent.source?.kind === "custom" ? agent.source.entrypoint : null;
+  const promptEntrypoint = agent.source?.kind === "custom" ? agent.source.entrypoint : null;
 
   return (
     <div className="panel space-y-4 p-4 text-xs">

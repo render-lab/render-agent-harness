@@ -253,7 +253,7 @@ function HarnessVersionPanel({ deployment }: { deployment: ReturnType<typeof use
   const rows = Object.entries(harness.running).sort(([a], [b]) => a.localeCompare(b));
   return (
     <section>
-        <SectionHeader title="LOOPS VERSION" />
+      <SectionHeader title="LOOPS VERSION" />
       <div className="border border-line p-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           <span className="badge">{harness.status}</span>
