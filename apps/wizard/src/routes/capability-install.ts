@@ -40,6 +40,7 @@ export function registerCapabilityInstallRoute(
   opts: RegisterCapabilityInstallRouteOpts,
 ): void {
   const createOctokitFn = opts.deps?.createOctokit ?? createOctokit;
+  let deprecationLogged = false;
 
   app.post("/api/capabilities/install", async (c) => {
     if (!opts.sharedSecret)
@@ -48,6 +49,16 @@ export function registerCapabilityInstallRoute(
     const auth = c.req.header("authorization") ?? "";
     if (!constantTimeEqual(auth, `Bearer ${opts.sharedSecret}`)) {
       return c.json<ErrorResponse>({ error: "unauthorized" }, 401);
+    }
+    if (!deprecationLogged) {
+      // Logged once per wizard process — actionable hint for the
+      // operator team that owns the deployed harness pinging this.
+      console.warn(
+        "[deprecated] /api/capabilities/install via WIZARD_SHARED_SECRET. " +
+          "New harnesses commit edit-in-UI changes directly via GITHUB_DEPLOY_KEY + GITHUB_DEPLOY_REPO_SSH_URL (see docs-site/managed-repo-commits.mdx). " +
+          "Rotate this harness when convenient — the wizard proxy path will be removed in a future minor cut.",
+      );
+      deprecationLogged = true;
     }
 
     let body: CapabilityInstallBody;

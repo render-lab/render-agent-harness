@@ -75,9 +75,29 @@ const TSUP_CONFIG_PATH = "tsup.config.ts";
 
 export function registerAgentAddRoute(app: Hono, opts: RegisterAgentAddRouteOpts): void {
   const createOctokitFn = opts.deps?.createOctokit ?? createOctokit;
+  let deprecationLogged = false;
 
   app.post("/api/agents/add", async (c) => {
     if (!opts.github) return c.json<ErrorResponse>({ error: "github_not_configured" }, 503);
+    const auth = c.req.header("authorization") ?? "";
+    if (
+      auth.startsWith("Bearer ") &&
+      opts.sharedSecret &&
+      auth === `Bearer ${opts.sharedSecret}` &&
+      !deprecationLogged
+    ) {
+      // Note: agent-add stays on the proxy path in Wave 1 because the
+      // helpers it needs (runtime-entries + create-render-agent
+      // templates) aren't yet plumbed through the registry. Follow-up
+      // tracked in docs/roadmap.md.
+      console.warn(
+        "[deprecated] /api/agents/add via WIZARD_SHARED_SECRET. " +
+          "Wave 1 of the deploy-key migration keeps this route on the proxy path " +
+          "because agent-add needs runtime-entries templates from create-render-agent. " +
+          "A follow-up minor cut will move this to GITHUB_DEPLOY_KEY too.",
+      );
+      deprecationLogged = true;
+    }
 
     let body: AgentAddBody;
     try {

@@ -46,6 +46,7 @@ const MANIFEST_PATH = "render-harness.yaml";
 
 export function registerAgentModelRoute(app: Hono, opts: RegisterAgentModelRouteOpts): void {
   const createOctokitFn = opts.deps?.createOctokit ?? createOctokit;
+  let deprecationLogged = false;
 
   app.patch("/api/agents/:slug/model", async (c) => {
     if (!opts.sharedSecret) {
@@ -58,6 +59,14 @@ export function registerAgentModelRoute(app: Hono, opts: RegisterAgentModelRoute
     const auth = c.req.header("authorization") ?? "";
     if (!constantTimeEqual(auth, `Bearer ${opts.sharedSecret}`)) {
       return c.json<ErrorResponse>({ error: "unauthorized" }, 401);
+    }
+    if (!deprecationLogged) {
+      console.warn(
+        "[deprecated] /api/agents/:slug/model via WIZARD_SHARED_SECRET. " +
+          "New harnesses commit model edits directly via GITHUB_DEPLOY_KEY + GITHUB_DEPLOY_REPO_SSH_URL (see docs-site/managed-repo-commits.mdx). " +
+          "Rotate this harness when convenient — the wizard proxy path will be removed in a future minor cut.",
+      );
+      deprecationLogged = true;
     }
 
     let body: AgentModelPatchBody;
