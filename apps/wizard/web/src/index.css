@@ -218,6 +218,14 @@
   .btn-primary:hover:not(:disabled) {
     @apply bg-surface text-accent;
   }
+  /* Bordered-at-rest variant of `.btn-primary` for cards where the
+   * solid purple block reads too heavy. Hover fills it. */
+  .btn-primary-outline {
+    @apply text-accent border-accent;
+  }
+  .btn-primary-outline:hover:not(:disabled) {
+    @apply bg-accent text-canvas border-accent;
+  }
   .btn-danger {
     @apply text-err border-err;
   }

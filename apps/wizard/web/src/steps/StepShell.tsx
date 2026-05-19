@@ -15,7 +15,8 @@ export function StepShell({
   title: string;
   description?: string;
   children: React.ReactNode;
-  onPrev: () => void;
+  /** When omitted, the Back button is hidden — pass null on the first step. */
+  onPrev?: (() => void) | null;
   onNext: () => void;
   nextLabel?: string;
   nextDisabled?: boolean;
@@ -29,11 +30,18 @@ export function StepShell({
         {description && <p className="mt-3 text-sm text-muted">{description}</p>}
       </div>
       <div className="space-y-4">{children}</div>
-      <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onPrev} className="btn">
-          ← Back
-        </button>
-        <button type="button" onClick={onNext} disabled={nextDisabled} className="btn btn-primary">
+      <div className="flex items-center pt-2">
+        {onPrev ? (
+          <button type="button" onClick={onPrev} className="btn">
+            ← Back
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={nextDisabled}
+          className="btn btn-primary ml-auto"
+        >
           {nextLabel ?? "Next →"}
         </button>
       </div>

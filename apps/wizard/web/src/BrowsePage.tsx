@@ -9,19 +9,27 @@ import {
   LuChevronRight,
   LuChevronsLeft,
   LuChevronsRight,
+  LuChrome,
+  LuDatabase,
   LuExternalLink,
+  LuFlame,
+  LuFolderTree,
   LuGitFork,
   LuGithub,
   LuGlobe,
   LuLayers,
   LuListChecks,
+  LuMail,
+  LuMessagesSquare,
   LuPlus,
   LuPuzzle,
   LuRocket,
   LuSearch,
+  LuSquareKanban,
   LuStar,
   LuTag,
   LuUsers,
+  LuWebhook,
   LuX,
 } from "react-icons/lu";
 import { Markdown } from "./components/Markdown.js";
@@ -75,7 +83,6 @@ export function BrowsePage() {
   const [addingFor, setAddingFor] = useState<BrowseItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
     fetchBrowse()
@@ -125,19 +132,19 @@ export function BrowsePage() {
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  // Reset to the first page whenever the filter/query/page-size shape
-  // changes, otherwise the user can land on a page that no longer
-  // exists (e.g. filter narrows the result to 3, page=2 is invalid).
+  // Reset to the first page whenever the filter/query shape changes,
+  // otherwise the user can land on a page that no longer exists (e.g.
+  // filter narrows the result to 3, page=2 is invalid).
   // biome-ignore lint/correctness/useExhaustiveDependencies: filtered.length is the proxy for "result set changed"; we deliberately don't depend on `filtered` itself
   useEffect(() => {
     setPage(0);
-  }, [filtered.length, pageSize]);
+  }, [filtered.length]);
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
-  const pageStart = safePage * pageSize;
-  const pageEnd = Math.min(pageStart + pageSize, filtered.length);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, filtered.length);
   const visible = filtered.slice(pageStart, pageEnd);
 
   const detailRef = parseDetailRef();
@@ -161,7 +168,32 @@ export function BrowsePage() {
 
   if (detailRef) {
     const item = browse.items.find((candidate) => matchesDetailRef(candidate, detailRef));
-    return item ? <BrowseDetail item={item} /> : <MissingDetail source={detailRef.source} />;
+    return (
+      <div className="space-y-6">
+        {item ? (
+          <BrowseDetail
+            item={item}
+            canAddToExisting={signedIn && myHarnesses.length > 0 && isOfficial(item)}
+            onAddToExisting={() => setAddingFor(item)}
+          />
+        ) : (
+          <MissingDetail source={detailRef.source} />
+        )}
+        {addingFor ? (
+          <AddToExistingPicker
+            item={addingFor}
+            harnesses={myHarnesses}
+            catalog={catalog}
+            onClose={() => setAddingFor(null)}
+            onAdded={(message) => {
+              setNotice(message);
+              setAddingFor(null);
+            }}
+          />
+        ) : null}
+        {notice ? <p className="border border-line p-3 text-[11px] text-muted">{notice}</p> : null}
+      </div>
+    );
   }
 
   return (
@@ -287,13 +319,7 @@ export function BrowsePage() {
           </div>
 
           {totalPages > 1 ? (
-            <Pagination
-              page={safePage}
-              totalPages={totalPages}
-              pageSize={pageSize}
-              onPage={setPage}
-              onPageSize={setPageSize}
-            />
+            <Pagination page={safePage} totalPages={totalPages} onPage={setPage} />
           ) : null}
         </>
       )}
@@ -318,26 +344,16 @@ function isOfficial(item: BrowseItem): boolean {
   return item.source === "official";
 }
 
-type PageSize = 12 | 24 | 48;
-const DEFAULT_PAGE_SIZE: PageSize = 12;
-const PAGE_SIZE_OPTIONS: SelectOption<string>[] = [
-  { value: "12", label: "12 / page" },
-  { value: "24", label: "24 / page" },
-  { value: "48", label: "48 / page" },
-];
+const PAGE_SIZE = 12;
 
 function Pagination({
   page,
   totalPages,
-  pageSize,
   onPage,
-  onPageSize,
 }: {
   page: number;
   totalPages: number;
-  pageSize: PageSize;
   onPage: (next: number) => void;
-  onPageSize: (next: PageSize) => void;
 }) {
   const atStart = page === 0;
   const atEnd = page >= totalPages - 1;
@@ -387,17 +403,6 @@ function Pagination({
       >
         <LuChevronsRight aria-hidden />
       </button>
-
-      <span aria-hidden className="mx-2 hidden h-5 w-px bg-line sm:inline-block" />
-
-      <div className="w-32">
-        <Select
-          value={String(pageSize)}
-          options={PAGE_SIZE_OPTIONS}
-          onChange={(next) => onPageSize(Number(next) as PageSize)}
-          ariaLabel="Page size"
-        />
-      </div>
     </nav>
   );
 }
@@ -442,44 +447,42 @@ function BrowseCard({
 
       <p className="mt-4 flex-1 text-sm leading-relaxed text-muted">{item.description}</p>
 
-      <div className="mt-5 flex flex-wrap gap-1.5">
-        {item.runtimeKinds.map((runtime) => {
-          const Icon = runtimeIcon(runtime);
-          return (
-            <span key={runtime} className="badge inline-flex items-center gap-1">
-              <Icon aria-hidden />
-              {runtime}
-            </span>
-          );
-        })}
-        {item.source === "official"
-          ? [
-              ...item.surface.map((s) => (
-                <span key={`surface:${s}`} className="badge">
-                  {s}
-                </span>
-              )),
-              ...item.audience.map((a) => (
-                <span key={`audience:${a}`} className="badge">
-                  {a}
-                </span>
-              )),
-            ]
-          : item.categories.map((category) => (
-              <span key={category} className="badge">
-                {category}
+      <div className="mt-5">
+        <div className="label mb-1.5">runtime</div>
+        <div className="flex flex-wrap gap-1.5">
+          {item.runtimeKinds.map((runtime) => {
+            const Icon = runtimeIcon(runtime);
+            return (
+              <span key={runtime} className="badge inline-flex items-center gap-1">
+                <Icon aria-hidden />
+                {runtime}
               </span>
-            ))}
+            );
+          })}
+        </div>
       </div>
 
       {item.capabilities.length > 0 ? (
-        <p
-          className="mt-4 flex items-center gap-1.5 truncate font-mono text-[10px] text-muted"
-          title={item.capabilities.join(", ")}
-        >
-          <LuPuzzle aria-hidden className="shrink-0" />
-          <span className="truncate">{item.capabilities.join(", ")}</span>
-        </p>
+        <div className="mt-4">
+          <div className="label mb-1.5">capabilities</div>
+          <div
+            className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted"
+            title={item.capabilities.join(", ")}
+          >
+            {item.capabilities.map((cap) => {
+              const Icon = capabilityIcon(cap);
+              return (
+                <span
+                  key={cap}
+                  className="inline-flex items-center gap-1 border border-line bg-code-bg px-1.5 py-0.5 font-mono uppercase tracking-wide text-ink"
+                >
+                  <Icon aria-hidden />
+                  {shortCapName(cap)}
+                </span>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       {item.source === "community" ? (
@@ -494,7 +497,7 @@ function BrowseCard({
         </p>
       ) : null}
 
-      <div className="relative z-10 mt-5 flex flex-wrap gap-2">
+      <div className="relative z-10 mt-5 flex flex-col gap-2">
         {item.source === "official" ? (
           (() => {
             // Atomic entries + has-harnesses → promote "Add to existing"
@@ -505,7 +508,7 @@ function BrowseCard({
             const promoteAdd = canAddToExisting && item.kind === "agent";
             const startTemplate = (
               <a
-                className={`btn ${promoteAdd ? "" : "btn-primary"} inline-flex items-center gap-1.5`}
+                className={`btn ${promoteAdd ? "" : "btn-primary-outline"} inline-flex w-full items-center justify-center gap-1.5`}
                 href={`/new?template=${encodeURIComponent(item.templateSlug)}`}
               >
                 <LuRocket aria-hidden />
@@ -515,7 +518,7 @@ function BrowseCard({
             const addToExisting = canAddToExisting ? (
               <button
                 type="button"
-                className={`btn ${promoteAdd ? "btn-primary" : ""} inline-flex items-center gap-1.5`}
+                className={`btn ${promoteAdd ? "btn-primary-outline" : ""} inline-flex w-full items-center justify-center gap-1.5`}
                 onClick={onAddToExisting}
               >
                 <LuPlus aria-hidden />
@@ -537,7 +540,7 @@ function BrowseCard({
         ) : (
           <>
             <a
-              className="btn btn-primary inline-flex items-center gap-1.5"
+              className="btn btn-primary-outline inline-flex w-full items-center justify-center gap-1.5"
               href={item.deployUrl}
               target="_blank"
               rel="noreferrer"
@@ -546,7 +549,7 @@ function BrowseCard({
               Deploy to Render
             </a>
             <a
-              className="btn inline-flex items-center gap-1.5"
+              className="btn inline-flex w-full items-center justify-center gap-1.5"
               href={item.repo}
               target="_blank"
               rel="noreferrer"
@@ -725,7 +728,15 @@ function AddToExistingPicker({
   );
 }
 
-function BrowseDetail({ item }: { item: BrowseItem }) {
+function BrowseDetail({
+  item,
+  canAddToExisting,
+  onAddToExisting,
+}: {
+  item: BrowseItem;
+  canAddToExisting: boolean;
+  onAddToExisting: () => void;
+}) {
   const kind = itemKind(item);
   const SourceIcon = sourceIcon(item.source);
   const KindIcon = kindIcon(kind);
@@ -754,13 +765,42 @@ function BrowseDetail({ item }: { item: BrowseItem }) {
 
         <div className="mt-5 flex flex-wrap gap-2">
           {item.source === "official" ? (
-            <a
-              className="btn btn-primary inline-flex items-center gap-1.5"
-              href={`/new?template=${encodeURIComponent(item.templateSlug)}`}
-            >
-              <LuRocket aria-hidden />
-              Start from template
-            </a>
+            (() => {
+              // Mirrors the BrowseCard heuristic: atomic entries with a
+              // landing harness promote "Add to existing" to primary;
+              // bundles always keep "Start from template" primary.
+              const promoteAdd = canAddToExisting && item.kind === "agent";
+              const startTemplate = (
+                <a
+                  className={`btn ${promoteAdd ? "" : "btn-primary"} inline-flex items-center gap-1.5`}
+                  href={`/new?template=${encodeURIComponent(item.templateSlug)}`}
+                >
+                  <LuRocket aria-hidden />
+                  Start from template
+                </a>
+              );
+              const addToExisting = canAddToExisting ? (
+                <button
+                  type="button"
+                  className={`btn ${promoteAdd ? "btn-primary" : ""} inline-flex items-center gap-1.5`}
+                  onClick={onAddToExisting}
+                >
+                  <LuPlus aria-hidden />
+                  Add to existing
+                </button>
+              ) : null;
+              return promoteAdd ? (
+                <>
+                  {addToExisting}
+                  {startTemplate}
+                </>
+              ) : (
+                <>
+                  {startTemplate}
+                  {addToExisting}
+                </>
+              );
+            })()
           ) : (
             <>
               <a
@@ -792,7 +832,7 @@ function BrowseDetail({ item }: { item: BrowseItem }) {
             <span>{"// OVERVIEW"}</span>
           </div>
           {item.source === "official" && item.readme ? (
-            <div className="mt-4 max-h-[40rem] overflow-auto border border-line bg-canvas p-4">
+            <div className="mt-4 max-h-[40rem] overflow-auto">
               <Markdown>{item.readme}</Markdown>
             </div>
           ) : (
@@ -969,6 +1009,20 @@ function stripProtocol(url: string): string {
   return url.replace(/^https?:\/\//, "");
 }
 
+/**
+ * Strip the `@scope/cap-` namespace prefix so capability chips show
+ * just the meaningful suffix (`slack`, `memory-pg`, `search-exa`)
+ * instead of the verbose `@render-harness/cap-slack`. Falls back to
+ * the original string if neither pattern matches.
+ */
+function shortCapName(pkg: string): string {
+  const scoped = /^@[^/]+\/cap-(.+)$/.exec(pkg);
+  if (scoped?.[1]) return scoped[1];
+  const bare = /^cap-(.+)$/.exec(pkg);
+  if (bare?.[1]) return bare[1];
+  return pkg;
+}
+
 function sourceIcon(source: BrowseItem["source"]): ComponentType<{ className?: string }> {
   return source === "official" ? LuStar : LuUsers;
 }
@@ -991,5 +1045,50 @@ function runtimeIcon(runtime: string): ComponentType<{ className?: string }> {
       return LuGitFork;
     default:
       return LuTag;
+  }
+}
+
+/**
+ * Pick a Lucide icon for a capability pack based on its short name
+ * (post `shortCapName()` peel). Multi-word names match on the leading
+ * segment first (e.g. `search-exa`, `search-tavily` both → search).
+ * Falls back to `LuPuzzle` for unknown packs.
+ */
+function capabilityIcon(pkg: string): ComponentType<{ className?: string }> {
+  const short = shortCapName(pkg);
+  const family = short.split("-")[0];
+  switch (family) {
+    case "search":
+      return LuSearch;
+    case "scrape":
+      return LuFlame;
+    case "browser":
+      return LuChrome;
+    case "memory":
+    case "rag":
+      return LuDatabase;
+    case "filesystem":
+      return LuFolderTree;
+    case "webhook":
+      return LuWebhook;
+    case "github":
+    case "gitlab":
+      return LuGithub;
+    case "linear":
+    case "jira":
+      return LuSquareKanban;
+    case "slack":
+    case "discord":
+    case "teams":
+    case "intercom":
+      return LuMessagesSquare;
+    case "google":
+      return LuMail;
+    case "render":
+      return LuRocket;
+    case "notion":
+      return LuBoxes;
+    default:
+      return LuPuzzle;
   }
 }

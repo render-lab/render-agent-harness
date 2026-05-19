@@ -7,12 +7,10 @@ export function Basics({
   state,
   onChange,
   onNext,
-  onPrev,
 }: {
   state: WizardState;
   onChange: (next: WizardState) => void;
   onNext: () => void;
-  onPrev: () => void;
 }) {
   const nameValid = SLUG_RE.test(state.agentName);
   const descValid = state.description.length > 0 && state.description.length <= 280;
@@ -21,7 +19,6 @@ export function Basics({
       title="Name and description"
       description="The slug lands in render-harness.yaml and package.json. Lowercase + hyphens only."
       onNext={onNext}
-      onPrev={onPrev}
       nextDisabled={!nameValid || !descValid}
     >
       <Field label="agent name" hint="lowercase, hyphens">

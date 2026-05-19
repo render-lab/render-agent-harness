@@ -272,7 +272,7 @@ export function App() {
 
   return (
     <Shell currentStep={step} me={me} route={route} onNavigate={navigate}>
-      {step === 0 && <Basics state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />}
+      {step === 0 && <Basics state={state} onChange={setState} onNext={goNext} />}
       {step === 1 && (
         <SystemPrompt state={state} onChange={setState} onNext={goNext} onPrev={goPrev} />
       )}
