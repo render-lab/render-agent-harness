@@ -428,7 +428,14 @@ function BrowseCard({
       </div>
 
       <h2 className="mt-2 line-clamp-2 wrap-break-word text-lg font-bold" title={item.name}>
-        <a href={detailPathFor(item)} className="hover:underline">
+        {/* Stretched link: the ::after expands the clickable area of */}
+        {/* the title `<a>` to cover the whole `relative` article. */}
+        {/* Action buttons below are lifted out of the stretched link */}
+        {/* via `relative z-10` so they keep capturing their own clicks. */}
+        <a
+          href={detailPathFor(item)}
+          className="after:absolute after:inset-0 after:content-[''] group-hover:underline"
+        >
           {item.name}
         </a>
       </h2>
@@ -487,11 +494,7 @@ function BrowseCard({
         </p>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <a className="btn inline-flex items-center gap-1.5" href={detailPathFor(item)}>
-          <LuArrowRight aria-hidden />
-          Details
-        </a>
+      <div className="relative z-10 mt-5 flex flex-wrap gap-2">
         {item.source === "official" ? (
           (() => {
             // Atomic entries + has-harnesses → promote "Add to existing"
