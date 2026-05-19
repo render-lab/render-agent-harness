@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
 import { log, outro } from "@clack/prompts";
+import { parseDeployKeyArgs, runDeployKeyCommand } from "./deploy-key-cmd.js";
 import { resolveGallery } from "./gallery.js";
 import { type GenerateResult, generate } from "./generate.js";
 import { runWizard } from "./prompts.js";
@@ -16,6 +17,7 @@ starter template.
 
 Usage:
   create-render-agent [directory] [options]
+  create-render-agent deploy-key [--repo owner/name] [--comment text]
 
 Arguments:
   directory                  Target directory. If omitted, the CLI prompts for it.
@@ -29,10 +31,20 @@ Options:
   --capability-catalog <path>
                              Optional capability catalog YAML or JSON file.
 
+Subcommands:
+  deploy-key                 Generate an SSH deploy key + paste-ready instructions
+                             to enable edit-in-UI on a CLI-scaffolded harness.
+                             Optional flags:
+                               --repo owner/name   Pre-fill the GitHub URL and
+                                                   GITHUB_DEPLOY_REPO_SSH_URL.
+                               --comment text       SSH key comment (default
+                                                    "render-harness").
+
 Examples:
   pnpm dlx create-render-agent my-agent
   create-render-agent my-agent --harness-root /path/to/render-harness
   create-render-agent --capability-catalog ./capability-catalog/index.yaml
+  create-render-agent deploy-key --repo render-lab-agents/my-agent-7af3
 
 Creates:
   render-harness.yaml        Agent, runtime, model, env, and capability config.
@@ -61,6 +73,17 @@ async function main(): Promise<void> {
   }
   if (args.includes("-v") || args.includes("--version")) {
     stdout.write(`${getVersion()}\n`);
+    return;
+  }
+  if (args[0] === "deploy-key") {
+    try {
+      const subArgs = parseDeployKeyArgs(args.slice(1));
+      const out = runDeployKeyCommand(subArgs);
+      stdout.write(`${out.text}\n`);
+    } catch (err) {
+      stderr.write(`deploy-key failed: ${describeError(err)}\n`);
+      exit(2);
+    }
     return;
   }
 

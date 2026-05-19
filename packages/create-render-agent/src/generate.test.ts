@@ -148,6 +148,12 @@ describe("buildFileMap", () => {
     const env = map.get(".env.example") ?? "";
     expect(env).toContain("WEB_API_KEY");
     expect(env).toContain("UI_COOKIE_SECRET");
+    // Deploy-key commit creds (commented out as opt-in) — surface them
+    // alongside the UI vars because edit-in-UI only makes sense when
+    // the UI is mounted.
+    expect(env).toContain("# GITHUB_DEPLOY_KEY=");
+    expect(env).toContain("# GITHUB_DEPLOY_REPO_SSH_URL=");
+    expect(env).toContain("npx create-render-agent deploy-key");
   });
 
   it("emits a complete openai-compat model block when a non-Anthropic preset is picked", () => {

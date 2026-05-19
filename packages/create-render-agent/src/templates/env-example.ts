@@ -17,6 +17,13 @@ WEB_API_KEY=demo
 # Required when the operator UI is mounted: signing secret for session cookies.
 # Replace before production. Generate with: openssl rand -hex 32
 UI_COOKIE_SECRET=dev-only-cookie-secret-change-me
+
+# Optional: enables edit-in-UI (Install capability, Edit model) directly
+# from the operator UI without proxying through the wizard service.
+# Generate with: npx create-render-agent deploy-key
+# Add the public key as a deploy key on your repo (Settings -> Deploy keys -> Add deploy key, allow write access).
+# GITHUB_DEPLOY_KEY=
+# GITHUB_DEPLOY_REPO_SSH_URL=git@github.com:your-org/your-repo.git
 `
     : "";
   const connectorBlock = connectorEnvBlock(answers);
