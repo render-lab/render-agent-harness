@@ -55,15 +55,19 @@ If you scaffolded before this flow shipped and want to migrate, jump to the CLI 
 
 CLI-scaffolded harnesses (`npx create-render-agent ...`) don't go through the wizard, so the deploy key isn't provisioned automatically. Four manual steps:
 
-### 1. Generate a keypair
+### 1. Generate a keypair (and optionally auto-register on GitHub)
 
 ```bash
 npx create-render-agent deploy-key --repo your-org/your-repo
 ```
 
-Outputs paste-ready blocks for the GitHub deploy-key page and the Render env-var page. The private key is generated in memory and never written to disk — copy it before closing the terminal, or rerun the command for a fresh pair.
+When the [GitHub CLI](https://cli.github.com/) (`gh`) is installed and you've run `gh auth login` first, the command **registers the public key on the repo automatically** as part of the run — the "paste into GitHub" step in §2 is replaced with a one-line confirmation and you only need to handle the Render env vars in §3.
 
-You can also use `ssh-keygen` if you prefer:
+When `gh` isn't installed (or you aren't logged in), the same command prints the public key block + the "Add deploy key" URL so you can do step 2 by hand. Pass `--no-gh` to always print the manual instructions even when `gh` is available.
+
+The private key is generated in memory and never written to disk — copy it before closing the terminal, or rerun the command for a fresh pair.
+
+You can also use `ssh-keygen` if you prefer to skip the CLI entirely:
 
 ```bash
 ssh-keygen -t ed25519 -C "render-harness" -f deploy-key -N ""
@@ -72,7 +76,7 @@ cat deploy-key.pub  # public key for the GitHub deploy-key form
 rm deploy-key deploy-key.pub   # after pasting
 ```
 
-### 2. Add the public key to GitHub
+### 2. Add the public key to GitHub (skip if the CLI did it for you)
 
 GitHub → your repo → **Settings** → **Deploy keys** → **Add deploy key**.
 

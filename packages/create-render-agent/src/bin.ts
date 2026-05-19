@@ -34,11 +34,19 @@ Options:
 Subcommands:
   deploy-key                 Generate an SSH deploy key + paste-ready instructions
                              to enable edit-in-UI on a CLI-scaffolded harness.
+                             When --repo is supplied AND the gh CLI is on PATH
+                             AND 'gh auth status' succeeds, the public key is
+                             registered on the repo automatically; otherwise the
+                             manual paste-into-GitHub steps are printed.
                              Optional flags:
-                               --repo owner/name   Pre-fill the GitHub URL and
-                                                   GITHUB_DEPLOY_REPO_SSH_URL.
+                               --repo owner/name    Pre-fill the GitHub URL +
+                                                    GITHUB_DEPLOY_REPO_SSH_URL,
+                                                    and try gh-auto-register.
                                --comment text       SSH key comment (default
                                                     "render-harness").
+                               --no-gh              Skip the gh-CLI auto-register
+                                                    attempt; always print the
+                                                    manual paste instructions.
 
 Examples:
   pnpm dlx create-render-agent my-agent
