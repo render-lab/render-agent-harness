@@ -113,7 +113,15 @@ export function AgentsTab() {
         <InstallCapabilityModal
           agents={agents}
           onClose={() => setInstallingCapability(false)}
-          onInstalled={setNotice}
+          onInstalled={(message) => {
+            // Same committed → restarting → restored toast chain
+            // AddAgentModal already uses. Without this, the operator
+            // sees a static notice but no signal that Render is
+            // auto-deploying the commit; they'd have to refresh
+            // manually to confirm the new pack is live.
+            setNotice(message);
+            startRedeployWatch(message);
+          }}
         />
       ) : null}
       {addingAgent ? (

@@ -71,7 +71,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     pack: "@render-harness/cap-slack",
     label: "Slack",
     description: "Slack connector + tools (read threads, reply, react, update messages).",
-    versionRange: "^0.1.1",
+    versionRange: "^0.7.0",
     envVars: ["SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN"],
     connector: true,
     readTools: ["cap-slack__slack_get_thread", "cap-slack__slack_get_channel_history"],
@@ -90,7 +90,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "GitHub",
     description:
       "GitHub connector + tools (issues, PRs, files, checks, workflow runs; comment/label/status writes).",
-    versionRange: "^0.1.1",
+    versionRange: "^0.7.0",
     envVars: ["GITHUB_WEBHOOK_SECRET", "GITHUB_TOKEN"],
     connector: true,
     readTools: [
@@ -125,7 +125,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "Linear",
     description:
       "Linear connector + tools (issues, comments, projects, teams; create/update/assign).",
-    versionRange: "^0.1.1",
+    versionRange: "^0.7.0",
     envVars: ["LINEAR_WEBHOOK_SECRET", "LINEAR_API_KEY"],
     connector: true,
     readTools: [
@@ -154,7 +154,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     pack: "@render-harness/cap-webhook-generic",
     label: "Generic webhook",
     description: "Signed-HMAC inbound webhook that enqueues runs on the agent's queue.",
-    versionRange: "^0.1.1",
+    versionRange: "^0.7.0",
     envVars: ["WEBHOOK_SECRET"],
     connector: true,
     readTools: [],
@@ -167,7 +167,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     pack: "@render-harness/cap-search-exa",
     label: "Exa web search",
     description: "Exa hosted MCP for high-recall web search and full-page fetch.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: ["EXA_API_KEY"],
     connector: false,
     // Tools sourced from https://docs.exa.ai/reference/exa-mcp at time of writing.
@@ -188,7 +188,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     pack: "@render-harness/cap-search-tavily",
     label: "Tavily AI search",
     description: "Tavily MCP for citation-friendly AI search with concise summaries.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: ["TAVILY_API_KEY"],
     connector: false,
     readTools: ["cap-search-tavily__tavily-search", "cap-search-tavily__tavily-extract"],
@@ -202,7 +202,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "Firecrawl scraping",
     description:
       "Firecrawl MCP for clean-markdown URL rendering + a local scrape_and_store tool that persists results to Postgres.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: ["FIRECRAWL_API_KEY"],
     connector: false,
     // Firecrawl MCP tool list per upstream README; the local
@@ -225,7 +225,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "Google (Gmail + Calendar)",
     description:
       "Per-user OAuth Gmail + Calendar tools. Requires Google Cloud OAuth client + CONNECTIONS_ENCRYPTION_KEY.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "CONNECTIONS_ENCRYPTION_KEY"],
     connector: false,
     // Tools enumerated from packages/capabilities/cap-google/src/tools/{gmail,calendar}.ts.
@@ -252,7 +252,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "Memory (Postgres)",
     description:
       "Long-term agent memory in Postgres with pg_trgm fuzzy search. Auto-bootstraps its table.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: [],
     connector: false,
     readTools: ["cap-memory-pg__search"],
@@ -264,7 +264,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     label: "Filesystem",
     description:
       "Sandboxed file read/list/write/delete under a configured root. Set the `roots` config to a path under the deployed disk.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: [],
     connector: false,
     readTools: ["cap-filesystem__fs_read_file", "cap-filesystem__fs_list_dir"],
@@ -277,7 +277,7 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     pack: "@render-harness/cap-browser-browserbase",
     label: "Browser (Browserbase)",
     description: "Browserbase hosted browser MCP for JS-heavy pages, login flows, and screenshots.",
-    versionRange: "^0.5.0",
+    versionRange: "^0.7.0",
     envVars: ["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID"],
     connector: false,
     // @browserbasehq/mcp tool list per upstream README.
@@ -296,6 +296,122 @@ export const OFFICIAL_CAPABILITY_INSTALLS: Record<string, CapabilityInstallSpec>
     defaultConfig: {},
     caveat:
       "Tools come from the @browserbasehq/mcp npm package. The exact tool set evolves with Browserbase releases; expand allowedTools manually if upstream adds new tools.",
+  },
+  "@render-harness/cap-render": {
+    pack: "@render-harness/cap-render",
+    label: "Render (MCP)",
+    description:
+      "Wraps the hosted Render MCP for managing services, deploys, databases, env vars, and logs. Ships skills and a curated mutating-tool list for HITL gating.",
+    versionRange: "^0.7.0",
+    envVars: ["RENDER_API_KEY"],
+    connector: false,
+    // Render MCP tool names get sanitized to underscores by core/mcp.ts
+    // (see AGENTS.md "MCP-discovered tool names get hyphens sanitized to
+    // underscores"). Mutating tools mirror RENDER_MCP_MUTATING_TOOLS.
+    readTools: [
+      "cap_render__render__list_services",
+      "cap_render__render__get_service",
+      "cap_render__render__list_deploys",
+      "cap_render__render__get_deploy",
+      "cap_render__render__list_environment_variables",
+      "cap_render__render__list_logs",
+    ],
+    writeTools: [
+      "cap_render__render__create_web_service",
+      "cap_render__render__update_web_service",
+      "cap_render__render__delete_service",
+      "cap_render__render__create_postgres",
+      "cap_render__render__update_postgres",
+      "cap_render__render__delete_postgres",
+      "cap_render__render__create_keyvalue",
+      "cap_render__render__update_keyvalue",
+      "cap_render__render__delete_keyvalue",
+      "cap_render__render__update_environment_variables",
+      "cap_render__render__create_environment_variable",
+      "cap_render__render__delete_environment_variable",
+    ],
+    defaultConfig: {},
+    caveat:
+      "Tools come from Render's hosted MCP at mcp.render.com. The exact read-tool set evolves with Render releases; expand allowedTools manually if upstream adds new tools. Use the writeTools list as `permissions.requireApproval` to gate destructive operations behind HITL.",
+  },
+  "@render-harness/cap-notion": {
+    pack: "@render-harness/cap-notion",
+    label: "Notion",
+    description:
+      "Notion pages, databases, and workspace search via per-end-user OAuth. 8 tools across pages, databases, and search.",
+    versionRange: "^0.7.0",
+    envVars: ["NOTION_OAUTH_CLIENT_ID", "NOTION_OAUTH_CLIENT_SECRET", "CONNECTIONS_ENCRYPTION_KEY"],
+    connector: false,
+    // Tools enumerated from packages/capabilities/cap-notion/src/tools/*.ts.
+    readTools: ["cap-notion__search", "cap-notion__read_page", "cap-notion__query_database"],
+    writeTools: [
+      "cap-notion__create_page",
+      "cap-notion__append_blocks",
+      "cap-notion__update_page_properties",
+      "cap-notion__create_database_row",
+      "cap-notion__update_database_row",
+    ],
+    defaultConfig: {},
+  },
+  "@render-harness/cap-intercom": {
+    pack: "@render-harness/cap-intercom",
+    label: "Intercom",
+    description:
+      "Dual inbound+outbound pack: HMAC-verified webhook for conversation events plus per-end-user OAuth tools for reply, assign, tag, close, snooze.",
+    versionRange: "^0.7.0",
+    envVars: [
+      "INTERCOM_OAUTH_CLIENT_ID",
+      "INTERCOM_OAUTH_CLIENT_SECRET",
+      "CONNECTIONS_ENCRYPTION_KEY",
+    ],
+    // Mounts POST /connectors/intercom for inbound webhooks; client
+    // secret doubles as the HMAC key (no separate webhook secret env).
+    connector: true,
+    readTools: ["cap-intercom__read_conversation", "cap-intercom__list_recent_conversations"],
+    writeTools: [
+      "cap-intercom__reply",
+      "cap-intercom__assign",
+      "cap-intercom__add_tag",
+      "cap-intercom__close",
+      "cap-intercom__snooze",
+    ],
+    defaultConfig: {
+      clientIdEnv: "INTERCOM_OAUTH_CLIENT_ID",
+      clientSecretEnv: "INTERCOM_OAUTH_CLIENT_SECRET",
+    },
+  },
+  "@render-harness/cap-granola": {
+    pack: "@render-harness/cap-granola",
+    label: "Granola",
+    description:
+      "API-key + polling pack — list/read Granola meeting notes and detect new ones via a recurring cron run. Owns a granola_seen_notes dedup table via the pack-migration runner.",
+    versionRange: "^0.7.0",
+    envVars: ["GRANOLA_API_KEY"],
+    connector: false,
+    readTools: ["cap-granola__list_notes", "cap-granola__read_note", "cap-granola__poll_recent"],
+    writeTools: [],
+    defaultConfig: {
+      apiKeyEnv: "GRANOLA_API_KEY",
+    },
+  },
+  "@render-harness/cap-figma": {
+    pack: "@render-harness/cap-figma",
+    label: "Figma",
+    description:
+      "Granular per-action OAuth scopes (post-Nov-2025 Figma update). 7 tools across files, projects/teams, and comments.",
+    versionRange: "^0.7.0",
+    envVars: ["FIGMA_OAUTH_CLIENT_ID", "FIGMA_OAUTH_CLIENT_SECRET", "CONNECTIONS_ENCRYPTION_KEY"],
+    connector: false,
+    readTools: [
+      "cap-figma__read_file",
+      "cap-figma__read_file_nodes",
+      "cap-figma__read_file_metadata",
+      "cap-figma__list_team_projects",
+      "cap-figma__list_project_files",
+      "cap-figma__read_comments",
+    ],
+    writeTools: ["cap-figma__post_comment"],
+    defaultConfig: {},
   },
 };
 
