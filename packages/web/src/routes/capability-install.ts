@@ -1,6 +1,39 @@
+/**
+ * `POST /capabilities/install` — operator UI's Install-capability flow.
+ *
+ * Two commit paths, chosen at request time by `pickCommitPath`:
+ *
+ *   1. deploy_key — preferred, post-May-2026 default. The harness
+ *      clones its own managed repo via the per-deployment SSH key in
+ *      `GITHUB_DEPLOY_KEY`, runs the same pure planner/mutator the
+ *      wizard does, and pushes the commit directly. No wizard
+ *      involvement.
+ *
+ *   2. wizard_proxy — legacy V1 path. The harness POSTs to the wizard's
+ *      `/api/capabilities/install` with `Bearer WIZARD_SHARED_SECRET`,
+ *      and the wizard does the Octokit commit on the harness's behalf.
+ *      Kept functional for harnesses that haven't rotated to the
+ *      deploy-key flow yet; rotation is a Config-tab follow-up.
+ *
+ * `GET /capabilities/catalog` still always proxies the wizard, because
+ * the catalog (`OFFICIAL_CAPABILITY_INSTALLS`) is part of the wizard's
+ * deployable surface — making it work offline against a baked-in copy
+ * is a separate follow-up.
+ */
+
 import type { DeploymentInfo } from "@render-harness/contracts";
 import type { AgentDefinition, UserId } from "@render-harness/core";
-import type { Hono } from "hono";
+import {
+  type CapabilityAccessMode,
+  CapabilityInstallError,
+  mutateCapabilityInstallYaml,
+  mutateEnvExample,
+  mutatePackageJsonAddDependency,
+  planCapabilityInstall,
+} from "@render-harness/registry/repo-mutations";
+import type { Context, Hono } from "hono";
+import { pickCommitPath } from "../lib/commit-shim.js";
+import { withRepoClone } from "../lib/git-commit.js";
 
 export interface CapabilityInstallRouteContext {
   auth: (req: Request) => Promise<UserId | null>;
@@ -12,7 +45,25 @@ export interface CapabilityInstallRouteContext {
   fetchImpl?: typeof fetch;
   /** TTL for the in-memory catalog cache (ms). Defaults to 60s; tests pass 0. */
   catalogCacheTtlMs?: number;
+  /**
+   * Optional env source for the commit-path picker. Tests pass a fake;
+   * production reads `process.env`.
+   */
+  env?: NodeJS.ProcessEnv;
 }
+
+interface CapabilityInstallBody {
+  agentId: string;
+  pack: string;
+  accessMode: CapabilityAccessMode;
+  config?: Record<string, unknown>;
+  requireApproval?: boolean;
+  branch?: string;
+}
+
+const MANIFEST_PATH = "render-harness.yaml";
+const PACKAGE_PATH = "package.json";
+const ENV_EXAMPLE_PATH = ".env.example";
 
 export function registerCapabilityInstallRoute(
   app: Hono,
@@ -74,42 +125,168 @@ export function registerCapabilityInstallRoute(
   app.post(r("/capabilities/install"), async (c) => {
     const userId = await auth(c.req.raw);
     if (!userId) return c.json({ error: "unauthorized" }, 401);
-    if (!wizardServiceUrl) return c.json({ error: "wizard_service_not_configured" }, 503);
-    if (!wizardSharedSecret) return c.json({ error: "wizard_shared_secret_not_configured" }, 503);
     const locator = deployment?.repoLocator;
     if (!locator?.org || !locator?.repo) return c.json({ error: "repo_locator_missing" }, 409);
-    if (!locator.installationId) {
-      return c.json(
-        {
-          error: "needs_install",
-          installUrl: `${trimTrailingSlash(wizardServiceUrl)}/api/installs/start?agentSlug=capability-install`,
-        },
-        409,
-      );
-    }
-    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+
+    const body = (await c.req.json().catch(() => null)) as CapabilityInstallBody | null;
     if (!body) return c.json({ error: "bad_json" }, 400);
-    const agentId = typeof body.agentId === "string" ? body.agentId : undefined;
-    if (!agentId || !agents[agentId]) return c.json({ error: "agent_not_found" }, 404);
-    const res = await fetchImpl(`${trimTrailingSlash(wizardServiceUrl)}/api/capabilities/install`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${wizardSharedSecret}`,
-      },
-      body: JSON.stringify({
-        ...body,
-        org: locator.org,
-        repo: locator.repo,
-        installationId: locator.installationId,
-      }),
+    if (!body.agentId || !agents[body.agentId]) {
+      return c.json({ error: "agent_not_found" }, 404);
+    }
+    if (typeof body.pack !== "string" || body.pack.length === 0) {
+      return c.json({ error: "invalid_request", details: "pack required" }, 400);
+    }
+    if (body.accessMode !== "read" && body.accessMode !== "read_write") {
+      return c.json({ error: "invalid_request", details: "accessMode required" }, 400);
+    }
+
+    const path = pickCommitPath({
+      deployment,
+      wizardSharedSecret,
+      ...(ctx.env ? { env: ctx.env } : {}),
     });
-    const text = await res.text();
-    return c.json(
-      safeParseJson(text) ?? { error: "wizard_response_not_json", body: text },
-      res.status as 200,
-    );
+
+    if (path.kind === "deploy_key") {
+      return runDeployKeyInstall({
+        c,
+        body,
+        repoSshUrl: path.repoSshUrl,
+        deployKeyPem: path.deployKeyPem,
+      });
+    }
+
+    if (path.kind === "wizard_proxy") {
+      return runWizardProxyInstall({
+        c,
+        body,
+        locator,
+        wizardServiceUrl,
+        wizardSharedSecret,
+        fetchImpl,
+      });
+    }
+
+    return c.json({ error: "edit_in_ui_not_configured", details: path.reason }, 503);
   });
+}
+
+async function runDeployKeyInstall(args: {
+  c: Context;
+  body: CapabilityInstallBody;
+  repoSshUrl: string;
+  deployKeyPem: string;
+}): Promise<Response> {
+  const { c, body, repoSshUrl, deployKeyPem } = args;
+  const branch = body.branch ?? "main";
+
+  try {
+    const { commit, result } = await withRepoClone(
+      { repoSshUrl, deployKeyPem, branch },
+      async (ctx) => {
+        const manifestText = await ctx.readFile(MANIFEST_PATH);
+        const pkgText = await ctx.readFile(PACKAGE_PATH);
+        if (manifestText === null || pkgText === null) {
+          throw new CapabilityInstallError(
+            "repo_layout_invalid",
+            `${MANIFEST_PATH} or ${PACKAGE_PATH} missing in repo`,
+          );
+        }
+        const envText = await ctx.readFile(ENV_EXAMPLE_PATH);
+
+        const plan = planCapabilityInstall({
+          yamlText: manifestText,
+          install: {
+            agentId: body.agentId,
+            pack: body.pack,
+            accessMode: body.accessMode,
+            ...(body.config !== undefined ? { config: body.config } : {}),
+            ...(body.requireApproval !== undefined
+              ? { requireApproval: body.requireApproval }
+              : {}),
+          },
+        });
+        const nextManifest = mutateCapabilityInstallYaml({ yamlText: manifestText, plan });
+        const nextPkg = mutatePackageJsonAddDependency({
+          jsonText: pkgText,
+          packageName: plan.spec.pack,
+          versionRange: plan.spec.versionRange,
+        });
+        const nextEnv =
+          envText !== null ? mutateEnvExample({ text: envText, envVars: plan.spec.envVars }) : null;
+
+        if (nextManifest !== manifestText) await ctx.writeFile(MANIFEST_PATH, nextManifest);
+        if (nextPkg !== pkgText) await ctx.writeFile(PACKAGE_PATH, nextPkg);
+        if (nextEnv !== null && envText !== null && nextEnv !== envText) {
+          await ctx.writeFile(ENV_EXAMPLE_PATH, nextEnv);
+        }
+        return {
+          message: `chore: install ${plan.spec.pack}`,
+          result: { warnings: plan.warnings, pack: plan.spec.pack },
+        };
+      },
+    );
+
+    return c.json({
+      ok: true,
+      unchanged: commit.changedFiles.length === 0,
+      commitSha: commit.commitSha,
+      changedFiles: commit.changedFiles,
+      warnings: result?.warnings ?? [],
+      via: "deploy_key",
+    });
+  } catch (err) {
+    if (err instanceof CapabilityInstallError) {
+      return c.json({ error: err.code, details: err.message }, 400);
+    }
+    return c.json(
+      {
+        error: "deploy_key_commit_failed",
+        details: err instanceof Error ? err.message : String(err),
+      },
+      502,
+    );
+  }
+}
+
+async function runWizardProxyInstall(args: {
+  c: Context;
+  body: CapabilityInstallBody;
+  locator: NonNullable<DeploymentInfo["repoLocator"]>;
+  wizardServiceUrl: string | null;
+  wizardSharedSecret: string | null;
+  fetchImpl: typeof fetch;
+}): Promise<Response> {
+  const { c, body, locator, wizardServiceUrl, wizardSharedSecret, fetchImpl } = args;
+  if (!wizardServiceUrl) return c.json({ error: "wizard_service_not_configured" }, 503);
+  if (!wizardSharedSecret) return c.json({ error: "wizard_shared_secret_not_configured" }, 503);
+  if (!locator.installationId) {
+    return c.json(
+      {
+        error: "needs_install",
+        installUrl: `${trimTrailingSlash(wizardServiceUrl)}/api/installs/start?agentSlug=capability-install`,
+      },
+      409,
+    );
+  }
+  const res = await fetchImpl(`${trimTrailingSlash(wizardServiceUrl)}/api/capabilities/install`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${wizardSharedSecret}`,
+    },
+    body: JSON.stringify({
+      ...body,
+      org: locator.org,
+      repo: locator.repo,
+      installationId: locator.installationId,
+    }),
+  });
+  const text = await res.text();
+  const parsed = safeParseJson(text) as Record<string, unknown> | null;
+  return c.json(
+    parsed ? { ...parsed, via: "wizard_proxy" } : { error: "wizard_response_not_json", body: text },
+    res.status as 200,
+  );
 }
 
 function trimTrailingSlash(s: string): string {

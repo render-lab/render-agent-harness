@@ -32,7 +32,8 @@
     "@render-harness/runtime-worker": "workspace:*",
     "hono": "^4.12.18",
     "pg": "^8.20.0",
-    "pg-boss": "^12.18.2"
+    "pg-boss": "^12.18.2",
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
     "@render-harness/ui": "workspace:*",
