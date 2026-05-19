@@ -11,6 +11,8 @@ export default defineConfig({
     emitter: "src/emitter.ts",
     "deploy-keys": "src/deploy-keys.ts",
     "repo-mutations/index": "src/repo-mutations/index.ts",
+    "runtime-entry-templates": "src/runtime-entry-templates.ts",
+    "runtime-entries": "src/runtime-entries.ts",
     gallery: "src/gallery.ts",
     "builtin-chat": "src/builtin-chat.ts",
     "deploy/index": "src/deploy/index.ts",

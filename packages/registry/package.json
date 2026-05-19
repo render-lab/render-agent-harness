@@ -39,6 +39,14 @@
       "types": "./dist/repo-mutations/index.d.ts",
       "import": "./dist/repo-mutations/index.js"
     },
+    "./runtime-entry-templates": {
+      "types": "./dist/runtime-entry-templates.d.ts",
+      "import": "./dist/runtime-entry-templates.js"
+    },
+    "./runtime-entries": {
+      "types": "./dist/runtime-entries.d.ts",
+      "import": "./dist/runtime-entries.js"
+    },
     "./gallery": {
       "types": "./dist/gallery.d.ts",
       "import": "./dist/gallery.js"

@@ -28,16 +28,15 @@ Deploy keys collapse that to one repo per key:
 - The public key only has push access to your repo. Even if the private key leaks, the attacker can push to your repo and nowhere else.
 - The wizard is out of the commit path entirely once scaffold is done. No shared secret to rotate across the fleet.
 
-## Wave 1 scope
+## What's covered
 
-In Wave 1 of the migration, the deploy-key path covers:
+All three edit-in-UI flows commit directly via the deploy-key path when `GITHUB_DEPLOY_KEY` and `GITHUB_DEPLOY_REPO_SSH_URL` are set:
 
 - `POST /capabilities/install` — Install capability modal
 - `PATCH /agents/:slug/model` — Edit model modal
+- `POST /agents/add` — Add agent modal
 
-`POST /agents/add` (Add agent) still uses the wizard proxy. It depends on runtime-entries templates that live in `create-render-agent`; a follow-up minor cut will move that to the deploy-key path too.
-
-If your harness has only `GITHUB_DEPLOY_KEY` set and you click **Add agent**, you'll see `wizard_shared_secret_not_configured`. Either keep `WIZARD_SHARED_SECRET` alongside the deploy-key vars during the transition, or wait for the follow-up.
+Add agent additionally fetches the gallery entry it needs from the wizard's `GET /api/gallery/agents/:slug` (cached for 60s) before cloning the repo, so the harness stays out of the gallery-loading business while still owning the commit. If the wizard 404s that endpoint (older wizard build), the route falls back to the legacy `WIZARD_SHARED_SECRET` proxy when that's also configured; otherwise it returns `wizard_gallery_endpoint_missing` so the operator can rotate.
 
 ## Wizard-scaffolded harnesses
 
