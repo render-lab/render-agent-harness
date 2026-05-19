@@ -25,7 +25,8 @@ Status legend:
 | Conversations model (`agent_conversations`, `conversation_id` FK, fan-in stream) | Shipped | Migration `0002_conversations.sql` |
 | Multi-agent bundles (`schemaVersion: 2`, fan-out emitter, `chief-of-staff` gallery entry) | Shipped | `gallery/agents/chief-of-staff` |
 | `trigger_workflow` builtin + cron-triggers-workflow mode | Shipped | Three-mode scheduling for V2 bundles |
-| npm publishing via Trusted Publishing OIDC | Shipped | Family live on npm at `0.2.x` |
+| Per-end-user OAuth connection API (`SecretsContext`, `oauthProviders` pack contract, `agent_user_connections`, `/connections` routes, Connections UI tab) | Shipped | See §11 |
+| npm publishing via Trusted Publishing OIDC | Shipped | Family live on npm at `0.5.x` |
 | **Hardened deployment mode** (`blueprints/render.hardened.yaml` — egress allowlist + audit) | **Planned** | Phase 5 |
 
 ## 2. Built-in tools (`packages/core/src/builtins/`)
@@ -43,22 +44,31 @@ Status legend:
 
 ## 3. Capability packs (`packages/capabilities/`)
 
-| Pack | Status | Notes |
+> **Full pack-by-pack roadmap (14 categories, 50+ targeted integrations) lives in [`docs/roadmap-capabilities.md`](./roadmap-capabilities.md). Sequenced execution plan for the next 7 packs lives in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).** This section keeps the high-level shape only.
+
+11 packs shipped today. **Active shipping plan: the next 7 packs in order.** Full per-pack spec in [`docs/capabilities-shipping-plan.md`](./capabilities-shipping-plan.md).
+
+| Front | Status | Notes |
 |---|---|---|
-| `cap-search-exa`, `cap-search-tavily` | Shipped | Search MCP + skills |
-| `cap-scrape-firecrawl` | Shipped | Firecrawl MCP + `scrape_and_store` |
-| `cap-memory-pg` | Shipped | `pg_trgm`-backed long-term memory |
-| `cap-browser-browserbase` | Shipped | Hosted browser MCP |
-| `cap-filesystem` | Shipped | Path-scoped, opt-in |
-| `cap-webhook-generic` | Shipped | HMAC-verified inbound webhook |
-| `cap-github` | Shipped | Webhook + read/write tools |
-| `cap-linear` | Shipped | Webhook + read/write tools |
-| `cap-slack` | Shipped | Slack Events + thread reads + opt-in replies |
-| **`cap-whatsapp`** | **Planned** | See §5 |
-| `cap-gitlab`, `cap-jira` | Planned | Work-monitoring wave |
-| `cap-discord`, `cap-teams` | Direction | Needs websocket / Gateway lifecycle design |
-| `cap-email-google`, `cap-email-microsoft` | Direction | IMAP-style polling vs push subscriptions TBD |
-| `cap-sandbox` (+ provider adapters) | Planned | See §8 |
+| Shipped: `cap-search-exa`, `cap-search-tavily`, `cap-scrape-firecrawl`, `cap-browser-browserbase`, `cap-memory-pg`, `cap-filesystem`, `cap-webhook-generic`, `cap-github`, `cap-linear`, `cap-slack`, `cap-google` | Shipped | Search, scraping, browser, memory, filesystem, inbound webhook, code repos, project management, chat, productivity (OAuth). |
+| **Next-7 #1 — `cap-render`** | **Planned** | First-party pack wrapping the existing Render MCP; on-brand, ~50 lines, showcases HITL. |
+| **Next-7 #2 — `cap-rag-pgvector`** (pgvector mode in `cap-memory-pg`) | **Planned** | Embeddings + pgvector unlock PDF/doc Q&A agents. |
+| **Next-7 #3 — `cap-notion`** | **Planned** | First non-Google OAuth provider; validates the connection API past one consumer. |
+| **Next-7 #4 — `cap-google` Drive / Docs / Sheets expansion** | **Planned** | Same Google OAuth provider, additional scopes — inside the shipped pack. |
+| **Next-7 #5 — `cap-intercom`** | **Planned** | First dual inbound+outbound support pack. |
+| **Next-7 #6 — `cap-granola`** | **Planned** | First API-key + polling pack; meeting-notes assistant pairs with cap-notion. |
+| **Next-7 #7 — `cap-figma`** | **Planned** | First pack with granular per-action OAuth scopes (post-Nov-2025 platform update). |
+| `cap-whatsapp` | Planned | Biggest net-new chat surface. Demoted from the next-7 list but design is locked in §5; first pick for batch 2. |
+| `cap-gitlab`, `cap-jira` | Planned | Work-monitoring wave alongside cap-github / cap-linear. |
+| `cap-sandbox` + first provider adapter | Planned | See §8. |
+| Productivity OAuth wave (rest): `cap-microsoft`, `cap-atlassian`, `cap-airtable`, `cap-zoom`, `cap-coda` | Direction | All fit the connection API (§11). `cap-microsoft` waits for an Office 365 customer ask. |
+| CRM wave (rest): `cap-hubspot`, `cap-salesforce`, `cap-zendesk`, `cap-front` | Direction | Intercom/Zendesk/Front are dual inbound+outbound. |
+| Outbound transactional email: `cap-resend`, `cap-sendgrid`, `cap-postmark` | Direction | Demoted from the next-7 list; build when there's a clear gallery story to pair it with. |
+| Observability: `cap-sentry`, `cap-posthog`, `cap-datadog`, `cap-pagerduty` | Direction | Debugging / product / incident agents. |
+| Payments / commerce: `cap-stripe`, `cap-shopify`, `cap-paddle`, `cap-lemon-squeezy` | Direction | Tiny packs, useful when a customer asks. |
+| Design tooling (beyond cap-figma): `cap-figjam` | Direction | Future companion to cap-figma if Figma exposes FigJam-specific endpoints. |
+| Other inbound chat surfaces: `cap-discord`, `cap-telegram`, `cap-twilio-sms`, `cap-email-*` | Direction | See §5; need lifecycle design per surface. |
+| Long tail (project mgmt beyond Linear/Jira, design tooling beyond Figma, e-sign, HR, banking, storage, voice, more RAG providers) | Direction | See [`roadmap-capabilities.md`](./roadmap-capabilities.md) §3.7–3.14. |
 
 ## 4. Onboarding & distribution
 
@@ -66,8 +76,8 @@ Status legend:
 |---|---|---|
 | CLI scaffolder (`npx create-render-agent`) | Shipped | `packages/create-render-agent` |
 | In-monorepo gallery (`gallery/agents/*`) | Shipped | 5 entries including `chief-of-staff` bundle |
-| Browser wizard v1 (anonymous, managed-repo, Deploy-to-Render) | Shipped | `packages/wizard` |
-| **Wizard "add agent to existing harness"** | **In flight** | Uncommitted: `packages/wizard/src/agent-add.{ts,test.ts}` + `routes/agent-add.{ts,test.ts}` |
+| Browser wizard v1 (anonymous, managed-repo, Deploy-to-Render) | Shipped | `apps/wizard` |
+| Wizard "add agent to existing harness" (zero-config from deployed harness) | Shipped | `apps/wizard/src/agent-add.ts` + `routes/agent-add.ts`; landed in `f9c2524` and shipped in the 0.5.x cuts |
 | Wizard v2: "my agents" dashboard, auth, graduate-managed-repo-to-user-GitHub | Planned | Phase 3 v2 |
 
 ## 5. Chat surfaces (inbound channels)
@@ -181,6 +191,28 @@ These are settled. Don't re-open in PRs without explicit discussion.
 7. Default model `claude-sonnet-4-6`; override with `LLM_MODEL`.
 8. `defineAgent()` is the canonical agent format; `render-harness.yaml` is the deploy-time interface.
 9. Independent (not lockstep) versioning for the `@render-harness/*` family. Capability packs and `ui` may drift onto their own minor lines.
+
+## 11. Per-end-user OAuth / connection API
+
+Lets capability packs act *as* each end user (their mailbox, calendar, workspace) instead of as a single deployment-wide service account. Shipped in the coordinated 0.5.0 cut. Full design in `docs-site/src/content/docs/connections-api.mdx`.
+
+| Item | Status | Notes |
+|---|---|---|
+| `SecretsContext` primitive + `requireConnection(provider)` for tool handlers | Shipped | `@render-harness/core` |
+| `agent_user_connections` table (AES-256-GCM at rest, `key_version` for rotation) | Shipped | Migration in `packages/core/sql/` |
+| `oauthProviders` pack contract + `connectionsRequired` env-schema field | Shipped | `@render-harness/contracts` + `@render-harness/registry` |
+| `/connections` routes (`GET`, `POST /:provider/start`, `GET /:provider/callback`, `DELETE /:provider`) | Shipped | `@render-harness/web`; callback is anonymous + HMAC-signed `state` token |
+| Connections tab in operator UI (Connect / Disconnect, account label, diagnostics) | Shipped | `@render-harness/ui` |
+| `cap-google` (Gmail + Calendar) — first and only consumer today | Shipped | Validates standard OAuth 2.0 + refresh-token flow. Only pack in-tree that registers `oauthProviders`. |
+| `cap-microsoft` (Outlook + Graph) | Direction | Realistic next-up pack — covers the Office 365 mirror of cap-google's surface. Refresh tokens rotate on every refresh (already handled in core). |
+| Other standard-OAuth packs (`cap-notion`, `cap-atlassian`, `cap-zoom`, `cap-hubspot`, `cap-salesforce`) | Direction | All fit the standard wire shape; low platform cost per pack. |
+| OAuth mode inside existing packs (`cap-linear`, `cap-github`, `cap-slack`) | Direction | Currently use deployment-wide tokens; OAuth becomes a config flag rather than a separate pack. |
+| `parseTokenResponse(raw)` + `revoke()` hooks on `OAuthProviderConfig` | Shipped (API only) | Defined in core for non-standard providers (e.g. Slack `authed_user`). No in-tree pack exercises them yet — first non-standard provider will validate. |
+| Service-account / domain-wide delegation primitive (workspace admin grants once) | Direction | Different primitive than refresh tokens; deferred |
+| Encryption key rotation tooling (`key_version` is reserved but no rotation script yet) | Planned | Low priority until we have >1 tenant per key |
+| Connection-scoped per-tool rate limits / quota visibility | Direction | Quota errors today surface as raw tool errors |
+
+Out of scope on purpose: OAuth 1.0a providers (Twitter v1.1) — request signing per call doesn't fit the refresh-token model.
 
 ---
 
